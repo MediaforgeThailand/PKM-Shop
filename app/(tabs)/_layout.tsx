@@ -74,6 +74,23 @@ export default function TabLayout() {
           ),
         }}
       />
+      <Tabs.Screen
+        name="chatbot"
+        options={{
+          title: 'Chatbot',
+          tabBarIcon: ({ color }) => (
+            <SymbolView
+              name={{
+                ios: 'message.and.waveform.fill',
+                android: 'chat',
+                web: 'chat',
+              }}
+              tintColor={color}
+              size={28}
+            />
+          ),
+        }}
+      />
     </Tabs>
   );
 }
