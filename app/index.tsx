@@ -1,48 +1,52 @@
 import { Link } from 'expo-router';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { ActionButton, BrandHeader, Card, Screen } from '@/components/MiraUI';
-import { MiraDesign, shadow } from '@/constants/Design';
+import { ActionButton, Card, Screen } from '@/components/MiraUI';
+import { HealthFigure, StatusRing } from '@/components/HealthVisuals';
+import { MiraDesign, softShadow } from '@/constants/Design';
 
 export default function LoginScreen() {
   return (
     <Screen>
-      <BrandHeader
-        eyebrow="Mobile health marketplace"
-        title="Find the right checkup, then let AI keep the context."
-        subtitle="Login with phone or LINE to see hospital packages, AI recommendations, referral links, and your health dashboard."
-      />
+      <View style={styles.heroCard}>
+        <View style={styles.brandRow}>
+          <View style={styles.brandMark} />
+          <Text style={styles.brand}>Mira</Text>
+          <Text style={styles.brandSoft}>Health</Text>
+        </View>
+        <View style={styles.visualRow}>
+          <View style={styles.figureWrap}>
+            <HealthFigure />
+          </View>
+          <StatusRing value={82} label="Match" size={112} />
+        </View>
+        <Text style={styles.title}>ตรวจสุขภาพที่ใช่ พร้อม AI ช่วยจำบริบทสุขภาพของคุณ</Text>
+        <Text style={styles.subtitle}>เลือกแพ็กเกจโรงพยาบาล ซื้อผ่านแอป แล้วเปลี่ยนผลตรวจให้เป็น dashboard ที่อ่านง่าย</Text>
+      </View>
 
       <Card style={styles.loginCard}>
-        <Text style={styles.cardTitle}>Start with your phone</Text>
-        <TextInput keyboardType="phone-pad" placeholder="+66 mobile number" placeholderTextColor={MiraDesign.color.muted} style={styles.input} />
+        <Text style={styles.cardTitle}>เข้าสู่ระบบ</Text>
+        <TextInput keyboardType="phone-pad" placeholder="เบอร์โทรศัพท์" placeholderTextColor={MiraDesign.color.muted} style={styles.input} />
         <Link href="/home" asChild>
-          <ActionButton label="Send OTP and continue" />
+          <ActionButton label="รับ OTP" />
         </Link>
-        <View style={styles.dividerRow}>
-          <View style={styles.divider} />
-          <Text style={styles.dividerText}>or</Text>
-          <View style={styles.divider} />
-        </View>
         <Link href="/home" asChild>
-          <Pressable style={styles.lineButton}>
-            <Text style={styles.lineButtonText}>Continue with LINE</Text>
-          </Pressable>
+          <ActionButton label="เข้าสู่ระบบด้วย LINE" variant="secondary" />
         </Link>
       </Card>
 
-      <View style={styles.promiseGrid}>
-        <View style={styles.promiseItem}>
-          <Text style={styles.promiseValue}>AI</Text>
-          <Text style={styles.promiseLabel}>Advisor</Text>
+      <View style={styles.marketStrip}>
+        <View style={styles.marketItem}>
+          <Text style={styles.marketValue}>5%</Text>
+          <Text style={styles.marketLabel}>Mira GP</Text>
         </View>
-        <View style={styles.promiseItem}>
-          <Text style={styles.promiseValue}>10%</Text>
-          <Text style={styles.promiseLabel}>GP + referral logic</Text>
+        <View style={styles.marketItem}>
+          <Text style={styles.marketValue}>5%</Text>
+          <Text style={styles.marketLabel}>Referral</Text>
         </View>
-        <View style={styles.promiseItem}>
-          <Text style={styles.promiseValue}>PHR</Text>
-          <Text style={styles.promiseLabel}>Timed health records</Text>
+        <View style={styles.marketItem}>
+          <Text style={styles.marketValue}>AI</Text>
+          <Text style={styles.marketLabel}>Recommendation</Text>
         </View>
       </View>
     </Screen>
@@ -50,75 +54,97 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  loginCard: {
-    marginTop: MiraDesign.space.md,
-  },
-  cardTitle: {
-    color: MiraDesign.color.ink,
-    fontSize: 18,
-    fontWeight: '900',
-  },
-  input: {
-    backgroundColor: '#EEF6FC',
+  heroCard: {
+    backgroundColor: MiraDesign.color.surface,
     borderColor: MiraDesign.color.line,
-    borderRadius: MiraDesign.radius.sm,
+    borderRadius: MiraDesign.radius.lg,
     borderWidth: 1,
-    color: MiraDesign.color.ink,
-    fontSize: 16,
-    minHeight: 54,
-    paddingHorizontal: MiraDesign.space.lg,
+    gap: MiraDesign.space.lg,
+    overflow: 'hidden',
+    padding: MiraDesign.space.xl,
+    ...softShadow,
   },
-  dividerRow: {
+  brandRow: {
     alignItems: 'center',
     flexDirection: 'row',
     gap: MiraDesign.space.sm,
   },
-  divider: {
-    backgroundColor: MiraDesign.color.line,
-    flex: 1,
-    height: 1,
+  brandMark: {
+    backgroundColor: MiraDesign.color.primary,
+    borderRadius: MiraDesign.radius.pill,
+    height: 18,
+    width: 36,
   },
-  dividerText: {
-    color: MiraDesign.color.muted,
-    fontSize: 12,
+  brand: {
+    color: MiraDesign.color.ink,
+    fontSize: 20,
     fontWeight: '900',
   },
-  lineButton: {
+  brandSoft: {
+    color: MiraDesign.color.primary,
+    fontSize: 20,
+    fontWeight: '900',
+  },
+  visualRow: {
     alignItems: 'center',
-    backgroundColor: '#06C755',
-    borderRadius: MiraDesign.radius.md,
-    minHeight: 54,
-    justifyContent: 'center',
-    ...shadow,
-  },
-  lineButtonText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '900',
-  },
-  promiseGrid: {
     flexDirection: 'row',
     gap: MiraDesign.space.md,
   },
-  promiseItem: {
-    backgroundColor: MiraDesign.color.surface,
-    borderColor: '#E6F1FA',
-    borderRadius: MiraDesign.radius.md,
-    borderWidth: 1,
+  figureWrap: {
+    backgroundColor: MiraDesign.color.surfaceSoft,
+    borderRadius: MiraDesign.radius.lg,
     flex: 1,
-    gap: MiraDesign.space.xs,
-    minHeight: 92,
-    padding: MiraDesign.space.md,
+    minHeight: 180,
+    paddingTop: MiraDesign.space.sm,
   },
-  promiseValue: {
-    color: MiraDesign.color.primary,
-    fontSize: 22,
+  title: {
+    color: MiraDesign.color.ink,
+    fontSize: 29,
+    fontWeight: '900',
+    lineHeight: 36,
+  },
+  subtitle: {
+    color: MiraDesign.color.inkSoft,
+    fontSize: 15,
+    lineHeight: 23,
+  },
+  loginCard: {
+    gap: MiraDesign.space.md,
+  },
+  cardTitle: {
+    color: MiraDesign.color.ink,
+    fontSize: 20,
     fontWeight: '900',
   },
-  promiseLabel: {
+  input: {
+    backgroundColor: MiraDesign.color.surfaceSoft,
+    borderColor: MiraDesign.color.line,
+    borderRadius: MiraDesign.radius.md,
+    borderWidth: 1,
+    color: MiraDesign.color.ink,
+    fontSize: 16,
+    minHeight: 56,
+    paddingHorizontal: MiraDesign.space.lg,
+  },
+  marketStrip: {
+    flexDirection: 'row',
+    gap: MiraDesign.space.md,
+  },
+  marketItem: {
+    backgroundColor: MiraDesign.color.surface,
+    borderRadius: MiraDesign.radius.md,
+    flex: 1,
+    gap: MiraDesign.space.xs,
+    padding: MiraDesign.space.md,
+  },
+  marketValue: {
+    color: MiraDesign.color.primary,
+    fontSize: 21,
+    fontWeight: '900',
+  },
+  marketLabel: {
     color: MiraDesign.color.inkSoft,
-    fontSize: 12,
-    fontWeight: '800',
-    lineHeight: 16,
+    fontSize: 11,
+    fontWeight: '900',
   },
 });

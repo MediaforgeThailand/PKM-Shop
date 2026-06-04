@@ -1,24 +1,30 @@
 export const MiraDesign = {
   color: {
-    canvas: '#D9EAF8',
-    surface: '#F7FBFF',
+    canvas: '#F4F9FA',
+    surface: '#FFFFFF',
     surfaceStrong: '#FFFFFF',
-    ink: '#17324A',
-    inkSoft: '#42657E',
-    muted: '#7F9CB1',
-    line: '#BFD8EA',
-    primary: '#0D72D9',
-    primaryDeep: '#0754AA',
-    primarySoft: '#E5F2FF',
-    aqua: '#37B7D5',
-    mint: '#5ED5A8',
-    amber: '#F2C04B',
-    danger: '#D86565',
+    surfaceSoft: '#ECF6F7',
+    surfaceTint: '#E5F5F2',
+    ink: '#12343B',
+    inkSoft: '#587177',
+    muted: '#8CA3A8',
+    line: '#D8E8EA',
+    primary: '#0EA5A4',
+    primaryDeep: '#087B7A',
+    primarySoft: '#DDF5F3',
+    blue: '#3278C7',
+    blueSoft: '#E6F0FB',
+    mint: '#54CFA5',
+    amber: '#F5B84B',
+    coral: '#EE6B6E',
+    danger: '#EE6B6E',
+    lavender: '#8D7EF5',
   },
   radius: {
-    xs: 4,
-    sm: 6,
-    md: 8,
+    xs: 6,
+    sm: 8,
+    md: 14,
+    lg: 22,
     pill: 999,
   },
   space: {
@@ -32,9 +38,17 @@ export const MiraDesign = {
 };
 
 export const shadow = {
-  shadowColor: '#316A9A',
+  shadowColor: '#6B9297',
   shadowOffset: { width: 0, height: 10 },
   shadowOpacity: 0.12,
-  shadowRadius: 24,
-  elevation: 8,
+  shadowRadius: 22,
+  elevation: 7,
+};
+
+export const softShadow = {
+  shadowColor: '#9BB7BB',
+  shadowOffset: { width: 0, height: 6 },
+  shadowOpacity: 0.08,
+  shadowRadius: 16,
+  elevation: 3,
 };

@@ -1,134 +1,161 @@
 import { StyleSheet, Text, View } from 'react-native';
 
-import { BrandHeader, Card, Pill, Screen, SectionHeader, StatTile } from '@/components/MiraUI';
-import { MiraDesign } from '@/constants/Design';
+import { BiomarkerBar, FreshnessDots, HealthFigure, MiniTrend, StatusRing } from '@/components/HealthVisuals';
+import { Card, Pill, Screen, SectionHeader } from '@/components/MiraUI';
+import { MiraDesign, softShadow } from '@/constants/Design';
 import { currentUser, healthMetrics } from '@/services/mockBackend';
-
-const dashboardModes = ['Simple visual', 'Stats heavy', 'Doctor summary'];
 
 export default function HealthScreen() {
   return (
     <Screen>
-      <BrandHeader
-        eyebrow="Personal health record"
-        title="Deep health, made readable."
-        subtitle="Hospital reports and AI intake become dated health snapshots so the agent knows what is current."
-        compact
-      />
-
-      <View style={styles.statsRow}>
-        <StatTile label="Latest report" value={currentUser.latestHealthDataAt} detail="Source: hospital result upload" />
-        <StatTile label="Agent status" value="Watch" detail={currentUser.agentStatus} />
+      <View style={styles.hero}>
+        <View style={styles.heroTop}>
+          <View>
+            <Text style={styles.eyebrow}>Personal health dashboard</Text>
+            <Text style={styles.title}>ผลตรวจสุขภาพที่อ่านง่าย</Text>
+          </View>
+          <Pill label="Updated 45d" tone="amber" />
+        </View>
+        <View style={styles.visualHealth}>
+          <View style={styles.figure}>
+            <HealthFigure />
+          </View>
+          <StatusRing value={78} label="Score" size={130} />
+        </View>
       </View>
 
-      <Card style={styles.scoreCard}>
-        <Text style={styles.scoreLabel}>Mira health score</Text>
-        <Text style={styles.scoreValue}>78</Text>
-        <Text style={styles.scoreBody}>Good baseline, but metabolic freshness is becoming the next priority.</Text>
+      <View style={styles.freshnessCard}>
+        <View>
+          <Text style={styles.freshTitle}>Data freshness</Text>
+          <Text style={styles.freshBody}>Latest hospital result: {currentUser.latestHealthDataAt}</Text>
+        </View>
+        <FreshnessDots active={3} />
+      </View>
+
+      <SectionHeader title="Visual health signals" meta="AI summary" />
+      <Card>
+        <BiomarkerBar label="Cardio baseline" value="Good" percent={82} tone={MiraDesign.color.primary} />
+        <BiomarkerBar label="Metabolic load" value="Watch" percent={62} tone={MiraDesign.color.amber} />
+        <BiomarkerBar label="Inflammation context" value="Missing" percent={36} tone={MiraDesign.color.coral} />
+        <MiniTrend color={MiraDesign.color.blue} />
       </Card>
 
-      <SectionHeader title="Dashboard styles" meta="user selectable" />
-      <View style={styles.modeRow}>
-        {dashboardModes.map((mode, index) => (
-          <View key={mode} style={[styles.modeCard, index === 0 ? styles.activeMode : null]}>
-            <Text style={styles.modeTitle}>{mode}</Text>
-            <Text style={styles.modeBody}>{index === 0 ? 'Large visuals and simple labels.' : 'Alternative display mode.'}</Text>
+      <SectionHeader title="Metric cards" meta="dated records" />
+      <View style={styles.metricGrid}>
+        {healthMetrics.map((metric) => (
+          <View key={metric.label} style={styles.metricCard}>
+            <View style={[styles.metricDot, metric.status === 'good' ? styles.goodDot : metric.status === 'risk' ? styles.riskDot : styles.watchDot]} />
+            <Text style={styles.metricValue}>{metric.value}</Text>
+            <Text style={styles.metricLabel}>{metric.label}</Text>
+            <Text style={styles.metricDate}>{metric.updatedAt}</Text>
           </View>
         ))}
       </View>
-
-      <SectionHeader title="Health metrics" meta="dated" />
-      {healthMetrics.map((metric) => (
-        <Card key={metric.label}>
-          <View style={styles.metricTop}>
-            <Text style={styles.metricTitle}>{metric.label}</Text>
-            <Pill label={metric.status} tone={metric.status === 'good' ? 'mint' : metric.status === 'watch' ? 'amber' : 'danger'} />
-          </View>
-          <Text style={styles.metricValue}>{metric.value}</Text>
-          <Text style={styles.metricDate}>Updated {metric.updatedAt}</Text>
-          <Text style={styles.body}>{metric.explanation}</Text>
-        </Card>
-      ))}
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  statsRow: {
-    flexDirection: 'row',
-    gap: MiraDesign.space.md,
-  },
-  scoreCard: {
-    backgroundColor: MiraDesign.color.ink,
-  },
-  scoreLabel: {
-    color: '#BFE8FF',
-    fontSize: 13,
-    fontWeight: '900',
-    textTransform: 'uppercase',
-  },
-  scoreValue: {
-    color: '#FFFFFF',
-    fontSize: 64,
-    fontWeight: '900',
-    lineHeight: 70,
-  },
-  scoreBody: {
-    color: '#D7ECFF',
-    fontSize: 14,
-    lineHeight: 21,
-  },
-  modeRow: {
-    flexDirection: 'row',
-    gap: MiraDesign.space.md,
-  },
-  modeCard: {
+  hero: {
     backgroundColor: MiraDesign.color.surface,
-    borderColor: '#E6F1FA',
-    borderRadius: MiraDesign.radius.md,
+    borderColor: MiraDesign.color.line,
+    borderRadius: MiraDesign.radius.lg,
     borderWidth: 1,
-    flex: 1,
-    gap: MiraDesign.space.xs,
-    minHeight: 96,
-    padding: MiraDesign.space.md,
+    gap: MiraDesign.space.lg,
+    padding: MiraDesign.space.lg,
+    ...softShadow,
   },
-  activeMode: {
-    borderColor: MiraDesign.color.primary,
-    borderWidth: 2,
-  },
-  modeTitle: {
-    color: MiraDesign.color.ink,
-    fontSize: 13,
-    fontWeight: '900',
-  },
-  modeBody: {
-    color: MiraDesign.color.inkSoft,
-    fontSize: 11,
-    lineHeight: 16,
-  },
-  metricTop: {
-    alignItems: 'center',
+  heroTop: {
+    alignItems: 'flex-start',
     flexDirection: 'row',
+    gap: MiraDesign.space.md,
     justifyContent: 'space-between',
   },
-  metricTitle: {
-    color: MiraDesign.color.ink,
-    fontSize: 17,
-    fontWeight: '900',
-  },
-  metricValue: {
-    color: MiraDesign.color.primary,
-    fontSize: 36,
-    fontWeight: '900',
-  },
-  metricDate: {
+  eyebrow: {
     color: MiraDesign.color.primaryDeep,
     fontSize: 12,
     fontWeight: '900',
+    textTransform: 'uppercase',
   },
-  body: {
+  title: {
+    color: MiraDesign.color.ink,
+    fontSize: 27,
+    fontWeight: '900',
+    lineHeight: 33,
+    marginTop: MiraDesign.space.xs,
+  },
+  visualHealth: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: MiraDesign.space.md,
+  },
+  figure: {
+    backgroundColor: MiraDesign.color.surfaceSoft,
+    borderRadius: MiraDesign.radius.lg,
+    flex: 1,
+    minHeight: 174,
+  },
+  freshnessCard: {
+    alignItems: 'center',
+    backgroundColor: MiraDesign.color.surfaceTint,
+    borderRadius: MiraDesign.radius.lg,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    padding: MiraDesign.space.lg,
+  },
+  freshTitle: {
+    color: MiraDesign.color.ink,
+    fontSize: 16,
+    fontWeight: '900',
+  },
+  freshBody: {
     color: MiraDesign.color.inkSoft,
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 12,
+    fontWeight: '800',
+    marginTop: MiraDesign.space.xs,
+  },
+  metricGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: MiraDesign.space.md,
+  },
+  metricCard: {
+    backgroundColor: MiraDesign.color.surface,
+    borderColor: MiraDesign.color.line,
+    borderRadius: MiraDesign.radius.lg,
+    borderWidth: 1,
+    flexBasis: '47%',
+    gap: MiraDesign.space.xs,
+    minHeight: 132,
+    padding: MiraDesign.space.md,
+  },
+  metricDot: {
+    borderRadius: MiraDesign.radius.pill,
+    height: 13,
+    width: 13,
+  },
+  goodDot: {
+    backgroundColor: MiraDesign.color.mint,
+  },
+  watchDot: {
+    backgroundColor: MiraDesign.color.amber,
+  },
+  riskDot: {
+    backgroundColor: MiraDesign.color.coral,
+  },
+  metricValue: {
+    color: MiraDesign.color.ink,
+    fontSize: 26,
+    fontWeight: '900',
+  },
+  metricLabel: {
+    color: MiraDesign.color.ink,
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  metricDate: {
+    color: MiraDesign.color.inkSoft,
+    fontSize: 11,
+    fontWeight: '800',
   },
 });

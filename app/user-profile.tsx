@@ -1,101 +1,219 @@
 import { StyleSheet, Text, View } from 'react-native';
 
-import { BrandHeader, Card, Pill, Screen, SectionHeader } from '@/components/MiraUI';
-import { MiraDesign } from '@/constants/Design';
+import { FreshnessDots, MiniTrend, StatusRing } from '@/components/HealthVisuals';
+import { Card, Pill, Screen, SectionHeader } from '@/components/MiraUI';
+import { MiraDesign, softShadow } from '@/constants/Design';
 import { currentUser } from '@/services/mockBackend';
 
 export default function UserProfileScreen() {
   return (
     <Screen>
-      <BrandHeader
-        eyebrow="User intelligence"
-        title="Profile, consent, and dated health context."
-        subtitle="This page shows the data shape the AI agent needs before Supabase connects."
-        compact
-      />
+      <View style={styles.profileHero}>
+        <View style={styles.profileTop}>
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>M</Text>
+          </View>
+          <View style={styles.identity}>
+            <Text style={styles.name}>{currentUser.name}</Text>
+            <Text style={styles.meta}>{currentUser.phone}</Text>
+            <Text style={styles.meta}>LINE {currentUser.lineId}</Text>
+          </View>
+        </View>
+        <View style={styles.heroVisual}>
+          <StatusRing value={74} label="Context" size={118} color={MiraDesign.color.blue} />
+          <View style={styles.contextBox}>
+            <Text style={styles.contextLabel}>AI knows</Text>
+            <Text style={styles.contextValue}>3 goals</Text>
+            <FreshnessDots active={3} />
+          </View>
+        </View>
+      </View>
 
+      <SectionHeader title="Health goals" meta="profile signals" />
+      <View style={styles.goalGrid}>
+        {currentUser.goals.map((goal, index) => (
+          <View key={goal} style={styles.goalCard}>
+            <View style={[styles.goalIcon, index === 1 ? styles.goalAmber : index === 2 ? styles.goalBlue : null]} />
+            <Text style={styles.goalText}>{goal}</Text>
+          </View>
+        ))}
+      </View>
+
+      <SectionHeader title="Record freshness" meta={currentUser.latestHealthDataAt} />
       <Card>
-        <Text style={styles.name}>{currentUser.name}</Text>
-        <Text style={styles.body}>{currentUser.phone} - LINE {currentUser.lineId}</Text>
-        <Pill label={`Age ${currentUser.ageRange}`} />
+        <View style={styles.freshTop}>
+          <View>
+            <Text style={styles.cardTitle}>ข้อมูลผลตรวจล่าสุด</Text>
+            <Text style={styles.cardBody}>AI จะใช้ข้อมูลที่มีวันที่กำกับเท่านั้น และลด confidence เมื่อข้อมูลเก่า</Text>
+          </View>
+          <Pill label="45d" tone="amber" />
+        </View>
+        <MiniTrend color={MiraDesign.color.primary} />
       </Card>
 
-      <SectionHeader title="Health goals" />
-      {currentUser.goals.map((goal) => (
-        <View key={goal} style={styles.goalRow}>
-          <View style={styles.goalDot} />
-          <Text style={styles.goalText}>{goal}</Text>
+      <SectionHeader title="Consent status" />
+      <View style={styles.consentRow}>
+        <View style={styles.consentCard}>
+          <View style={styles.consentDot} />
+          <Text style={styles.consentTitle}>AI advice</Text>
+          <Text style={styles.consentValue}>On</Text>
         </View>
-      ))}
-
-      <SectionHeader title="Consent and data freshness" />
-      <Card>
-        <View style={styles.policyRow}>
-          <Text style={styles.policyLabel}>Latest health data</Text>
-          <Text style={styles.policyValue}>{currentUser.latestHealthDataAt}</Text>
+        <View style={styles.consentCard}>
+          <View style={[styles.consentDot, styles.consentAmber]} />
+          <Text style={styles.consentTitle}>Referral tag</Text>
+          <Text style={styles.consentValue}>Limited</Text>
         </View>
-        <View style={styles.policyRow}>
-          <Text style={styles.policyLabel}>AI recommendation consent</Text>
-          <Text style={styles.policyValue}>Granted</Text>
-        </View>
-        <View style={styles.policyRow}>
-          <Text style={styles.policyLabel}>Marketing/referral attribution</Text>
-          <Text style={styles.policyValue}>Limited</Text>
-        </View>
-      </Card>
+      </View>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  name: {
-    color: MiraDesign.color.ink,
-    fontSize: 22,
-    fontWeight: '900',
-  },
-  body: {
-    color: MiraDesign.color.inkSoft,
-    fontSize: 14,
-    lineHeight: 21,
-  },
-  goalRow: {
-    alignItems: 'center',
+  profileHero: {
     backgroundColor: MiraDesign.color.surface,
-    borderColor: '#E6F1FA',
-    borderRadius: MiraDesign.radius.md,
+    borderColor: MiraDesign.color.line,
+    borderRadius: MiraDesign.radius.lg,
     borderWidth: 1,
+    gap: MiraDesign.space.lg,
+    padding: MiraDesign.space.lg,
+    ...softShadow,
+  },
+  profileTop: {
+    alignItems: 'center',
     flexDirection: 'row',
     gap: MiraDesign.space.md,
-    minHeight: 62,
-    paddingHorizontal: MiraDesign.space.lg,
   },
-  goalDot: {
-    backgroundColor: MiraDesign.color.mint,
+  avatar: {
+    alignItems: 'center',
+    backgroundColor: MiraDesign.color.primary,
+    borderRadius: MiraDesign.radius.lg,
+    height: 76,
+    justifyContent: 'center',
+    width: 76,
+  },
+  avatarText: {
+    color: '#FFFFFF',
+    fontSize: 30,
+    fontWeight: '900',
+  },
+  identity: {
+    flex: 1,
+    gap: MiraDesign.space.xs,
+  },
+  name: {
+    color: MiraDesign.color.ink,
+    fontSize: 24,
+    fontWeight: '900',
+  },
+  meta: {
+    color: MiraDesign.color.inkSoft,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  heroVisual: {
+    alignItems: 'center',
+    backgroundColor: MiraDesign.color.surfaceSoft,
+    borderRadius: MiraDesign.radius.lg,
+    flexDirection: 'row',
+    gap: MiraDesign.space.md,
+    padding: MiraDesign.space.md,
+  },
+  contextBox: {
+    flex: 1,
+    gap: MiraDesign.space.sm,
+  },
+  contextLabel: {
+    color: MiraDesign.color.primaryDeep,
+    fontSize: 12,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+  },
+  contextValue: {
+    color: MiraDesign.color.ink,
+    fontSize: 26,
+    fontWeight: '900',
+  },
+  goalGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: MiraDesign.space.md,
+  },
+  goalCard: {
+    backgroundColor: MiraDesign.color.surface,
+    borderColor: MiraDesign.color.line,
+    borderRadius: MiraDesign.radius.lg,
+    borderWidth: 1,
+    flexBasis: '47%',
+    gap: MiraDesign.space.md,
+    minHeight: 116,
+    padding: MiraDesign.space.md,
+  },
+  goalIcon: {
+    backgroundColor: MiraDesign.color.primary,
     borderRadius: MiraDesign.radius.pill,
-    height: 12,
-    width: 12,
+    height: 28,
+    width: 28,
+  },
+  goalAmber: {
+    backgroundColor: MiraDesign.color.amber,
+  },
+  goalBlue: {
+    backgroundColor: MiraDesign.color.blue,
   },
   goalText: {
     color: MiraDesign.color.ink,
-    flex: 1,
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '900',
+    lineHeight: 19,
   },
-  policyRow: {
-    alignItems: 'center',
+  freshTop: {
+    alignItems: 'flex-start',
     flexDirection: 'row',
     gap: MiraDesign.space.md,
     justifyContent: 'space-between',
   },
-  policyLabel: {
-    color: MiraDesign.color.inkSoft,
-    flex: 1,
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  policyValue: {
+  cardTitle: {
     color: MiraDesign.color.ink,
+    fontSize: 17,
+    fontWeight: '900',
+  },
+  cardBody: {
+    color: MiraDesign.color.inkSoft,
     fontSize: 13,
+    lineHeight: 19,
+    marginTop: MiraDesign.space.xs,
+  },
+  consentRow: {
+    flexDirection: 'row',
+    gap: MiraDesign.space.md,
+  },
+  consentCard: {
+    backgroundColor: MiraDesign.color.surface,
+    borderColor: MiraDesign.color.line,
+    borderRadius: MiraDesign.radius.lg,
+    borderWidth: 1,
+    flex: 1,
+    gap: MiraDesign.space.xs,
+    minHeight: 104,
+    padding: MiraDesign.space.md,
+  },
+  consentDot: {
+    backgroundColor: MiraDesign.color.mint,
+    borderRadius: MiraDesign.radius.pill,
+    height: 14,
+    width: 14,
+  },
+  consentAmber: {
+    backgroundColor: MiraDesign.color.amber,
+  },
+  consentTitle: {
+    color: MiraDesign.color.inkSoft,
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  consentValue: {
+    color: MiraDesign.color.ink,
+    fontSize: 18,
     fontWeight: '900',
   },
 });

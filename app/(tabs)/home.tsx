@@ -1,131 +1,228 @@
 import { Link } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { ActionButton, BrandHeader, Card, Pill, Screen, SectionHeader, StatTile } from '@/components/MiraUI';
-import { MiraDesign } from '@/constants/Design';
-import { currentUser, featuredPackage, formatMoney, mockBackendStatus, purchaseOrders } from '@/services/mockBackend';
+import { ActionButton, Card, Pill, Screen, SectionHeader } from '@/components/MiraUI';
+import { BiomarkerBar, FreshnessDots, MiniTrend, StatusRing } from '@/components/HealthVisuals';
+import { MiraDesign, softShadow } from '@/constants/Design';
+import { currentUser, featuredPackage, formatMoney } from '@/services/mockBackend';
 
 export default function HomeScreen() {
   return (
     <Screen>
-      <BrandHeader
-        eyebrow="AI health concierge"
-        title={`Welcome, ${currentUser.name}`}
-        subtitle="Buy hospital checkups, let the agent keep health context, and turn results into a personal health dashboard."
-        compact
-      />
-
-      <View style={styles.statsRow}>
-        <StatTile label="Latest data" value="45d" detail={currentUser.agentStatus} />
-        <StatTile label="Backend mode" value={mockBackendStatus.mode} detail="Supabase-ready service contract" />
+      <View style={styles.header}>
+        <View>
+          <Text style={styles.eyebrow}>Mira Health</Text>
+          <Text style={styles.title}>สวัสดี {currentUser.name}</Text>
+        </View>
+        <View style={styles.avatar}>
+          <Text style={styles.avatarText}>M</Text>
+        </View>
       </View>
 
-      <Card>
-        <View style={styles.cardTop}>
-          <Pill label="AI match" tone="blue" />
+      <View style={styles.statusHero}>
+        <View style={styles.statusCopy}>
+          <Pill label="AI health status" tone="mint" />
+          <Text style={styles.statusTitle}>พร้อมเลือกแพ็กเกจตรวจสุขภาพ</Text>
+          <FreshnessDots active={3} />
+        </View>
+        <StatusRing value={78} label="Ready" size={128} />
+      </View>
+
+      <SectionHeader title="แพ็กเกจที่ AI แนะนำ" meta="best match" />
+      <Card style={styles.packageCard}>
+        <View style={styles.packageTop}>
+          <View style={styles.iconTile}>
+            <Text style={styles.iconText}>+</Text>
+          </View>
+          <View style={styles.packageCopy}>
+            <Text style={styles.packageTitle}>{featuredPackage.title}</Text>
+            <Text style={styles.packageMeta}>{featuredPackage.hospital}</Text>
+          </View>
           <Text style={styles.price}>{formatMoney(featuredPackage.price)}</Text>
         </View>
-        <Text style={styles.featureTitle}>{featuredPackage.title}</Text>
-        <Text style={styles.featureMeta}>{featuredPackage.hospital} - {featuredPackage.duration}</Text>
-        <Text style={styles.body}>{featuredPackage.aiReason}</Text>
+        <View style={styles.visualPanel}>
+          <BiomarkerBar label="Heart fit" value="82%" percent={82} tone={MiraDesign.color.primary} />
+          <BiomarkerBar label="Metabolic need" value="68%" percent={68} tone={MiraDesign.color.amber} />
+          <MiniTrend color={MiraDesign.color.primary} />
+        </View>
         <Link href="/package-detail" asChild>
-          <ActionButton label="View package" />
+          <ActionButton label="ดูรายละเอียดแพ็กเกจ" />
         </Link>
       </Card>
 
-      <SectionHeader title="Core flows" meta="wireframe" />
-      <View style={styles.flowGrid}>
+      <SectionHeader title="ทางลัด" meta="marketplace + health" />
+      <View style={styles.quickGrid}>
         <Link href="/packages" asChild>
-          <Pressable style={styles.flowCard}>
-            <Text style={styles.flowTitle}>Marketplace</Text>
-            <Text style={styles.flowBody}>Hospital packages, price, GP, referral tags.</Text>
+          <Pressable style={styles.quickCard}>
+            <View style={[styles.quickIcon, styles.tealIcon]} />
+            <Text style={styles.quickTitle}>Marketplace</Text>
+            <Text style={styles.quickBody}>เลือกบริการตรวจสุขภาพ</Text>
           </Pressable>
         </Link>
         <Link href="/agent" asChild>
-          <Pressable style={styles.flowCard}>
-            <Text style={styles.flowTitle}>AI Agent</Text>
-            <Text style={styles.flowBody}>Collect context and recommend services.</Text>
+          <Pressable style={styles.quickCard}>
+            <View style={[styles.quickIcon, styles.blueIcon]} />
+            <Text style={styles.quickTitle}>AI Advisor</Text>
+            <Text style={styles.quickBody}>ถามและให้ AI จัดอันดับ</Text>
           </Pressable>
         </Link>
         <Link href="/health" asChild>
-          <Pressable style={styles.flowCard}>
-            <Text style={styles.flowTitle}>Health dashboard</Text>
-            <Text style={styles.flowBody}>Timed records, freshness, deep stats.</Text>
+          <Pressable style={styles.quickCard}>
+            <View style={[styles.quickIcon, styles.coralIcon]} />
+            <Text style={styles.quickTitle}>Dashboard</Text>
+            <Text style={styles.quickBody}>ดูผลตรวจแบบ visual</Text>
           </Pressable>
         </Link>
         <Link href="/partner" asChild>
-          <Pressable style={styles.flowCard}>
-            <Text style={styles.flowTitle}>Referral</Text>
-            <Text style={styles.flowBody}>Doctor, nurse, creator link tracking.</Text>
+          <Pressable style={styles.quickCard}>
+            <View style={[styles.quickIcon, styles.amberIcon]} />
+            <Text style={styles.quickTitle}>Referral</Text>
+            <Text style={styles.quickBody}>ลิงก์หมอ/creator</Text>
           </Pressable>
         </Link>
       </View>
-
-      <SectionHeader title="After purchase" meta={purchaseOrders[0].id} />
-      <Card>
-        <Text style={styles.featureTitle}>Call hospital sales to book</Text>
-        <Text style={styles.body}>After payment, the hospital sales team can look up the order by phone, ID card, or order number.</Text>
-        <Link href="/order-status" asChild>
-          <ActionButton label="Open booking status" variant="secondary" />
-        </Link>
-      </Card>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  statsRow: {
-    flexDirection: 'row',
-    gap: MiraDesign.space.md,
-  },
-  cardTop: {
+  header: {
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
-  price: {
-    color: MiraDesign.color.ink,
-    fontSize: 16,
-    fontWeight: '900',
-  },
-  featureTitle: {
-    color: MiraDesign.color.ink,
-    fontSize: 20,
-    fontWeight: '900',
-  },
-  featureMeta: {
+  eyebrow: {
     color: MiraDesign.color.primaryDeep,
     fontSize: 13,
     fontWeight: '900',
   },
-  body: {
-    color: MiraDesign.color.inkSoft,
-    fontSize: 14,
-    lineHeight: 21,
+  title: {
+    color: MiraDesign.color.ink,
+    fontSize: 27,
+    fontWeight: '900',
+    marginTop: 3,
   },
-  flowGrid: {
+  avatar: {
+    alignItems: 'center',
+    backgroundColor: MiraDesign.color.primary,
+    borderRadius: MiraDesign.radius.pill,
+    height: 48,
+    justifyContent: 'center',
+    width: 48,
+  },
+  avatarText: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '900',
+  },
+  statusHero: {
+    alignItems: 'center',
+    backgroundColor: MiraDesign.color.surface,
+    borderColor: MiraDesign.color.line,
+    borderRadius: MiraDesign.radius.lg,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: MiraDesign.space.md,
+    padding: MiraDesign.space.lg,
+    ...softShadow,
+  },
+  statusCopy: {
+    flex: 1,
+    gap: MiraDesign.space.md,
+  },
+  statusTitle: {
+    color: MiraDesign.color.ink,
+    fontSize: 24,
+    fontWeight: '900',
+    lineHeight: 30,
+  },
+  packageCard: {
+    gap: MiraDesign.space.lg,
+  },
+  packageTop: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: MiraDesign.space.md,
+  },
+  iconTile: {
+    alignItems: 'center',
+    backgroundColor: MiraDesign.color.primarySoft,
+    borderRadius: MiraDesign.radius.md,
+    height: 50,
+    justifyContent: 'center',
+    width: 50,
+  },
+  iconText: {
+    color: MiraDesign.color.primary,
+    fontSize: 30,
+    fontWeight: '300',
+  },
+  packageCopy: {
+    flex: 1,
+    gap: MiraDesign.space.xs,
+  },
+  packageTitle: {
+    color: MiraDesign.color.ink,
+    fontSize: 17,
+    fontWeight: '900',
+  },
+  packageMeta: {
+    color: MiraDesign.color.inkSoft,
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  price: {
+    color: MiraDesign.color.ink,
+    fontSize: 14,
+    fontWeight: '900',
+  },
+  visualPanel: {
+    backgroundColor: MiraDesign.color.surfaceSoft,
+    borderRadius: MiraDesign.radius.lg,
+    gap: MiraDesign.space.md,
+    padding: MiraDesign.space.lg,
+  },
+  quickGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: MiraDesign.space.md,
   },
-  flowCard: {
+  quickCard: {
     backgroundColor: MiraDesign.color.surface,
-    borderColor: '#E6F1FA',
-    borderRadius: MiraDesign.radius.md,
+    borderColor: MiraDesign.color.line,
+    borderRadius: MiraDesign.radius.lg,
     borderWidth: 1,
     flexBasis: '47%',
     gap: MiraDesign.space.sm,
-    minHeight: 118,
+    minHeight: 128,
     padding: MiraDesign.space.md,
   },
-  flowTitle: {
+  quickIcon: {
+    borderRadius: MiraDesign.radius.pill,
+    height: 28,
+    width: 28,
+  },
+  tealIcon: {
+    backgroundColor: MiraDesign.color.primary,
+  },
+  blueIcon: {
+    backgroundColor: MiraDesign.color.blue,
+  },
+  coralIcon: {
+    backgroundColor: MiraDesign.color.coral,
+  },
+  amberIcon: {
+    backgroundColor: MiraDesign.color.amber,
+  },
+  quickTitle: {
     color: MiraDesign.color.ink,
     fontSize: 15,
     fontWeight: '900',
   },
-  flowBody: {
+  quickBody: {
     color: MiraDesign.color.inkSoft,
     fontSize: 12,
+    fontWeight: '800',
     lineHeight: 17,
   },
 });
