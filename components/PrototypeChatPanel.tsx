@@ -19,11 +19,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Circle, Defs, LinearGradient as SvgGradient, Path, Rect, Stop } from 'react-native-svg';
 
 import { askGeminiWithRag, geminiConfigStatus, type ChatMessage } from '@/lib/ai/gemini';
+import { transcribeAudio } from '@/lib/ai/openaiTranscription';
 import { useAuthSession } from '@/lib/auth/useAuthSession';
 import { localHealthKnowledge } from '@/lib/rag/healthKnowledge';
 import { retrieveRagContext } from '@/lib/rag/retriever';
 
 const logo = require('@/assets/images/mira-orbit-logo.png');
+const iconInk = '#536491';
 
 function createMessage(role: ChatMessage['role'], content: string, sources?: ChatMessage['sources']): ChatMessage {
   return {
@@ -63,6 +65,22 @@ function createDemoAnswer(question: string) {
       topic: match.topic,
     })),
   };
+}
+
+function blobToBase64(blob: Blob) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Could not read recorded audio.'));
+    reader.onloadend = () => {
+      const result = reader.result;
+      if (typeof result !== 'string') {
+        reject(new Error('Recorded audio could not be converted.'));
+        return;
+      }
+      resolve(result.includes(',') ? result.split(',').pop() ?? '' : result);
+    };
+    reader.readAsDataURL(blob);
+  });
 }
 
 function usePressScale() {
@@ -141,7 +159,7 @@ function BellIcon() {
   );
 }
 
-function MicIcon({ color = '#23294B' }: { color?: string }) {
+function MicIcon({ color = iconInk }: { color?: string }) {
   return (
     <Svg height={19} viewBox="0 0 20 20" width={19}>
       <Rect fill="none" height={8.2} rx={3.1} stroke={color} strokeWidth={1.3} width={5.5} x={7.25} y={3.2} />
@@ -153,8 +171,8 @@ function MicIcon({ color = '#23294B' }: { color?: string }) {
 function ChatIcon() {
   return (
     <Svg height={19} viewBox="0 0 20 20" width={19}>
-      <Path d="M5.1 5.35h9.8c1.15 0 2.08.93 2.08 2.08v4.25c0 1.15-.93 2.08-2.08 2.08H9.55l-3.32 2.1c-.48.3-1.1-.05-1.1-.62v-1.48h-.03A2.08 2.08 0 0 1 3 11.68V7.43c0-1.15.93-2.08 2.1-2.08Z" fill="none" stroke="#23294B" strokeLinejoin="round" strokeWidth={1.3} />
-      <Path d="M7.1 9.6h.02M10 9.6h.02M12.9 9.6h.02" stroke="#23294B" strokeLinecap="round" strokeWidth={2.1} />
+      <Path d="M5.1 5.35h9.8c1.15 0 2.08.93 2.08 2.08v4.25c0 1.15-.93 2.08-2.08 2.08H9.55l-3.32 2.1c-.48.3-1.1-.05-1.1-.62v-1.48h-.03A2.08 2.08 0 0 1 3 11.68V7.43c0-1.15.93-2.08 2.1-2.08Z" fill="none" stroke={iconInk} strokeLinejoin="round" strokeWidth={1.3} />
+      <Path d="M7.1 9.6h.02M10 9.6h.02M12.9 9.6h.02" stroke={iconInk} strokeLinecap="round" strokeWidth={2.1} />
     </Svg>
   );
 }
@@ -162,9 +180,9 @@ function ChatIcon() {
 function ImageIcon() {
   return (
     <Svg height={19} viewBox="0 0 20 20" width={19}>
-      <Rect fill="none" height={11.2} rx={2.2} stroke="#23294B" strokeWidth={1.3} width={12.2} x={3.9} y={4.4} />
-      <Circle cx={8} cy={8} fill="none" r={1.3} stroke="#23294B" strokeWidth={1.2} />
-      <Path d="m4.7 13.9 3.2-3.1 2.25 2.05 1.42-1.32 3.7 3.3" fill="none" stroke="#23294B" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.25} />
+      <Rect fill="none" height={11.2} rx={2.2} stroke={iconInk} strokeWidth={1.3} width={12.2} x={3.9} y={4.4} />
+      <Circle cx={8} cy={8} fill="none" r={1.3} stroke={iconInk} strokeWidth={1.2} />
+      <Path d="m4.7 13.9 3.2-3.1 2.25 2.05 1.42-1.32 3.7 3.3" fill="none" stroke={iconInk} strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.25} />
     </Svg>
   );
 }
@@ -172,9 +190,9 @@ function ImageIcon() {
 function ScanIcon() {
   return (
     <Svg height={19} viewBox="0 0 20 20" width={19}>
-      <Path d="M6.3 3.8H4.8c-.62 0-1 .38-1 1v1.5M13.7 3.8h1.5c.62 0 1 .38 1 1v1.5M3.8 13.7v1.5c0 .62.38 1 1 1h1.5M16.2 13.7v1.5c0 .62-.38 1-1 1h-1.5" fill="none" stroke="#23294B" strokeLinecap="round" strokeWidth={1.35} />
-      <Circle cx={10} cy={10} fill="none" r={3.05} stroke="#23294B" strokeWidth={1.25} />
-      <Path d="M8.55 10.1h2.9M10 8.65v2.9" stroke="#23294B" strokeLinecap="round" strokeWidth={1.15} />
+      <Path d="M6.3 3.8H4.8c-.62 0-1 .38-1 1v1.5M13.7 3.8h1.5c.62 0 1 .38 1 1v1.5M3.8 13.7v1.5c0 .62.38 1 1 1h1.5M16.2 13.7v1.5c0 .62-.38 1-1 1h-1.5" fill="none" stroke={iconInk} strokeLinecap="round" strokeWidth={1.35} />
+      <Circle cx={10} cy={10} fill="none" r={3.05} stroke={iconInk} strokeWidth={1.25} />
+      <Path d="M8.55 10.1h2.9M10 8.65v2.9" stroke={iconInk} strokeLinecap="round" strokeWidth={1.15} />
     </Svg>
   );
 }
@@ -211,7 +229,7 @@ function GlassCircleButton({ children, size = 47, onPress }: { children: ReactNo
 function Avatar() {
   return (
     <View style={styles.avatarOuter}>
-      <Svg height={40} viewBox="0 0 40 40" width={40}>
+      <Svg height={34} viewBox="0 0 40 40" width={34}>
         <Defs>
           <SvgGradient id="avatarBg" x1="0" x2="1" y1="0" y2="1">
             <Stop offset="0" stopColor="#FFE7D1" />
@@ -280,36 +298,67 @@ function FeatureTile({ icon, label, onPress }: { icon: ReactNode; label: string;
 
 function Composer({
   input,
+  isRecording,
   isSending,
+  isTranscribing,
   sendMessage,
   setInput,
+  toggleVoiceRecording,
+  voiceStatus,
 }: {
   input: string;
+  isRecording: boolean;
   isSending: boolean;
+  isTranscribing: boolean;
   sendMessage: () => void;
   setInput: (value: string) => void;
+  toggleVoiceRecording: () => void;
+  voiceStatus: string | null;
 }) {
   const { pressIn, pressOut, scale } = usePressScale();
+  const placeholder = isRecording ? 'Listening...' : isTranscribing ? 'Transcribing voice...' : 'Ask anything';
 
   return (
-    <BlurView intensity={36} tint="light" style={styles.composerGlass}>
-      <TextInput
-        value={input}
-        onChangeText={setInput}
-        onSubmitEditing={sendMessage}
-        placeholder="Ask anything"
-        placeholderTextColor="#414866"
-        returnKeyType="send"
-        style={styles.input}
-      />
-      <Pressable disabled={isSending} onPress={sendMessage} onPressIn={pressIn} onPressOut={pressOut}>
-        <Animated.View style={[styles.sendShadow, { transform: [{ scale }] }]}>
-          <LinearGradient colors={['#BDF2FF', '#9F83FF', '#626CFF']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.sendButton}>
-            {isSending ? <ActivityIndicator color="#FFFFFF" size="small" /> : <SparkleIcon />}
+    <View>
+      {voiceStatus ? (
+        <View style={styles.voiceStatusPill}>
+          <View style={[styles.voiceStatusDot, isRecording ? styles.voiceStatusDotLive : null]} />
+          <Text numberOfLines={1} style={styles.voiceStatusText}>
+            {voiceStatus}
+          </Text>
+        </View>
+      ) : null}
+
+      <BlurView intensity={36} tint="light" style={styles.composerGlass}>
+        <Pressable disabled={isSending || isTranscribing} onPress={toggleVoiceRecording} style={({ pressed }) => [styles.voiceButtonPress, pressed ? styles.voiceButtonPressed : null]}>
+          <LinearGradient
+            colors={isRecording ? ['#6FE7FF', '#587CFF'] : ['rgba(255,255,255,0.72)', 'rgba(255,255,255,0.32)']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={[styles.voiceButton, isRecording ? styles.voiceButtonRecording : null]}>
+            {isTranscribing ? <ActivityIndicator color="#536491" size="small" /> : <MicIcon color={isRecording ? '#FFFFFF' : iconInk} />}
           </LinearGradient>
-        </Animated.View>
-      </Pressable>
-    </BlurView>
+        </Pressable>
+
+        <TextInput
+          value={input}
+          onChangeText={setInput}
+          onSubmitEditing={sendMessage}
+          placeholder={placeholder}
+          placeholderTextColor="#6677A3"
+          returnKeyType="send"
+          style={styles.input}
+        />
+
+        <Pressable disabled={isSending || isTranscribing} onPress={sendMessage} onPressIn={pressIn} onPressOut={pressOut}>
+          <Animated.View style={[styles.sendShadow, { transform: [{ scale }] }]}>
+            <LinearGradient colors={['#C4ECFF', '#8FA6FF', '#6176F7']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.sendButton}>
+              {isSending ? <ActivityIndicator color="#FFFFFF" size="small" /> : <SparkleIcon />}
+            </LinearGradient>
+          </Animated.View>
+        </Pressable>
+      </BlurView>
+    </View>
   );
 }
 
@@ -354,20 +403,133 @@ function BackgroundSheen() {
 export function PrototypeChatPanel() {
   const auth = useAuthSession();
   const { height, width } = useWindowDimensions();
+  const audioChunksRef = useRef<Blob[]>([]);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
   const [input, setInput] = useState('');
+  const [isRecording, setIsRecording] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
   const [lastAnswer, setLastAnswer] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [voiceStatus, setVoiceStatus] = useState<string | null>(null);
 
   const canUseLiveAi = Boolean(auth.session && geminiConfigStatus.hasProxy);
   const isCompact = width < 390;
   const frameSize = useMemo(
     () => ({
-      height: isCompact ? height : Math.min(622, Math.max(610, height - 28)),
-      width: isCompact ? width : 304,
+      height: isCompact ? height : Math.min(604, Math.max(590, height - 36)),
+      width: isCompact ? width : 292,
     }),
     [height, isCompact, width],
   );
+
+  useEffect(() => {
+    return () => {
+      if (mediaRecorderRef.current?.state === 'recording') {
+        mediaRecorderRef.current.stop();
+      }
+      stopMediaStream();
+    };
+  }, []);
+
+  function stopMediaStream() {
+    mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
+    mediaStreamRef.current = null;
+  }
+
+  async function transcribeRecordedAudio(mimeType: string) {
+    const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
+    audioChunksRef.current = [];
+    stopMediaStream();
+
+    if (audioBlob.size <= 0) {
+      setVoiceStatus('ไม่ได้ยินเสียง ลองกดพูดใหม่อีกครั้ง');
+      return;
+    }
+
+    setIsTranscribing(true);
+    setVoiceStatus('กำลังถอดเสียงด้วย OpenAI...');
+
+    try {
+      const audioBase64 = await blobToBase64(audioBlob);
+      const transcript = await transcribeAudio({
+        audioBase64,
+        fileName: mimeType.includes('mp4') ? 'mira-voice.mp4' : 'mira-voice.webm',
+        language: 'th',
+        mimeType,
+      });
+
+      setInput((current) => (current.trim() ? `${current.trim()} ${transcript.text}` : transcript.text));
+      setVoiceStatus('ถอดเสียงเรียบร้อย พร้อมส่ง');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Voice transcription failed.';
+      setVoiceStatus(`ยังใช้ voice ไม่ได้: ${message}`);
+    } finally {
+      setIsTranscribing(false);
+    }
+  }
+
+  async function startVoiceRecording() {
+    if (Platform.OS !== 'web' || typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+      setVoiceStatus('Voice input รองรับบน web prototype ก่อน ต้องเพิ่ม native audio module สำหรับ iOS/Android');
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : MediaRecorder.isTypeSupported('audio/webm')
+          ? 'audio/webm'
+          : 'audio/mp4';
+      const recorder = new MediaRecorder(stream, { mimeType });
+
+      audioChunksRef.current = [];
+      mediaStreamRef.current = stream;
+      mediaRecorderRef.current = recorder;
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+      recorder.onstop = () => {
+        void transcribeRecordedAudio(mimeType);
+      };
+      recorder.start();
+      setIsRecording(true);
+      setVoiceStatus('กำลังฟัง... กดไมค์อีกครั้งเพื่อหยุด');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Microphone permission failed.';
+      stopMediaStream();
+      setIsRecording(false);
+      setVoiceStatus(`เปิดไมค์ไม่ได้: ${message}`);
+    }
+  }
+
+  function stopVoiceRecording() {
+    const recorder = mediaRecorderRef.current;
+
+    if (!recorder || recorder.state === 'inactive') {
+      setIsRecording(false);
+      stopMediaStream();
+      return;
+    }
+
+    setIsRecording(false);
+    setVoiceStatus('หยุดฟังแล้ว กำลังเตรียมเสียง...');
+    recorder.stop();
+    mediaRecorderRef.current = null;
+  }
+
+  function toggleVoiceRecording() {
+    if (isRecording) {
+      stopVoiceRecording();
+      return;
+    }
+
+    void startVoiceRecording();
+  }
 
   async function sendMessage() {
     const question = input.trim();
@@ -421,7 +583,7 @@ export function PrototypeChatPanel() {
 
               <View style={styles.topActions}>
                 <Avatar />
-                <GlassCircleButton size={48}>
+                <GlassCircleButton size={38}>
                   <BellIcon />
                 </GlassCircleButton>
               </View>
@@ -443,7 +605,16 @@ export function PrototypeChatPanel() {
               <MiniResponse answer={lastAnswer} />
 
               <View style={styles.bottomArea}>
-                <Composer input={input} isSending={isSending} sendMessage={sendMessage} setInput={setInput} />
+                <Composer
+                  input={input}
+                  isRecording={isRecording}
+                  isSending={isSending}
+                  isTranscribing={isTranscribing}
+                  sendMessage={sendMessage}
+                  setInput={setInput}
+                  toggleVoiceRecording={toggleVoiceRecording}
+                  voiceStatus={voiceStatus}
+                />
                 <View style={styles.homeIndicator} />
               </View>
             </LinearGradient>
@@ -466,12 +637,12 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'flex-start',
     padding: 12,
-    paddingTop: 38,
+    paddingTop: 34,
   },
   phoneShell: {
     backgroundColor: 'rgba(255,255,255,0.26)',
     borderColor: 'rgba(255,255,255,0.86)',
-    borderRadius: 38,
+    borderRadius: 36,
     borderWidth: 1.4,
     overflow: 'hidden',
     shadowColor: '#796BE0',
@@ -568,14 +739,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 13,
+    marginTop: 11,
   },
   avatarOuter: {
     backgroundColor: 'rgba(255,255,255,0.92)',
     borderColor: 'rgba(255,255,255,0.9)',
     borderRadius: 999,
     borderWidth: 1.2,
-    padding: 2,
+    padding: 1.8,
     shadowColor: '#584992',
     shadowOffset: { height: 7, width: 0 },
     shadowOpacity: 0.18,
@@ -599,8 +770,8 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     shadowColor: '#6F60C7',
     shadowOffset: { height: 10, width: 0 },
-    shadowOpacity: 0.18,
-    shadowRadius: 16,
+    shadowOpacity: 0.14,
+    shadowRadius: 14,
   },
   glassCircle: {
     alignItems: 'center',
@@ -622,28 +793,28 @@ const styles = StyleSheet.create({
   },
   heroCopy: {
     alignItems: 'center',
-    marginTop: 8,
-    paddingHorizontal: 28,
+    marginTop: 7,
+    paddingHorizontal: 26,
   },
   heroTitle: {
     color: '#FFFFFF',
-    fontSize: 26,
+    fontSize: 23.5,
     fontStyle: 'italic',
     fontWeight: '900',
     letterSpacing: 0,
-    lineHeight: 31,
+    lineHeight: 28,
   },
   heroSubtitle: {
     color: 'rgba(255,255,255,0.92)',
-    fontSize: 10.6,
+    fontSize: 9.7,
     fontWeight: '600',
-    lineHeight: 14,
-    marginTop: 7,
+    lineHeight: 13,
+    marginTop: 6,
     textAlign: 'center',
   },
   orbWrap: {
     alignItems: 'center',
-    height: 170,
+    height: 150,
     justifyContent: 'center',
     marginTop: 0,
   },
@@ -652,19 +823,19 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.36)',
     borderRadius: 999,
     borderWidth: 1,
-    height: 138,
+    height: 122,
     position: 'absolute',
-    width: 138,
+    width: 122,
   },
   logoOrbitRing: {
     alignItems: 'center',
     borderColor: 'rgba(255,255,255,0.4)',
     borderRadius: 999,
     borderWidth: 1,
-    height: 154,
+    height: 136,
     justifyContent: 'center',
     position: 'absolute',
-    width: 154,
+    width: 136,
   },
   logoOrbitDot: {
     backgroundColor: '#FFFFFF',
@@ -687,27 +858,27 @@ const styles = StyleSheet.create({
   logoCard: {
     alignItems: 'center',
     borderRadius: 999,
-    height: 118,
+    height: 104,
     justifyContent: 'center',
     shadowColor: '#5F8CFF',
     shadowOffset: { height: 18, width: 0 },
     shadowOpacity: 0.24,
     shadowRadius: 22,
-    width: 118,
+    width: 104,
   },
   logoCardGlass: {
     alignItems: 'center',
     borderColor: 'rgba(255,255,255,0.62)',
     borderRadius: 999,
     borderWidth: 1,
-    height: 118,
+    height: 104,
     justifyContent: 'center',
     overflow: 'hidden',
-    width: 118,
+    width: 104,
   },
   heroLogoImage: {
-    height: 100,
-    width: 100,
+    height: 88,
+    width: 88,
   },
   logoSparkOne: {
     position: 'absolute',
@@ -724,11 +895,12 @@ const styles = StyleSheet.create({
   tileGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 1,
+    justifyContent: 'space-between',
+    marginTop: 0,
+    rowGap: 7,
   },
   tilePressable: {
-    width: 134,
+    width: 126,
   },
   tileShadow: {
     shadowColor: '#7062C4',
@@ -737,16 +909,16 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
   },
   featureTile: {
-    backgroundColor: 'rgba(255,255,255,0.17)',
-    borderColor: 'rgba(255,255,255,0.34)',
-    borderRadius: 17,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderColor: 'rgba(255,255,255,0.38)',
+    borderRadius: 16,
     borderWidth: 1,
-    height: 93,
+    height: 84,
     justifyContent: 'space-between',
     overflow: 'hidden',
-    paddingBottom: 12,
-    paddingLeft: 14,
-    paddingTop: 14,
+    paddingBottom: 10,
+    paddingLeft: 12,
+    paddingTop: 12,
   },
   tileIconCircle: {
     alignItems: 'center',
@@ -754,16 +926,16 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.84)',
     borderRadius: 999,
     borderWidth: 0.9,
-    height: 34,
+    height: 30,
     justifyContent: 'center',
-    width: 34,
+    width: 30,
   },
   tileLabel: {
-    color: '#1F2445',
-    fontSize: 13.2,
-    fontWeight: '500',
+    color: '#43547E',
+    fontSize: 12,
+    fontWeight: '600',
     letterSpacing: 0,
-    lineHeight: 16.2,
+    lineHeight: 14.8,
   },
   responseGlass: {
     backgroundColor: 'rgba(255,255,255,0.2)',
@@ -787,32 +959,84 @@ const styles = StyleSheet.create({
   },
   bottomArea: {
     bottom: 0,
-    left: 13,
+    left: 12,
     position: 'absolute',
-    right: 13,
+    right: 12,
   },
   composerGlass: {
     alignItems: 'center',
     backgroundColor: 'rgba(255,255,255,0.2)',
     borderColor: 'rgba(255,255,255,0.56)',
-    borderRadius: 25,
+    borderRadius: 23,
     borderWidth: 1,
     flexDirection: 'row',
-    height: 51,
+    height: 48,
     overflow: 'hidden',
-    paddingLeft: 15,
+    gap: 7,
+    paddingLeft: 7,
     paddingRight: 5,
     shadowColor: '#7265CF',
     shadowOffset: { height: 10, width: 0 },
     shadowOpacity: 0.09,
     shadowRadius: 20,
   },
+  voiceButtonPress: {
+    borderRadius: 999,
+  },
+  voiceButtonPressed: {
+    opacity: 0.72,
+    transform: [{ scale: 0.94 }],
+  },
+  voiceButton: {
+    alignItems: 'center',
+    borderColor: 'rgba(255,255,255,0.72)',
+    borderRadius: 999,
+    borderWidth: 1,
+    height: 34,
+    justifyContent: 'center',
+    width: 34,
+  },
+  voiceButtonRecording: {
+    shadowColor: '#5E9DFF',
+    shadowOffset: { height: 5, width: 0 },
+    shadowOpacity: 0.34,
+    shadowRadius: 10,
+  },
+  voiceStatusPill: {
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(255,255,255,0.24)',
+    borderColor: 'rgba(255,255,255,0.42)',
+    borderRadius: 999,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 6,
+    marginBottom: 7,
+    maxWidth: '100%',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  voiceStatusDot: {
+    backgroundColor: '#88A9D8',
+    borderRadius: 999,
+    height: 6,
+    width: 6,
+  },
+  voiceStatusDotLive: {
+    backgroundColor: '#6FE7FF',
+  },
+  voiceStatusText: {
+    color: '#44547E',
+    fontSize: 10.6,
+    fontWeight: '700',
+    maxWidth: 210,
+  },
   input: {
-    color: '#1F2445',
+    color: '#36466E',
     flex: 1,
-    fontSize: 12.2,
-    fontWeight: '500',
-    height: 42,
+    fontSize: 11.8,
+    fontWeight: '600',
+    height: 39,
     paddingHorizontal: 0,
   },
   sendShadow: {
@@ -827,9 +1051,9 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.72)',
     borderRadius: 999,
     borderWidth: 1,
-    height: 42,
+    height: 39,
     justifyContent: 'center',
-    width: 42,
+    width: 39,
   },
   homeIndicator: {
     alignSelf: 'center',
