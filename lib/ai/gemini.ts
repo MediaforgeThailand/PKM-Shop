@@ -30,12 +30,18 @@ export type AskAiResult = {
 };
 
 export const DEFAULT_SYSTEM_PROMPT = [
-  'You are Mira, a Thai healthcare marketplace assistant.',
+  'You are Mira, a clinical health advisor for a Thai healthcare marketplace.',
   '',
+  'Role-play as Dr. Mira, a senior preventive-health physician persona who gives warm consultation-style guidance.',
+  "Do not claim to be the user's treating doctor, and do not say you are a real licensed physician.",
   'Sound like a calm human in a private mobile chat, not a brochure or legal notice.',
   'For greetings, thanks, or tiny small-talk, reply in 1 short natural sentence only.',
   'Greeting example: สวัสดีค่ะ วันนี้อยากให้ Mira ช่วยเรื่องอะไรคะ',
-  'Use only relevant RAG context. If context is missing, say what is unknown in one short sentence.',
+  'Use relevant RAG context for Mira packages, booking, policies, and hospital-specific details.',
+  'If RAG context is missing or irrelevant, do not mention database, RAG, system data, snippets, or missing context to the user.',
+  'When safe, answer from general health knowledge like a careful clinical advisor, then ask one useful follow-up question if needed.',
+  'For harmless off-topic questions, reply naturally in 1 short line and gently steer back to health or self-care.',
+  'Never answer with "no data in the system" or similar wording.',
   'Answer in Thai by default.',
   'Use plain text only. Do not use Markdown bold, headings, tables, or asterisks.',
   'Write for a mobile chat UI: short, clean, and easy to scan.',
@@ -247,14 +253,26 @@ export function createOfflineRagAnswer(question: string, ragMatches: RagMatch[])
   }
 
   if (ragMatches.length === 0) {
-    return `I found no matching RAG context for "${question}". Configure the OpenAI proxy or expand the RAG corpus to answer this safely.`;
+    return [
+      'เรื่องนี้ฉันช่วยมองเป็นคำแนะนำทั่วไปให้ได้ค่ะ',
+      'ถ้าอยากให้แนะนำด้านสุขภาพแบบตรงจุด บอกอายุ อาการ หรือเป้าหมายที่อยากดูแลเพิ่มนิดหนึ่งนะคะ',
+    ].join('\n');
   }
 
   return [
-    'The OpenAI proxy is unavailable or not configured yet, so this is a local RAG preview.',
-    '',
-    ...ragMatches.map((match, index) => `${index + 1}. ${match.title}: ${match.summary}`),
-    '',
-    'Configure Supabase Edge Function gemini-chat or EXPO_PUBLIC_AI_PROXY_URL to generate a real OpenAI answer.',
+    'จากที่เล่ามา ฉันแนะนำให้เริ่มจากจุดเสี่ยงหลักก่อนค่ะ',
+    ...ragMatches.slice(0, 2).map((match, index) => {
+      if (match.category === 'ops.booking') {
+        return `${index + 1}. หลังซื้อแพ็กเกจ ให้ใช้เลข order เพื่อจองคิวกับโรงพยาบาล`;
+      }
+      if (match.category === 'care.checkup_preparation') {
+        return `${index + 1}. ถ้าจะตรวจพื้นฐาน ให้ดูเลือด ไขมัน น้ำตาล ตับ ไต และความดัน`;
+      }
+      if (match.category === 'safety.escalation') {
+        return `${index + 1}. ถ้ามีอาการรุนแรงหรือเฉียบพลัน ควรพบแพทย์ทันที`;
+      }
+      return `${index + 1}. เลือกแพ็กเกจตามอายุ ความเสี่ยง และเป้าหมายสุขภาพหลัก`;
+    }),
+    'อยากให้ช่วยคัดตามอายุ งบ หรือโรงพยาบาลใกล้บ้านไหมคะ',
   ].join('\n');
 }

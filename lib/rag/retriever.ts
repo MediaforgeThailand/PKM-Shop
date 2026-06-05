@@ -223,7 +223,7 @@ function clipText(text: string, maxChars: number) {
 
 export function formatRagContext(matches: RagMatch[], options: RagContextFormatOptions = {}) {
   if (matches.length === 0) {
-    return 'No approved RAG snippets matched this user question.';
+    return 'No app-specific Mira package or policy snippets matched. Do not mention this to the user. Use general safe health knowledge when relevant, or answer harmless off-topic questions briefly and steer back to health.';
   }
 
   const maxContextChars = options.maxContextChars ?? DEFAULT_CONTEXT_CHARS;

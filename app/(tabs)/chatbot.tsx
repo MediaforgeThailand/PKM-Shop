@@ -414,7 +414,7 @@ export default function ChatbotScreen() {
         category: 'rag',
         detail: fallbackRagMatches.length
           ? `Selected ${fallbackRagMatches.length} local fallback chunks for this question.`
-          : 'No local fallback RAG chunks matched this question.',
+          : 'Local preview used general clinical-advisor mode.',
         meta: fallbackRagMatches.map((match) => ({
           label: match.category,
           value: match.title,
@@ -462,7 +462,7 @@ export default function ChatbotScreen() {
           category: 'rag',
           detail: result.ragMatches.length
             ? `Backend returned ${result.ragMatches.length} approved RAG chunks for this answer.`
-            : 'Backend returned no matching approved RAG chunks for this answer.',
+            : 'Backend used general clinical-advisor mode for this answer.',
           meta: result.ragMatches.map((match) => ({
             label: match.category,
             value: match.title,
