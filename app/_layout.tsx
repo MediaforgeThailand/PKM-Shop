@@ -56,6 +56,7 @@ function RootLayoutNav() {
         <Stack.Screen name="partner" options={{ headerShown: false }} />
         <Stack.Screen name="admin-booking" options={{ headerShown: false }} />
         <Stack.Screen name="user-profile" options={{ headerShown: false }} />
+        <Stack.Screen name="prototype" options={{ headerShown: false }} />
         <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
       </Stack>
     </ThemeProvider>
