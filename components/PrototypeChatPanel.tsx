@@ -9,6 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -159,6 +160,24 @@ function BellIcon() {
   );
 }
 
+function BackIcon() {
+  return (
+    <Svg height={18} viewBox="0 0 18 18" width={18}>
+      <Path d="M11.2 3.7 6 9l5.2 5.3" fill="none" stroke="#FFFFFF" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} />
+    </Svg>
+  );
+}
+
+function DotsIcon() {
+  return (
+    <View style={styles.dotsIcon}>
+      <View style={styles.dotsIconDot} />
+      <View style={styles.dotsIconDot} />
+      <View style={styles.dotsIconDot} />
+    </View>
+  );
+}
+
 function MicIcon({ color = iconInk }: { color?: string }) {
   return (
     <Svg height={19} viewBox="0 0 20 20" width={19}>
@@ -296,6 +315,56 @@ function FeatureTile({ icon, label, onPress }: { icon: ReactNode; label: string;
   );
 }
 
+function ChatAvatar() {
+  return (
+    <LinearGradient colors={['#E9F8FF', '#CFE2FF']} style={styles.chatAvatar}>
+      <Image source={logo} resizeMode="contain" style={styles.chatAvatarLogo} />
+    </LinearGradient>
+  );
+}
+
+function ChatMessageBubble({ index, message }: { index: number; message: ChatMessage }) {
+  const opacity = useRef(new Animated.Value(0)).current;
+  const translate = useRef(new Animated.Value(14)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(opacity, { delay: Math.min(index * 55, 240), duration: 260, toValue: 1, useNativeDriver: true }),
+      Animated.spring(translate, { delay: Math.min(index * 55, 240), friction: 8, tension: 120, toValue: 0, useNativeDriver: true }),
+    ]).start();
+  }, [index, opacity, translate]);
+
+  if (message.role === 'user') {
+    return (
+      <Animated.View style={[styles.userChatRow, { opacity, transform: [{ translateY: translate }] }]}>
+        <LinearGradient colors={['rgba(80,147,255,0.94)', 'rgba(103,178,255,0.82)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.userChatBubble}>
+          <Text style={styles.userChatText}>{message.content}</Text>
+        </LinearGradient>
+      </Animated.View>
+    );
+  }
+
+  return (
+    <Animated.View style={[styles.assistantChatRow, { opacity, transform: [{ translateY: translate }] }]}>
+      <ChatAvatar />
+      <BlurView intensity={30} tint="light" style={styles.assistantChatBubble}>
+        <Text style={styles.assistantChatText}>{message.content}</Text>
+      </BlurView>
+    </Animated.View>
+  );
+}
+
+function EmptyChatHint() {
+  return (
+    <View style={styles.emptyChatWrap}>
+      <ChatAvatar />
+      <BlurView intensity={28} tint="light" style={styles.emptyChatBubble}>
+        <Text style={styles.emptyChatText}>พร้อมคุยแล้วค่ะ พิมพ์หรือกดไมค์เพื่อให้ Mira ช่วยเลือกแพ็กเกจสุขภาพ</Text>
+      </BlurView>
+    </View>
+  );
+}
+
 function Composer({
   input,
   isRecording,
@@ -362,20 +431,6 @@ function Composer({
   );
 }
 
-function MiniResponse({ answer }: { answer: string | null }) {
-  if (!answer) {
-    return null;
-  }
-
-  return (
-    <BlurView intensity={28} tint="light" style={styles.responseGlass}>
-      <Text numberOfLines={3} style={styles.responseText}>
-        {answer}
-      </Text>
-    </BlurView>
-  );
-}
-
 function BackgroundSheen() {
   return (
     <Svg height="100%" pointerEvents="none" style={styles.sheenLayer} viewBox="0 0 320 646" width="100%">
@@ -406,12 +461,13 @@ export function PrototypeChatPanel() {
   const audioChunksRef = useRef<Blob[]>([]);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
+  const scrollRef = useRef<ScrollView>(null);
   const [input, setInput] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
-  const [lastAnswer, setLastAnswer] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [viewMode, setViewMode] = useState<'chat' | 'home'>('home');
   const [voiceStatus, setVoiceStatus] = useState<string | null>(null);
 
   const canUseLiveAi = Boolean(auth.session && geminiConfigStatus.hasProxy);
@@ -432,6 +488,14 @@ export function PrototypeChatPanel() {
       stopMediaStream();
     };
   }, []);
+
+  useEffect(() => {
+    if (viewMode === 'chat') {
+      const timer = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 80);
+      return () => clearTimeout(timer);
+    }
+    return undefined;
+  }, [isSending, messages, viewMode]);
 
   function stopMediaStream() {
     mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
@@ -540,29 +604,28 @@ export function PrototypeChatPanel() {
 
     const userMessage = createMessage('user', question);
     const nextMessages = [...messages, userMessage];
+    setViewMode('chat');
     setMessages(nextMessages);
     setInput('');
     setIsSending(true);
+    setVoiceStatus(null);
 
     try {
       if (canUseLiveAi) {
         const result = await askGeminiWithRag({ messages: nextMessages, question });
         const answer = createMessage('assistant', result.text, result.ragMatches);
         setMessages((current) => [...current, answer]);
-        setLastAnswer(result.text);
       } else {
         await new Promise((resolve) => setTimeout(resolve, 520));
         const demo = createDemoAnswer(question);
         const answer = createMessage('assistant', demo.content, demo.sources);
         setMessages((current) => [...current, answer]);
-        setLastAnswer(demo.content);
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'AI request failed.';
       const demo = createDemoAnswer(question);
       const fallback = `${demo.content}\n\nLive AI ยังตอบไม่ได้ตอนนี้ (${message})`;
       setMessages((current) => [...current, createMessage('assistant', fallback, demo.sources)]);
-      setLastAnswer(fallback);
     } finally {
       setIsSending(false);
     }
@@ -573,7 +636,7 @@ export function PrototypeChatPanel() {
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.keyboard}>
         <View style={styles.stage}>
           <View style={[styles.phoneShell, isCompact ? styles.phoneShellCompact : null, frameSize]}>
-            <LinearGradient colors={['#99B7FA', '#B6A9F0', '#D7E4FF']} start={{ x: 0.1, y: 0 }} end={{ x: 1, y: 1 }} style={styles.screen}>
+            <LinearGradient colors={['#A8C8FF', '#D8E9FF', '#F5FBFF']} start={{ x: 0.1, y: 0 }} end={{ x: 1, y: 1 }} style={styles.screen}>
               <BackgroundSheen />
 
               <View style={styles.statusBar}>
@@ -581,42 +644,83 @@ export function PrototypeChatPanel() {
                 <StatusGlyphs />
               </View>
 
-              <View style={styles.topActions}>
-                <Avatar />
-                <GlassCircleButton size={38}>
-                  <BellIcon />
-                </GlassCircleButton>
-              </View>
+              {viewMode === 'home' ? (
+                <>
+                  <View style={styles.topActions}>
+                    <Avatar />
+                    <GlassCircleButton size={36}>
+                      <BellIcon />
+                    </GlassCircleButton>
+                  </View>
 
-              <View style={styles.heroCopy}>
-                <Text style={styles.heroTitle}>Hi Amelia,</Text>
-                <Text style={styles.heroSubtitle}>Ask any questions you have — your AI voice chatbot is always listening.</Text>
-              </View>
+                  <View style={styles.heroCopy}>
+                    <Text style={styles.heroTitle}>Hi Amelia,</Text>
+                    <Text style={styles.heroSubtitle}>Ask any questions you have — your AI voice chatbot is always listening.</Text>
+                  </View>
 
-              <HeroLogo />
+                  <HeroLogo />
 
-              <View style={styles.tileGrid}>
-                <FeatureTile icon={<MicIcon />} label={'Voice\nChat AI'} />
-                <FeatureTile icon={<ChatIcon />} label={'Chat\nwith AI'} onPress={() => setLastAnswer('Chat mode is ready. Type anything below and Mira will answer with the existing chatbot logic.')} />
-                <FeatureTile icon={<ImageIcon />} label={'Generate\nImages'} />
-                <FeatureTile icon={<ScanIcon />} label={'Scan and\nSearch'} />
-              </View>
+                  <View style={styles.tileGrid}>
+                    <FeatureTile icon={<MicIcon />} label={'Voice\nChat AI'} onPress={toggleVoiceRecording} />
+                    <FeatureTile icon={<ChatIcon />} label={'Chat\nwith AI'} onPress={() => setViewMode('chat')} />
+                    <FeatureTile icon={<ImageIcon />} label={'Generate\nImages'} />
+                    <FeatureTile icon={<ScanIcon />} label={'Scan and\nSearch'} />
+                  </View>
 
-              <MiniResponse answer={lastAnswer} />
+                  <View style={styles.bottomArea}>
+                    <Composer
+                      input={input}
+                      isRecording={isRecording}
+                      isSending={isSending}
+                      isTranscribing={isTranscribing}
+                      sendMessage={sendMessage}
+                      setInput={setInput}
+                      toggleVoiceRecording={toggleVoiceRecording}
+                      voiceStatus={voiceStatus}
+                    />
+                    <View style={styles.homeIndicator} />
+                  </View>
+                </>
+              ) : (
+                <>
+                  <View style={styles.chatHeader}>
+                    <GlassCircleButton onPress={() => setViewMode('home')} size={40}>
+                      <BackIcon />
+                    </GlassCircleButton>
+                    <Text style={styles.chatTitle}>Smart Chat</Text>
+                    <GlassCircleButton size={44}>
+                      <DotsIcon />
+                    </GlassCircleButton>
+                  </View>
 
-              <View style={styles.bottomArea}>
-                <Composer
-                  input={input}
-                  isRecording={isRecording}
-                  isSending={isSending}
-                  isTranscribing={isTranscribing}
-                  sendMessage={sendMessage}
-                  setInput={setInput}
-                  toggleVoiceRecording={toggleVoiceRecording}
-                  voiceStatus={voiceStatus}
-                />
-                <View style={styles.homeIndicator} />
-              </View>
+                  <ScrollView ref={scrollRef} contentContainerStyle={styles.chatMessages} showsVerticalScrollIndicator={false}>
+                    {messages.length === 0 ? <EmptyChatHint /> : messages.map((message, index) => <ChatMessageBubble key={message.id} index={index} message={message} />)}
+                    {isSending ? (
+                      <View style={styles.assistantChatRow}>
+                        <ChatAvatar />
+                        <BlurView intensity={30} tint="light" style={[styles.assistantChatBubble, styles.typingChatBubble]}>
+                          <ActivityIndicator color="#5E8DFF" size="small" />
+                          <Text style={styles.assistantChatText}>Mira is thinking...</Text>
+                        </BlurView>
+                      </View>
+                    ) : null}
+                  </ScrollView>
+
+                  <View style={styles.bottomArea}>
+                    <Composer
+                      input={input}
+                      isRecording={isRecording}
+                      isSending={isSending}
+                      isTranscribing={isTranscribing}
+                      sendMessage={sendMessage}
+                      setInput={setInput}
+                      toggleVoiceRecording={toggleVoiceRecording}
+                      voiceStatus={voiceStatus}
+                    />
+                    <View style={styles.homeIndicator} />
+                  </View>
+                </>
+              )}
             </LinearGradient>
           </View>
         </View>
@@ -791,6 +895,16 @@ const styles = StyleSheet.create({
     top: 5,
     width: '52%',
   },
+  dotsIcon: {
+    alignItems: 'center',
+    gap: 3,
+  },
+  dotsIconDot: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 999,
+    height: 3,
+    width: 3,
+  },
   heroCopy: {
     alignItems: 'center',
     marginTop: 7,
@@ -937,25 +1051,104 @@ const styles = StyleSheet.create({
     letterSpacing: 0,
     lineHeight: 14.8,
   },
-  responseGlass: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderColor: 'rgba(255,255,255,0.5)',
-    borderRadius: 14,
+  chatHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    height: 60,
+    justifyContent: 'space-between',
+  },
+  chatTitle: {
+    color: '#FFFFFF',
+    fontSize: 14.5,
+    fontWeight: '700',
+    letterSpacing: 0,
+  },
+  chatMessages: {
+    flexGrow: 1,
+    gap: 12,
+    paddingBottom: 96,
+    paddingTop: 16,
+  },
+  chatAvatar: {
+    alignItems: 'center',
+    borderColor: 'rgba(255,255,255,0.66)',
+    borderRadius: 999,
     borderWidth: 1,
-    bottom: 86,
-    left: 15,
-    maxHeight: 68,
+    height: 30,
+    justifyContent: 'center',
+    overflow: 'hidden',
+    width: 30,
+  },
+  chatAvatarLogo: {
+    height: 23,
+    width: 23,
+  },
+  assistantChatRow: {
+    alignItems: 'flex-start',
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    gap: 9,
+    maxWidth: '92%',
+  },
+  assistantChatBubble: {
+    backgroundColor: 'rgba(255,255,255,0.34)',
+    borderColor: 'rgba(255,255,255,0.66)',
+    borderRadius: 18,
+    borderWidth: 1,
     overflow: 'hidden',
     paddingHorizontal: 12,
-    paddingVertical: 9,
-    position: 'absolute',
-    right: 15,
+    paddingVertical: 10,
+    width: 205,
   },
-  responseText: {
-    color: '#1F2445',
-    fontSize: 11,
+  assistantChatText: {
+    color: '#40527B',
+    fontSize: 11.6,
     fontWeight: '600',
-    lineHeight: 15,
+    lineHeight: 16.6,
+  },
+  userChatRow: {
+    alignSelf: 'flex-end',
+    maxWidth: '84%',
+  },
+  userChatBubble: {
+    borderColor: 'rgba(255,255,255,0.56)',
+    borderRadius: 20,
+    borderWidth: 1,
+    paddingHorizontal: 13,
+    paddingVertical: 10,
+  },
+  userChatText: {
+    color: '#FFFFFF',
+    fontSize: 11.8,
+    fontWeight: '700',
+    lineHeight: 16.8,
+  },
+  typingChatBubble: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 8,
+  },
+  emptyChatWrap: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: 9,
+    marginTop: 10,
+  },
+  emptyChatBubble: {
+    backgroundColor: 'rgba(255,255,255,0.34)',
+    borderColor: 'rgba(255,255,255,0.66)',
+    borderRadius: 18,
+    borderWidth: 1,
+    overflow: 'hidden',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    width: 205,
+  },
+  emptyChatText: {
+    color: '#40527B',
+    fontSize: 11.5,
+    fontWeight: '600',
+    lineHeight: 16.5,
   },
   bottomArea: {
     bottom: 0,
