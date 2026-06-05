@@ -67,7 +67,7 @@ On Windows, you can also run the helper script. It reads `SUPABASE_ACCESS_TOKEN`
 
 `SUPABASE_ACCESS_TOKEN` is the Supabase account access token used by the CLI to deploy functions. It is different from `GEMINI_API_KEY`, which is the Edge Function secret used at runtime.
 
-The helper currently deploys `gemini-chat` with `--no-verify-jwt` because the scaffold has no signed-in user session yet. Before production, add Supabase Auth to the app, remove `--no-verify-jwt`, and enforce user JWT plus rate limiting on the function.
+The helper deploys `gemini-chat` with JWT verification enabled. Users must sign in through Supabase Auth before the mobile app can call Gemini or save chat-derived health facts.
 
 For local function testing:
 
@@ -81,11 +81,13 @@ supabase functions serve gemini-chat --env-file .env.local
 npm run start
 ```
 
-The app retrieves context from `lib/rag/healthKnowledge.ts` by default. If Supabase is configured and the RAG migration has been applied, it loads active rows from `public.rag_chunks` first and falls back to the local corpus if the database is unavailable.
+The app retrieves context from `lib/rag/healthKnowledge.ts` by default. If Supabase is configured and the RAG migrations have been applied, it loads approved active rows from `public.rag_chunks` first and falls back to the local corpus if the database is unavailable.
 
 For source governance and recommended medical RAG sources, see `docs/rag-source-plan.md`.
 
 For AI agents or developers connecting Supabase, Edge Functions, secrets, and RAG, see `docs/supabase-ai-connection.md`.
+
+For chat-derived personal health data, consent, health facts, and audit tables, see `docs/patient-health-data-vault.md`.
 
 For custom hosting, set `EXPO_PUBLIC_AI_PROXY_URL` to your backend endpoint. If it is empty, the app calls `supabase.functions.invoke('gemini-chat')`.
 
@@ -128,8 +130,28 @@ The first migration lives in `supabase/migrations/20260604000000_initial_health_
 The chatbot RAG migration lives in `supabase/migrations/20260604010000_chatbot_rag_schema.sql` and creates:
 
 - `rag_chunks`
-- a read policy for active public RAG chunks
+- a first read policy for active public RAG chunks
 - seed content for checkup preparation, booking, medical safety, privacy, and referral handling
+
+The RAG governance migration lives in `supabase/migrations/20260604020000_rag_governance_taxonomy.sql` and adds:
+
+- dotted categories such as `ops.booking`, `ops.referral`, `safety.escalation`, and `privacy.consent`
+- `summary`, `topic`, `risk_level`, `review_status`, `source_url`, `token_budget`, and `priority`
+- a stricter read policy that exposes only approved active chunks
+
+The patient health data vault migration lives in `supabase/migrations/20260604030000_patient_health_data_vault.sql` and adds:
+
+- `consents`
+- `chat_sessions`
+- `chat_messages`
+- `health_facts`
+- `health_fact_sources`
+- `hospital_access_grants`
+- `data_access_logs`
+
+Chat-derived health facts are stored only after user review and consent. They must not be inserted into the RAG corpus.
+
+The app includes an email/password Supabase Auth MVP on the index screen. Authenticated users can manage confirmed health facts, revoke health-memory consent, export a JSON snapshot, and sign out from `user-profile`.
 
 Do not put Supabase secret keys in the app. Mobile apps can safely include publishable keys only when RLS is correctly enabled.
 

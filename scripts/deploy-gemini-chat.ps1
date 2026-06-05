@@ -35,4 +35,4 @@ if ([string]::IsNullOrWhiteSpace($supabaseUrl)) {
 $projectRef = ([Uri]$supabaseUrl).Host.Split('.')[0]
 
 Write-Output "Deploying gemini-chat to Supabase project $projectRef"
-npx supabase functions deploy gemini-chat --project-ref $projectRef --no-verify-jwt
+npx supabase functions deploy gemini-chat --project-ref $projectRef
