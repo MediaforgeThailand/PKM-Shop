@@ -1,6 +1,6 @@
 # Supabase AI Connection Guide
 
-This document is for AI agents and developers working on Mira Health. It explains how the app connects to Supabase, how the Gemini chatbot proxy is configured, and which secrets must never be exposed in mobile code.
+This document is for AI agents and developers working on Mira Health. It explains how the app connects to Supabase, how the OpenAI chatbot proxy is configured, and which secrets must never be exposed in mobile code.
 
 ## Current Architecture
 
@@ -9,15 +9,15 @@ Expo mobile app
 -> Supabase client
 -> Supabase Edge Function: gemini-chat
 -> approved Supabase RAG corpus + active prompt version + persistent logs
--> Gemini API
+-> OpenAI Responses API
 ```
 
-The mobile app does not call Gemini directly and no longer sends client-built RAG context to Gemini. Gemini credentials, RAG retrieval, active system prompt selection, rate limiting, and AI/RAG/API process logs stay inside Supabase Edge Function and database infrastructure.
+The mobile app does not call OpenAI directly and no longer sends client-built RAG context to the model. OpenAI credentials, RAG retrieval, active system prompt selection, rate limiting, and AI/RAG/API process logs stay inside Supabase Edge Function and database infrastructure.
 
 ## Important Files
 
 - Mobile Supabase client: `lib/supabase.ts`
-- Gemini proxy client: `lib/ai/gemini.ts`
+- OpenAI proxy client: `lib/ai/gemini.ts`
 - Chatbot screen: `app/(tabs)/chatbot.tsx`
 - Local RAG corpus: `lib/rag/healthKnowledge.ts`
 - Optional Supabase RAG loader: `lib/rag/supabaseRag.ts`
@@ -35,7 +35,7 @@ Create `.env.local` in the project root. Do not commit it.
 ```env
 EXPO_PUBLIC_SUPABASE_URL=https://xwixdxmemwcuoamcloty.supabase.co
 EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_BSadkmHjFnN1iJJbZKTRMA_39uRg_gn
-EXPO_PUBLIC_GEMINI_MODEL=gemini-3.5-flash
+EXPO_PUBLIC_OPENAI_MODEL=gpt-5.5
 EXPO_PUBLIC_AI_PROXY_URL=
 SUPABASE_ACCESS_TOKEN=your_supabase_cli_access_token
 ```
@@ -44,25 +44,25 @@ Notes:
 
 - `EXPO_PUBLIC_*` values are bundled into the mobile app. Only put public values there.
 - `SUPABASE_ACCESS_TOKEN` is for the Supabase CLI deploy workflow only.
-- Do not add `EXPO_PUBLIC_GEMINI_API_KEY`.
+- Do not add `EXPO_PUBLIC_OPENAI_API_KEY`.
 - Do not put Supabase service-role keys in Expo/mobile env files.
 
 ## Supabase Secrets
 
-Set Gemini secrets in Supabase, not in the mobile app:
+Set OpenAI secrets in Supabase, not in the mobile app:
 
 ```bash
-npx supabase secrets set GEMINI_API_KEY=your_gemini_api_key_here --project-ref your-project-ref
-npx supabase secrets set GEMINI_MODEL=gemini-3.5-flash --project-ref your-project-ref
-npx supabase secrets set GEMINI_MAX_OUTPUT_TOKENS=1800 --project-ref your-project-ref
-npx supabase secrets set GEMINI_RATE_LIMIT_PER_MINUTE=30 --project-ref your-project-ref
+npx supabase secrets set OPENAI_API_KEY=your_openai_api_key_here --project-ref your-project-ref
+npx supabase secrets set OPENAI_CHAT_MODEL=gpt-5.5 --project-ref your-project-ref
+npx supabase secrets set OPENAI_MAX_OUTPUT_TOKENS=450 --project-ref your-project-ref
+npx supabase secrets set OPENAI_RATE_LIMIT_PER_MINUTE=30 --project-ref your-project-ref
 ```
 
 Optional:
 
 ```bash
-npx supabase secrets set GEMINI_API_BASE_URL=https://generativelanguage.googleapis.com/v1beta --project-ref your-project-ref
-npx supabase secrets set GEMINI_ALLOWED_MODELS=gemini-3.5-flash --project-ref your-project-ref
+npx supabase secrets set OPENAI_API_BASE_URL=https://api.openai.com/v1 --project-ref your-project-ref
+npx supabase secrets set OPENAI_ALLOWED_MODELS=gpt-5.5 --project-ref your-project-ref
 ```
 
 ## Deploy Edge Function
@@ -122,7 +122,7 @@ $uri = $vars['EXPO_PUBLIC_SUPABASE_URL'].TrimEnd('/') + '/functions/v1/gemini-ch
 $anon = $vars['EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY']
 $userJwt = 'paste_authenticated_user_access_token_here'
 $body = @{
-  model = $vars['EXPO_PUBLIC_GEMINI_MODEL']
+  model = $vars['EXPO_PUBLIC_OPENAI_MODEL']
   question = 'จ่ายเงินค่าตรวจสุขภาพแล้วต้องทำยังไงต่อ'
   messages = @()
 } | ConvertTo-Json -Depth 5
@@ -148,7 +148,7 @@ Common errors:
 
 - `404`: function is not deployed to that Supabase project.
 - `401 UNAUTHORIZED_INVALID_JWT_FORMAT` or `Missing authenticated user JWT`: the caller is sending a publishable key or missing user JWT instead of an authenticated user's access token.
-- `500 Missing GEMINI_API_KEY`: Gemini secret is not set on the Edge Function.
+- `500 Missing OPENAI_API_KEY`: OpenAI secret is not set on the Edge Function.
 
 ## How The App Chooses AI Backend
 
@@ -158,13 +158,13 @@ Common errors:
 2. Otherwise, if Supabase public config exists, call `supabase.functions.invoke('gemini-chat')`.
 3. If neither exists, show local RAG preview only.
 
-For the Supabase path, the mobile app sends the authenticated question and short chat history only. The Edge Function retrieves RAG context, loads the active prompt, calls Gemini, and returns public source metadata.
+For the Supabase path, the mobile app sends the authenticated question and short chat history only. The Edge Function retrieves RAG context, loads the active prompt, calls OpenAI, and returns public source metadata.
 
 ## Security Rules For AI Agents
 
 - Never print `.env.local` values.
-- Never add `EXPO_PUBLIC_GEMINI_API_KEY`.
-- Never place `GEMINI_API_KEY`, Supabase service-role key, or `SUPABASE_ACCESS_TOKEN` in committed files.
+- Never add `EXPO_PUBLIC_OPENAI_API_KEY`.
+- Never place `OPENAI_API_KEY`, Supabase service-role key, or `SUPABASE_ACCESS_TOKEN` in committed files.
 - Do not use service-role keys in Expo or React Native code.
 - Keep Supabase Auth JWT required on `gemini-chat`.
 - Keep rate limiting enabled before public launch.
@@ -172,14 +172,14 @@ For the Supabase path, the mobile app sends the authenticated question and short
 
 ## RAG Notes
 
-The app still keeps local fallback RAG chunks for offline preview. In normal Supabase mode, the Edge Function loads approved active `rag_chunks`, routes by taxonomy, then sends compact `summary` context to Gemini.
+The app still keeps local fallback RAG chunks for offline preview. In normal Supabase mode, the Edge Function loads approved active `rag_chunks`, routes by taxonomy, then sends compact `summary` context to OpenAI.
 
 Before using real medical content:
 
 - Use only whitelisted sources.
 - Store `source_url`, `reviewer`, `last_reviewed_at`, `expires_at`, and `risk_level`.
 - Have a qualified medical reviewer approve chunks before activation.
-- Use the dotted taxonomy in `docs/rag-source-plan.md` so unrelated chunks are not sent to Gemini.
+- Use the dotted taxonomy in `docs/rag-source-plan.md` so unrelated chunks are not sent to the model.
 - Keep `summary` short and set `token_budget` per chunk.
 - Keep emergency escalation rules in system policy, not only in RAG content.
 

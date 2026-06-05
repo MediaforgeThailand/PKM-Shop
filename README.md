@@ -28,9 +28,9 @@ npm run typecheck
 
 Use Expo Go for fast previews. Use EAS Build later when the app needs store-ready Android and iOS builds, custom native modules, push notifications, or team distribution.
 
-## Gemini Chatbot + RAG
+## OpenAI Chatbot + RAG
 
-The Chatbot tab is wired for Gemini 3.5 Flash and retrieval-augmented generation through the `gemini-chat` Supabase Edge Function. The Gemini API key stays on the backend as a function secret.
+The Chatbot tab is wired for GPT-5.5 and retrieval-augmented generation through the `gemini-chat` Supabase Edge Function. The function name is legacy, but the runtime now calls OpenAI. The OpenAI API key stays on the backend as a function secret.
 
 1. Copy the env template.
 
@@ -43,14 +43,15 @@ copy .env.example .env
 ```env
 EXPO_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
 EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_your_key_here
-EXPO_PUBLIC_GEMINI_MODEL=gemini-3.5-flash
+EXPO_PUBLIC_OPENAI_MODEL=gpt-5.5
 ```
 
-3. Store the Gemini key as a Supabase Edge Function secret.
+3. Store the OpenAI key as a Supabase Edge Function secret.
 
 ```bash
-supabase secrets set GEMINI_API_KEY=your_gemini_api_key_here
-supabase secrets set GEMINI_MODEL=gemini-3.5-flash
+supabase secrets set OPENAI_API_KEY=your_openai_api_key_here
+supabase secrets set OPENAI_CHAT_MODEL=gpt-5.5
+supabase secrets set OPENAI_MAX_OUTPUT_TOKENS=450
 ```
 
 4. Deploy the Edge Function.
@@ -65,9 +66,9 @@ On Windows, you can also run the helper script. It reads `SUPABASE_ACCESS_TOKEN`
 .\scripts\deploy-gemini-chat.ps1
 ```
 
-`SUPABASE_ACCESS_TOKEN` is the Supabase account access token used by the CLI to deploy functions. It is different from `GEMINI_API_KEY`, which is the Edge Function secret used at runtime.
+`SUPABASE_ACCESS_TOKEN` is the Supabase account access token used by the CLI to deploy functions. It is different from `OPENAI_API_KEY`, which is the Edge Function secret used at runtime.
 
-The helper deploys `gemini-chat` with JWT verification enabled. Users must sign in through Supabase Auth before the mobile app can call Gemini or save chat-derived health facts.
+The helper deploys `gemini-chat` with JWT verification enabled. Users must sign in through Supabase Auth before the mobile app can call OpenAI or save chat-derived health facts.
 
 For local function testing:
 
@@ -91,13 +92,13 @@ For chat-derived personal health data, consent, health facts, and audit tables, 
 
 For custom hosting, set `EXPO_PUBLIC_AI_PROXY_URL` to your backend endpoint. If it is empty, the app calls `supabase.functions.invoke('gemini-chat')`.
 
-Do not ship a Gemini API key directly inside a mobile app. Expo public env values are bundled into the app, so the Gemini key must stay in the Edge Function secret or your own backend secret store.
+Do not ship an OpenAI API key directly inside a mobile app. Expo public env values are bundled into the app, so the OpenAI key must stay in the Edge Function secret or your own backend secret store.
 
 Expected proxy request shape:
 
 ```json
 {
-  "model": "gemini-3.5-flash",
+  "model": "gpt-5.5",
   "question": "User question",
   "messages": [],
   "ragContext": "Retrieved context"

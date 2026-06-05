@@ -1,6 +1,6 @@
 # Chatbot Production Hardening
 
-This note documents the production-oriented chatbot controls added around Gemini, RAG, prompt governance, logs, and health memory.
+This note documents the production-oriented chatbot controls added around OpenAI, RAG, prompt governance, logs, and health memory.
 
 ## Runtime Flow
 
@@ -10,7 +10,7 @@ Expo app
 -> gemini-chat Edge Function
 -> approved active rag_chunks
 -> active prompt_versions row
--> Gemini API
+-> OpenAI Responses API
 -> persistent ai/rag/api logs
 -> app chat UI
 ```

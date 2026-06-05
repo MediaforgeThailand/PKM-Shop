@@ -15,10 +15,11 @@ import {
 } from 'react-native';
 
 import {
-  askGeminiWithRag,
+  aiChatConfigStatus,
+  askAiWithRag,
+  createSmallTalkAnswer,
   createOfflineRagAnswer,
   DEFAULT_SYSTEM_PROMPT,
-  geminiConfigStatus,
   type ChatMessage,
 } from '@/lib/ai/gemini';
 import {
@@ -59,7 +60,7 @@ const initialMessages: ChatMessage[] = [
     id: 'welcome',
     role: 'assistant',
     content:
-      'สวัสดีครับ ผมคือ Mira chatbot พร้อมช่วยเรื่องแพ็กเกจตรวจสุขภาพ ขั้นตอนจองคิว และ referral flow โดยใช้ RAG context ของระบบก่อนตอบเสมอ',
+      'สวัสดีค่ะ วันนี้อยากให้ Mira ช่วยเรื่องอะไรคะ',
     createdAt: new Date().toISOString(),
   },
 ];
@@ -153,11 +154,11 @@ export default function ChatbotScreen() {
   const isWideLayout = width >= 1100;
   const authUserId = auth.user?.id ?? null;
   const isAdminUser = appRole === 'admin';
-  const canUseGemini = geminiConfigStatus.hasProxy && Boolean(auth.session);
-  const modeLabel = !geminiConfigStatus.hasProxy
+  const canUseAi = aiChatConfigStatus.hasProxy && Boolean(auth.session);
+  const modeLabel = !aiChatConfigStatus.hasProxy
     ? 'Local RAG only'
     : auth.session
-    ? geminiConfigStatus.hasSupabaseProxy
+    ? aiChatConfigStatus.hasSupabaseProxy
       ? 'Supabase Edge Function'
       : 'External proxy'
     : 'Login required';
@@ -373,7 +374,7 @@ export default function ChatbotScreen() {
       category: 'api',
       detail: 'User submitted a chatbot message and the app started the request pipeline.',
       meta: [
-        { label: 'mode', value: canUseGemini ? modeLabel : 'Local RAG preview' },
+        { label: 'mode', value: canUseAi ? modeLabel : 'Local RAG preview' },
         { label: 'chars', value: String(question.length) },
       ],
       status: 'info',
@@ -385,7 +386,22 @@ export default function ChatbotScreen() {
     const userMessage = createMessage('user', question);
     const nextMessages = [...messages, userMessage];
     setMessages(nextMessages);
-    if (canUseGemini) {
+    const smallTalkAnswer = createSmallTalkAnswer(question);
+
+    if (smallTalkAnswer) {
+      const assistantMessage = createMessage('assistant', smallTalkAnswer);
+      setMessages((current) => [...current, assistantMessage]);
+      appendLog({
+        category: 'ai',
+        detail: 'Answered with the local small-talk shortcut so simple greetings stay short and human.',
+        status: 'success',
+        title: 'Small-talk shortcut used',
+      });
+      setIsSending(false);
+      return;
+    }
+
+    if (canUseAi) {
       appendLog({
         category: 'rag',
         detail: 'RAG retrieval is delegated to the Supabase Edge Function so the mobile app does not send client-built context.',
@@ -424,18 +440,18 @@ export default function ChatbotScreen() {
       let answer: string;
       let answerSources: ChatMessage['sources'] = [];
 
-      if (canUseGemini) {
+      if (canUseAi) {
         appendLog({
           category: 'api',
-          detail: 'Calling gemini-chat with the user question. RAG retrieval, prompt selection, rate limiting, and AI logs run on the backend.',
+          detail: 'Calling the OpenAI chat backend with the user question. RAG retrieval, prompt selection, rate limiting, and AI logs run on the backend.',
           meta: [
-            { label: 'model', value: geminiConfigStatus.model },
+            { label: 'model', value: aiChatConfigStatus.model },
             { label: 'prompt override', value: isAdminUser ? 'admin available' : 'disabled' },
           ],
           status: 'info',
-          title: 'Gemini API call started',
+          title: 'OpenAI API call started',
         });
-        const result = await askGeminiWithRag({
+        const result = await askAiWithRag({
           messages,
           question,
           systemPrompt: isAdminUser ? systemPrompt : undefined,
@@ -456,7 +472,7 @@ export default function ChatbotScreen() {
         });
         appendLog({
           category: 'ai',
-          detail: 'Gemini returned an assistant answer.',
+          detail: 'OpenAI returned an assistant answer.',
           meta: [
             { label: 'model', value: result.model },
             { label: 'finish', value: result.finishReason ?? 'UNKNOWN' },
@@ -469,21 +485,21 @@ export default function ChatbotScreen() {
         });
         appendLog({
           category: 'api',
-          detail: 'gemini-chat completed successfully and returned text to the app.',
+          detail: 'The chat backend completed successfully and returned text to the app.',
           meta: [
             { label: 'mode', value: result.mode },
             { label: 'latency', value: `${result.latencyMs}ms` },
             ...(result.requestId ? [{ label: 'request', value: result.requestId }] : []),
           ],
           status: 'success',
-          title: 'Gemini API call completed',
+          title: 'OpenAI API call completed',
         });
       } else {
         answer = createOfflineRagAnswer(question, fallbackRagMatches);
         answerSources = fallbackRagMatches;
         appendLog({
           category: 'ai',
-          detail: 'Gemini was unavailable, so the app rendered a local RAG preview answer.',
+          detail: 'OpenAI was unavailable, so the app rendered a local RAG preview answer.',
           meta: [{ label: 'reason', value: auth.session ? 'proxy_not_configured' : 'login_required' }],
           status: 'warning',
           title: 'AI fallback used',
@@ -493,14 +509,14 @@ export default function ChatbotScreen() {
       setMessages((current) => [...current, createMessage('assistant', answer, answerSources)]);
       void handleHealthFactsAfterAnswer(question, answer, answerSources.map((match) => match.id), extractedFacts);
     } catch (sendError) {
-      const message = sendError instanceof Error ? sendError.message : 'Unable to reach Gemini.';
+      const message = sendError instanceof Error ? sendError.message : 'Unable to reach OpenAI.';
       const offlineAnswer = createOfflineRagAnswer(question, fallbackRagMatches);
       setError(message);
       appendLog({
         category: 'api',
         detail: message,
         status: 'error',
-        title: 'Gemini API call failed',
+        title: 'OpenAI API call failed',
       });
       appendLog({
         category: 'ai',
@@ -558,7 +574,7 @@ export default function ChatbotScreen() {
       const result = await persistConfirmedHealthFacts({
         assistantAnswer,
         facts,
-        model: geminiConfigStatus.model,
+        model: aiChatConfigStatus.model,
         question,
         ragChunkIds,
       });
@@ -664,17 +680,17 @@ export default function ChatbotScreen() {
         <View style={[styles.chatPane, !isWideLayout ? styles.chatPaneStack : null]}>
           <ScrollView ref={scrollRef} contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
             <View style={styles.header}>
-          <Text style={styles.eyebrow}>Gemini + RAG</Text>
+          <Text style={styles.eyebrow}>OpenAI + RAG</Text>
           <Text style={styles.title}>Chatbot</Text>
           <Text style={styles.subtitle}>
-            A healthcare assistant wired for Gemini 3.5 Flash, backend RAG, and local fallback knowledge.
+            A healthcare assistant wired for GPT-5.5, backend RAG, and local fallback knowledge.
           </Text>
         </View>
 
         <View style={styles.statusGrid}>
           <View style={styles.statusCard}>
             <Text style={styles.statusLabel}>Model</Text>
-            <Text style={styles.statusValue}>{geminiConfigStatus.model}</Text>
+            <Text style={styles.statusValue}>{aiChatConfigStatus.model}</Text>
           </View>
           <View style={styles.statusCard}>
             <Text style={styles.statusLabel}>Mode</Text>
@@ -686,18 +702,18 @@ export default function ChatbotScreen() {
           </View>
         </View>
 
-        {!geminiConfigStatus.hasProxy ? (
+        {!aiChatConfigStatus.hasProxy ? (
           <View style={styles.notice}>
-            <Text style={styles.noticeTitle}>Gemini proxy ยังไม่ได้ตั้งค่า</Text>
+            <Text style={styles.noticeTitle}>OpenAI proxy ยังไม่ได้ตั้งค่า</Text>
             <Text style={styles.noticeBody}>
-              ใส่ Supabase URL/key แล้วตั้ง GEMINI_API_KEY เป็น Edge Function secret หรือใส่ EXPO_PUBLIC_AI_PROXY_URL แล้ว restart Expo
+              ใส่ Supabase URL/key แล้วตั้ง OPENAI_API_KEY เป็น Edge Function secret หรือใส่ EXPO_PUBLIC_AI_PROXY_URL แล้ว restart Expo
             </Text>
           </View>
         ) : null}
 
-        {geminiConfigStatus.hasProxy && !auth.session ? (
+        {aiChatConfigStatus.hasProxy && !auth.session ? (
           <View style={styles.notice}>
-            <Text style={styles.noticeTitle}>ต้อง login ก่อนใช้ Gemini และ Health Memory</Text>
+            <Text style={styles.noticeTitle}>ต้อง login ก่อนใช้ OpenAI และ Health Memory</Text>
             <Text style={styles.noticeBody}>
               Edge Function เปิด JWT verification แล้ว จึงต้องมี user session ก่อนเรียก AI และก่อนบันทึกข้อมูลสุขภาพ
             </Text>
@@ -711,7 +727,7 @@ export default function ChatbotScreen() {
 
         {error ? (
           <View style={styles.errorBox}>
-            <Text style={styles.errorTitle}>Gemini request fallback</Text>
+            <Text style={styles.errorTitle}>OpenAI request fallback</Text>
             <Text style={styles.errorBody}>{error}</Text>
           </View>
         ) : null}
@@ -746,7 +762,7 @@ export default function ChatbotScreen() {
           {isSending ? (
             <View style={[styles.bubble, styles.assistantBubble, styles.loadingBubble]}>
               <ActivityIndicator color="#3C7864" />
-              <Text style={styles.loadingText}>Retrieving backend context and asking Gemini...</Text>
+                <Text style={styles.loadingText}>Retrieving backend context and asking OpenAI...</Text>
             </View>
           ) : null}
         </View>
@@ -884,7 +900,7 @@ export default function ChatbotScreen() {
           <View style={styles.promptModal}>
             <View style={styles.promptModalHeader}>
               <View>
-                <Text style={styles.promptModalEyebrow}>Gemini system prompt</Text>
+                <Text style={styles.promptModalEyebrow}>OpenAI system prompt</Text>
                 <Text style={styles.promptModalTitle}>Prompt editor</Text>
               </View>
               <Pressable onPress={() => setIsPromptEditorOpen(false)} style={styles.modalIconButton}>

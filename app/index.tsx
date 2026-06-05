@@ -80,7 +80,7 @@ export default function LoginScreen() {
             <StatusRing value={82} label="Match" size={112} />
           </View>
           <Text style={styles.title}>ตรวจสุขภาพที่ใช่ พร้อม AI ช่วยจำบริบทสุขภาพของคุณ</Text>
-          <Text style={styles.subtitle}>เข้าสู่ระบบก่อนใช้ Gemini chatbot และบันทึก Health Profile จากแชทอย่างปลอดภัย</Text>
+          <Text style={styles.subtitle}>เข้าสู่ระบบก่อนใช้ OpenAI chatbot และบันทึก Health Profile จากแชทอย่างปลอดภัย</Text>
         </View>
 
         <Card style={styles.loginCard}>

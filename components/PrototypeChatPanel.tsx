@@ -19,7 +19,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Circle, Defs, LinearGradient as SvgGradient, Path, Rect, Stop } from 'react-native-svg';
 
-import { askGeminiWithRag, geminiConfigStatus, type ChatMessage } from '@/lib/ai/gemini';
+import { aiChatConfigStatus, askAiWithRag, createSmallTalkAnswer, type ChatMessage } from '@/lib/ai/gemini';
 import { transcribeAudio } from '@/lib/ai/openaiTranscription';
 import { useAuthSession } from '@/lib/auth/useAuthSession';
 import { localHealthKnowledge } from '@/lib/rag/healthKnowledge';
@@ -39,6 +39,15 @@ function createMessage(role: ChatMessage['role'], content: string, sources?: Cha
 }
 
 function createDemoAnswer(question: string) {
+  const smallTalkAnswer = createSmallTalkAnswer(question);
+
+  if (smallTalkAnswer) {
+    return {
+      content: smallTalkAnswer,
+      sources: [],
+    };
+  }
+
   const matches = retrieveRagContext(question, localHealthKnowledge, { limit: 2, maxContextChars: 1000 });
 
   if (matches.length === 0) {
@@ -484,7 +493,7 @@ export function PrototypeChatPanel() {
   const [viewMode, setViewMode] = useState<'chat' | 'home'>('home');
   const [voiceStatus, setVoiceStatus] = useState<string | null>(null);
 
-  const canUseLiveAi = Boolean(auth.session && geminiConfigStatus.hasProxy);
+  const canUseLiveAi = Boolean(auth.session && aiChatConfigStatus.hasProxy);
   const isCompact = width < 390;
   const frameSize = useMemo(
     () => ({
@@ -625,8 +634,16 @@ export function PrototypeChatPanel() {
     setVoiceStatus(null);
 
     try {
+      const smallTalkAnswer = createSmallTalkAnswer(question);
+
+      if (smallTalkAnswer) {
+        await new Promise((resolve) => setTimeout(resolve, 180));
+        setMessages((current) => [...current, createMessage('assistant', smallTalkAnswer)]);
+        return;
+      }
+
       if (canUseLiveAi) {
-        const result = await askGeminiWithRag({ messages: nextMessages, question });
+        const result = await askAiWithRag({ messages: nextMessages, question });
         const answer = createMessage('assistant', result.text, result.ragMatches);
         setMessages((current) => [...current, answer]);
       } else {

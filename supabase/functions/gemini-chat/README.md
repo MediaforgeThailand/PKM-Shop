@@ -1,23 +1,23 @@
 # gemini-chat Edge Function
 
-Server-side Gemini proxy for the Mira Health mobile chatbot.
+Server-side OpenAI proxy for the Mira Health mobile chatbot. The function name is legacy so existing mobile clients can keep calling `gemini-chat`.
 
 Deploy with Supabase JWT verification enabled. The mobile app must call this function with an authenticated user's access token, not only the publishable key.
 
 ## Required Secrets
 
 ```bash
-supabase secrets set GEMINI_API_KEY=your_gemini_api_key_here
-supabase secrets set GEMINI_MODEL=gemini-3.5-flash
-supabase secrets set GEMINI_MAX_OUTPUT_TOKENS=1800
-supabase secrets set GEMINI_RATE_LIMIT_PER_MINUTE=30
+supabase secrets set OPENAI_API_KEY=your_openai_api_key_here
+supabase secrets set OPENAI_CHAT_MODEL=gpt-5.5
+supabase secrets set OPENAI_MAX_OUTPUT_TOKENS=450
+supabase secrets set OPENAI_RATE_LIMIT_PER_MINUTE=30
 ```
 
 Optional:
 
 ```bash
-supabase secrets set GEMINI_API_BASE_URL=https://generativelanguage.googleapis.com/v1beta
-supabase secrets set GEMINI_ALLOWED_MODELS=gemini-3.5-flash
+supabase secrets set OPENAI_API_BASE_URL=https://api.openai.com/v1
+supabase secrets set OPENAI_ALLOWED_MODELS=gpt-5.5
 ```
 
 ## Request
@@ -31,7 +31,7 @@ apikey: <supabase-publishable-key>
 
 ```json
 {
-  "model": "gemini-3.5-flash",
+  "model": "gpt-5.5",
   "question": "How should I prepare for a checkup?",
   "messages": [],
   "systemPromptOverride": "Optional admin-only prompt override"
@@ -45,8 +45,8 @@ The function ignores client-supplied RAG context. It retrieves approved active `
 ```json
 {
   "text": "Assistant answer",
-  "model": "gemini-3.5-flash",
-  "finishReason": "STOP",
+  "model": "gpt-5.5",
+  "finishReason": "completed",
   "requestId": "client-or-generated-request-id",
   "ragMatches": [],
   "promptVersion": {
