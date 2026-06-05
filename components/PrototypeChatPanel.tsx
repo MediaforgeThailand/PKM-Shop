@@ -44,15 +44,29 @@ function createDemoAnswer(question: string) {
   if (matches.length === 0) {
     return {
       content:
-        'ตอนนี้ยังไม่มี context ที่ตรงพอใน RAG demo แต่ระบบจริงจะส่งคำถามนี้ไปที่ Supabase Edge Function พร้อม health profile และประวัติการซื้อของผู้ใช้',
+        'ยังไม่มีข้อมูลอ้างอิงที่ตรงพอค่ะ\nลองบอกอายุ เป้าหมายสุขภาพ หรืองบประมาณเพิ่มอีกนิดได้ไหมคะ',
       sources: [],
     };
   }
 
+  const compactTips = matches.slice(0, 2).map((match, index) => {
+    if (match.category === 'ops.booking') {
+      return `${index + 1}. หลังซื้อ ใช้เลข order โทรจองคิวกับโรงพยาบาล`;
+    }
+    if (match.category === 'care.checkup_preparation') {
+      return `${index + 1}. ตรวจพื้นฐานควรดูเลือด ไขมัน น้ำตาล ตับ ไต`;
+    }
+    if (match.category === 'safety.escalation') {
+      return `${index + 1}. ถ้ามีอาการรุนแรง ให้พบแพทย์ทันที`;
+    }
+    return `${index + 1}. เลือกแพ็กเกจตามความเสี่ยงและเป้าหมายหลัก`;
+  });
+
   return {
     content: [
-      'จากข้อมูลที่มี Mira แนะนำให้เลือกแพ็กเกจตามความเสี่ยงหลักก่อน แล้วให้โรงพยาบาลยืนยันรายละเอียดวันตรวจอีกครั้ง',
-      ...matches.map((match, index) => `${index + 1}. ${match.title}: ${match.summary}`),
+      'แนะนำให้เริ่มจากแพ็กเกจที่ตรงกับความเสี่ยงหลักก่อนค่ะ',
+      ...compactTips,
+      'อยากให้คัดตามงบ หรือโรงพยาบาลใกล้บ้านไหมคะ',
     ].join('\n'),
     sources: matches.map((match) => ({
       category: match.category,
