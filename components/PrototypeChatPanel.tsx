@@ -19,7 +19,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Circle, Defs, LinearGradient as SvgGradient, Path, Rect, Stop } from 'react-native-svg';
 
-import { aiChatConfigStatus, askAiWithRag, createSmallTalkAnswer, type ChatMessage } from '@/lib/ai/gemini';
+import { aiChatConfigStatus, askAiWithRag, createSmallTalkAnswer, DEFAULT_USER_NICKNAME, type ChatMessage } from '@/lib/ai/gemini';
 import { transcribeAudio } from '@/lib/ai/openaiTranscription';
 import { useAuthSession } from '@/lib/auth/useAuthSession';
 import { localHealthKnowledge } from '@/lib/rag/healthKnowledge';
@@ -27,6 +27,7 @@ import { retrieveRagContext } from '@/lib/rag/retriever';
 
 const logo = require('@/assets/images/mira-orbit-logo.png');
 const iconInk = '#536491';
+const prototypeUserNickname = DEFAULT_USER_NICKNAME;
 
 function createMessage(role: ChatMessage['role'], content: string, sources?: ChatMessage['sources']): ChatMessage {
   return {
@@ -384,7 +385,7 @@ function EmptyChatHint() {
     <View style={styles.emptyChatWrap}>
       <ChatAvatar />
       <BlurView intensity={28} tint="light" style={styles.emptyChatBubble}>
-        <Text style={styles.emptyChatText}>พร้อมคุยแล้วค่ะ พิมพ์หรือกดไมค์เพื่อให้ Mira ช่วยเลือกแพ็กเกจสุขภาพ</Text>
+        <Text style={styles.emptyChatText}>พร้อมคุยแล้วค่ะ พิมพ์หรือกดไมค์เพื่อให้ฉันช่วยเลือกแพ็กเกจสุขภาพ</Text>
       </BlurView>
     </View>
   );
@@ -687,8 +688,8 @@ export function PrototypeChatPanel() {
                   </View>
 
                   <View style={styles.heroCopy}>
-                    <Text style={styles.heroTitle}>Hi Amelia,</Text>
-                    <Text style={styles.heroSubtitle}>Ask any questions you have — your AI voice chatbot is always listening.</Text>
+                    <Text style={styles.heroTitle}>{`Hi ${prototypeUserNickname},`}</Text>
+                    <Text style={styles.heroSubtitle}>Ask anything about your health plan — I am listening.</Text>
                   </View>
 
                   <HeroLogo />
@@ -733,7 +734,7 @@ export function PrototypeChatPanel() {
                         <ChatAvatar />
                         <BlurView intensity={30} tint="light" style={[styles.assistantChatBubble, styles.typingChatBubble]}>
                           <ActivityIndicator color="#5E8DFF" size="small" />
-                          <Text style={styles.assistantChatText}>Mira is thinking...</Text>
+                          <Text style={styles.assistantChatText}>กำลังคิดคำตอบ...</Text>
                         </BlurView>
                       </View>
                     ) : null}

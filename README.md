@@ -44,6 +44,7 @@ copy .env.example .env
 EXPO_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
 EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_your_key_here
 EXPO_PUBLIC_OPENAI_MODEL=gpt-5.5
+EXPO_PUBLIC_USER_NICKNAME=บอส
 ```
 
 3. Store the OpenAI key as a Supabase Edge Function secret.
@@ -52,6 +53,7 @@ EXPO_PUBLIC_OPENAI_MODEL=gpt-5.5
 supabase secrets set OPENAI_API_KEY=your_openai_api_key_here
 supabase secrets set OPENAI_CHAT_MODEL=gpt-5.5
 supabase secrets set OPENAI_MAX_OUTPUT_TOKENS=450
+supabase secrets set DEFAULT_USER_NICKNAME=บอส
 ```
 
 4. Deploy the Edge Function.
@@ -101,7 +103,7 @@ Expected proxy request shape:
   "model": "gpt-5.5",
   "question": "User question",
   "messages": [],
-  "ragContext": "Retrieved context"
+  "userNickname": "บอส"
 }
 ```
 

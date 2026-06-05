@@ -19,7 +19,9 @@ import {
   askAiWithRag,
   createSmallTalkAnswer,
   createOfflineRagAnswer,
+  DEFAULT_USER_NICKNAME,
   DEFAULT_SYSTEM_PROMPT,
+  formatUserDisplayName,
   type ChatMessage,
 } from '@/lib/ai/gemini';
 import {
@@ -47,6 +49,7 @@ const starterPrompts = [
 ];
 
 const bottomTabBarOffset = 104;
+const defaultUserDisplayName = formatUserDisplayName(DEFAULT_USER_NICKNAME);
 
 const logTabs = [
   { key: 'ai', label: 'AI' },
@@ -59,8 +62,7 @@ const initialMessages: ChatMessage[] = [
   {
     id: 'welcome',
     role: 'assistant',
-    content:
-      'สวัสดีค่ะ วันนี้อยากให้ Mira ช่วยเรื่องอะไรคะ',
+    content: `สวัสดีค่ะ${defaultUserDisplayName} วันนี้อยากให้ฉันช่วยเรื่องอะไรคะ`,
     createdAt: new Date().toISOString(),
   },
 ];

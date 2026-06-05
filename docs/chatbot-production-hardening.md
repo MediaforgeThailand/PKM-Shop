@@ -15,7 +15,7 @@ Expo app
 -> app chat UI
 ```
 
-The app must not send full RAG context from mobile code. In Supabase mode it sends only the user question, short chat history, model hint, and an optional admin-only prompt override. The Edge Function owns retrieval and prompt assembly.
+The app must not send full RAG context from mobile code. In Supabase mode it sends only the user question, short chat history, model hint, user nickname, and an optional admin-only prompt override. The Edge Function owns retrieval and prompt assembly.
 
 ## Production Tables
 
@@ -38,7 +38,7 @@ Chat-derived personal health facts are stored in the patient health data vault, 
 
 ## Verification Checklist
 
-- Run database migrations including `20260605000000_chatbot_production_hardening.sql`.
+- Run database migrations including `20260605000000_chatbot_production_hardening.sql` and `20260605100000_user_nickname_chat_prompt.sql`.
 - Deploy `gemini-chat` with JWT verification enabled.
 - Confirm publishable-key-only calls return `401`.
 - Confirm an authenticated call returns `text`, `requestId`, and `ragMatches`.

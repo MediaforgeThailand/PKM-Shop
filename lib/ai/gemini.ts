@@ -29,14 +29,27 @@ export type AskAiResult = {
   text: string;
 };
 
+const FALLBACK_USER_NICKNAME = 'บอส';
+
+export const DEFAULT_USER_NICKNAME = process.env.EXPO_PUBLIC_USER_NICKNAME?.trim() || FALLBACK_USER_NICKNAME;
+
+export function formatUserDisplayName(userNickname = DEFAULT_USER_NICKNAME) {
+  const nickname = userNickname.trim() || FALLBACK_USER_NICKNAME;
+
+  return nickname.startsWith('คุณ') ? nickname : `คุณ${nickname}`;
+}
+
 export const DEFAULT_SYSTEM_PROMPT = [
-  'You are Mira, a clinical health advisor for a Thai healthcare marketplace.',
+  'You are a clinical health advisor for a Thai healthcare marketplace.',
   '',
-  'Role-play as Dr. Mira, a senior preventive-health physician persona who gives warm consultation-style guidance.',
+  'Role-play as a senior preventive-health physician persona who gives warm consultation-style guidance.',
+  'Your internal product name is Mira, but do not mention Mira in normal answers unless the user asks who you are or asks about the app/brand.',
+  'Use "ฉัน" only when a self-reference is needed. Do not call yourself AI, chatbot, system, model, Mira, or doctor in normal answers.',
+  'The current user nickname is บอส. Address the user as คุณบอส when it feels natural, especially in greetings and follow-up questions.',
   "Do not claim to be the user's treating doctor, and do not say you are a real licensed physician.",
   'Sound like a calm human in a private mobile chat, not a brochure or legal notice.',
   'For greetings, thanks, or tiny small-talk, reply in 1 short natural sentence only.',
-  'Greeting example: สวัสดีค่ะ วันนี้อยากให้ Mira ช่วยเรื่องอะไรคะ',
+  'Greeting example: สวัสดีค่ะคุณบอส วันนี้อยากให้ฉันช่วยเรื่องอะไรคะ',
   'Use relevant RAG context for Mira packages, booking, policies, and hospital-specific details.',
   'If RAG context is missing or irrelevant, do not mention database, RAG, system data, snippets, or missing context to the user.',
   'When safe, answer from general health knowledge like a careful clinical advisor, then ask one useful follow-up question if needed.',
@@ -87,6 +100,7 @@ async function callProxy({
     model: aiChatConfig.model,
     question,
     systemPromptOverride: systemPrompt?.trim() ? systemPrompt.trim() : undefined,
+    userNickname: DEFAULT_USER_NICKNAME,
   };
 
   if (!aiChatConfig.proxyUrl) {
@@ -212,12 +226,14 @@ export async function askAiWithRag({
   throw new Error('Missing AI proxy. Configure Supabase or EXPO_PUBLIC_AI_PROXY_URL.');
 }
 
-export function createSmallTalkAnswer(question: string) {
+export function createSmallTalkAnswer(question: string, userNickname = DEFAULT_USER_NICKNAME) {
   const normalized = question
     .toLowerCase()
     .replace(/[^\p{L}\p{M}\p{N}\s]/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+
+  const userDisplayName = formatUserDisplayName(userNickname);
 
   const greetings = new Set([
     'hi',
@@ -235,11 +251,11 @@ export function createSmallTalkAnswer(question: string) {
   ]);
 
   if (greetings.has(normalized)) {
-    return 'สวัสดีค่ะ วันนี้อยากให้ Mira ช่วยเรื่องอะไรคะ';
+    return `สวัสดีค่ะ${userDisplayName} วันนี้อยากให้ฉันช่วยเรื่องอะไรคะ`;
   }
 
   if (['ขอบคุณ', 'ขอบคุณค่ะ', 'ขอบคุณครับ', 'thanks', 'thank you'].includes(normalized)) {
-    return 'ยินดีค่ะ';
+    return `ยินดีค่ะ${userDisplayName}`;
   }
 
   return null;

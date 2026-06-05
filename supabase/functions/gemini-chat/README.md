@@ -11,6 +11,7 @@ supabase secrets set OPENAI_API_KEY=your_openai_api_key_here
 supabase secrets set OPENAI_CHAT_MODEL=gpt-5.5
 supabase secrets set OPENAI_MAX_OUTPUT_TOKENS=450
 supabase secrets set OPENAI_RATE_LIMIT_PER_MINUTE=30
+supabase secrets set DEFAULT_USER_NICKNAME=บอส
 ```
 
 Optional:
@@ -34,11 +35,12 @@ apikey: <supabase-publishable-key>
   "model": "gpt-5.5",
   "question": "How should I prepare for a checkup?",
   "messages": [],
+  "userNickname": "บอส",
   "systemPromptOverride": "Optional admin-only prompt override"
 }
 ```
 
-The function ignores client-supplied RAG context. It retrieves approved active `rag_chunks` on the backend, loads the active `prompt_versions` row, applies per-user rate limiting, and writes AI/RAG/API logs to Supabase.
+The function ignores client-supplied RAG context. It retrieves approved active `rag_chunks` on the backend, loads the active `prompt_versions` row, adds the user nickname/addressing context, applies per-user rate limiting, and writes AI/RAG/API logs to Supabase.
 
 ## Response
 

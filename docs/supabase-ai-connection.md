@@ -36,6 +36,7 @@ Create `.env.local` in the project root. Do not commit it.
 EXPO_PUBLIC_SUPABASE_URL=https://xwixdxmemwcuoamcloty.supabase.co
 EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_BSadkmHjFnN1iJJbZKTRMA_39uRg_gn
 EXPO_PUBLIC_OPENAI_MODEL=gpt-5.5
+EXPO_PUBLIC_USER_NICKNAME=บอส
 EXPO_PUBLIC_AI_PROXY_URL=
 SUPABASE_ACCESS_TOKEN=your_supabase_cli_access_token
 ```
@@ -56,6 +57,7 @@ npx supabase secrets set OPENAI_API_KEY=your_openai_api_key_here --project-ref y
 npx supabase secrets set OPENAI_CHAT_MODEL=gpt-5.5 --project-ref your-project-ref
 npx supabase secrets set OPENAI_MAX_OUTPUT_TOKENS=450 --project-ref your-project-ref
 npx supabase secrets set OPENAI_RATE_LIMIT_PER_MINUTE=30 --project-ref your-project-ref
+npx supabase secrets set DEFAULT_USER_NICKNAME=บอส --project-ref your-project-ref
 ```
 
 Optional:
@@ -80,6 +82,7 @@ Current behavior:
 - The app must have a Supabase Auth session before calling `gemini-chat`.
 - Backend RAG retrieves only approved active `rag_chunks`.
 - Active prompt text comes from `prompt_versions`; only admins can manage prompt versions.
+- The app sends `userNickname` so the active prompt can address the user as `คุณบอส` by default.
 - Per-user rate limiting is handled by `increment_ai_rate_limit`.
 - AI, RAG, and API process events are written to persistent log tables.
 
@@ -94,6 +97,7 @@ Apply these migrations to the Supabase project:
 - `supabase/migrations/20260604040000_health_fact_autosave_triggers.sql`
 - `supabase/migrations/20260604050000_blood_test_and_health_risk_rag.sql`
 - `supabase/migrations/20260605000000_chatbot_production_hardening.sql`
+- `supabase/migrations/20260605100000_user_nickname_chat_prompt.sql`
 
 Safe options:
 
@@ -105,6 +109,8 @@ The first RAG migration creates `public.rag_chunks`. The governance migration ad
 The patient health data vault migration creates consent, chat history, health fact, hospital grant, and audit tables. Chat-derived personal health data belongs there, not in `rag_chunks`.
 
 The production hardening migration creates `app_user_roles`, `prompt_versions`, `ai_request_logs`, `rag_retrieval_logs`, `api_process_logs`, `health_memory_logs`, `chat_eval_cases`, `ai_rate_limits`, and the `increment_ai_rate_limit` RPC.
+
+The user nickname prompt migration archives older active chatbot prompts and activates `mira-health-chatbot-v5-user-nickname`, which addresses the default user as `คุณบอส` and avoids self-references like AI, chatbot, Mira, or doctor in normal answers.
 
 ## Verify Function Endpoint
 
@@ -123,6 +129,7 @@ $anon = $vars['EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY']
 $userJwt = 'paste_authenticated_user_access_token_here'
 $body = @{
   model = $vars['EXPO_PUBLIC_OPENAI_MODEL']
+  userNickname = $vars['EXPO_PUBLIC_USER_NICKNAME']
   question = 'จ่ายเงินค่าตรวจสุขภาพแล้วต้องทำยังไงต่อ'
   messages = @()
 } | ConvertTo-Json -Depth 5
