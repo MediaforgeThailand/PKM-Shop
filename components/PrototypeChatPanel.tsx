@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   Animated,
+  Easing,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -14,12 +16,14 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Svg, { Circle, ClipPath, Defs, Ellipse, G, LinearGradient as SvgGradient, Path, Rect, Stop } from 'react-native-svg';
+import Svg, { Circle, Defs, LinearGradient as SvgGradient, Path, Rect, Stop } from 'react-native-svg';
 
 import { askGeminiWithRag, geminiConfigStatus, type ChatMessage } from '@/lib/ai/gemini';
 import { useAuthSession } from '@/lib/auth/useAuthSession';
 import { localHealthKnowledge } from '@/lib/rag/healthKnowledge';
 import { retrieveRagContext } from '@/lib/rag/retriever';
+
+const logo = require('@/assets/images/mira-orbit-logo.png');
 
 function createMessage(role: ChatMessage['role'], content: string, sources?: ChatMessage['sources']): ChatMessage {
   return {
@@ -77,20 +81,33 @@ function usePressScale() {
 
 function useFloatMotion() {
   const float = useRef(new Animated.Value(0)).current;
+  const orbit = useRef(new Animated.Value(0)).current;
+  const pulse = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     Animated.loop(
       Animated.sequence([
-        Animated.timing(float, { duration: 1700, toValue: 1, useNativeDriver: true }),
-        Animated.timing(float, { duration: 1700, toValue: 0, useNativeDriver: true }),
+        Animated.timing(float, { duration: 1800, easing: Easing.inOut(Easing.sin), toValue: 1, useNativeDriver: true }),
+        Animated.timing(float, { duration: 1800, easing: Easing.inOut(Easing.sin), toValue: 0, useNativeDriver: true }),
       ]),
     ).start();
-  }, [float]);
+    Animated.loop(Animated.timing(orbit, { duration: 9000, easing: Easing.linear, toValue: 1, useNativeDriver: true })).start();
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { duration: 1450, easing: Easing.out(Easing.quad), toValue: 1, useNativeDriver: true }),
+        Animated.timing(pulse, { duration: 1450, easing: Easing.in(Easing.quad), toValue: 0, useNativeDriver: true }),
+      ]),
+    ).start();
+  }, [float, orbit, pulse]);
 
   return {
-    transform: [
+    haloOpacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.28, 0.58] }),
+    haloScale: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1.08] }),
+    logoScale: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.98, 1.025] }),
+    orbitRotate: orbit.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] }),
+    rootTransform: [
       {
-        translateY: float.interpolate({ inputRange: [0, 1], outputRange: [0, -7] }),
+        translateY: float.interpolate({ inputRange: [0, 1], outputRange: [2, -8] }),
       },
     ],
   };
@@ -177,10 +194,15 @@ function GlassCircleButton({ children, size = 47, onPress }: { children: ReactNo
 
   return (
     <Pressable onPress={onPress} onPressIn={pressIn} onPressOut={pressOut}>
-      <Animated.View style={[styles.glassCircleShadow, { transform: [{ scale }] }]}>
-        <BlurView intensity={28} tint="light" style={[styles.glassCircle, { height: size, width: size }]}>
+      <Animated.View style={[styles.glassCircleShadow, { borderRadius: size / 2, height: size, transform: [{ scale }], width: size }]}>
+        <LinearGradient
+          colors={['rgba(255,255,255,0.36)', 'rgba(255,255,255,0.1)']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[styles.glassCircle, { borderRadius: size / 2, height: size, width: size }]}>
+          <View style={styles.glassCircleHighlight} />
           {children}
-        </BlurView>
+        </LinearGradient>
       </Animated.View>
     </Pressable>
   );
@@ -216,52 +238,27 @@ function Avatar() {
   );
 }
 
-function HeroOrb() {
-  const floating = useFloatMotion();
+function HeroLogo() {
+  const motion = useFloatMotion();
 
   return (
-    <Animated.View style={[styles.orbWrap, floating]}>
-      <Svg height={170} viewBox="0 0 210 190" width={196}>
-        <Defs>
-          <SvgGradient id="orbBase" x1="0" x2="1" y1="0" y2="1">
-            <Stop offset="0" stopColor="#BFFFEF" />
-            <Stop offset="0.27" stopColor="#7AE6EE" />
-            <Stop offset="0.53" stopColor="#BB9DFF" />
-            <Stop offset="0.78" stopColor="#FF9DE8" />
-            <Stop offset="1" stopColor="#95FFE2" />
-          </SvgGradient>
-          <SvgGradient id="orbStripe" x1="0" x2="1" y1="0" y2="0">
-            <Stop offset="0" stopColor="#E8FFF8" />
-            <Stop offset="0.4" stopColor="#75E7F4" />
-            <Stop offset="0.72" stopColor="#D68CFF" />
-            <Stop offset="1" stopColor="#F6ECFF" />
-          </SvgGradient>
-          <SvgGradient id="orbShadow" x1="0" x2="0" y1="0" y2="1">
-            <Stop offset="0" stopColor="#FFFFFF" stopOpacity={0.35} />
-            <Stop offset="1" stopColor="#6B71D8" stopOpacity={0.2} />
-          </SvgGradient>
-          <ClipPath id="orbClip">
-            <Ellipse cx={104} cy={94} rx={72} ry={64} />
-          </ClipPath>
-        </Defs>
-        <Ellipse cx={105} cy={103} fill="rgba(64,96,170,0.16)" rx={78} ry={63} />
-        <Ellipse cx={104} cy={94} fill="url(#orbBase)" rx={72} ry={64} />
-        <G clipPath="url(#orbClip)" opacity={0.92} transform="rotate(-18 105 95)">
-          {[0, 1, 2, 3, 4, 5, 6, 7].map((item) => (
-            <Path
-              key={item}
-              d={`M28 ${45 + item * 14} C63 ${25 + item * 14} 124 ${27 + item * 14} 181 ${55 + item * 14}`}
-              fill="none"
-              stroke="url(#orbStripe)"
-              strokeLinecap="round"
-              strokeWidth={11.5}
-            />
-          ))}
-        </G>
-        <Path d="M65 65c26-26 72-28 103 2" fill="none" opacity={0.38} stroke="#FFFFFF" strokeLinecap="round" strokeWidth={12} />
-        <Path d="M61 124c35 20 74 22 112 1" fill="none" opacity={0.2} stroke="#19D5D3" strokeLinecap="round" strokeWidth={19} />
-        <Ellipse cx={104} cy={94} fill="url(#orbShadow)" rx={72} ry={64} />
-      </Svg>
+    <Animated.View style={[styles.orbWrap, { transform: motion.rootTransform }]}>
+      <Animated.View style={[styles.logoHaloOuter, { opacity: motion.haloOpacity, transform: [{ scale: motion.haloScale }] }]} />
+      <Animated.View style={[styles.logoOrbitRing, { transform: [{ rotate: motion.orbitRotate }] }]}>
+        <View style={styles.logoOrbitDot} />
+        <View style={styles.logoOrbitDotSoft} />
+      </Animated.View>
+      <Animated.View style={[styles.logoCard, { transform: [{ scale: motion.logoScale }] }]}>
+        <LinearGradient colors={['rgba(255,255,255,0.72)', 'rgba(255,255,255,0.2)']} style={styles.logoCardGlass}>
+          <Image source={logo} resizeMode="contain" style={styles.heroLogoImage} />
+        </LinearGradient>
+      </Animated.View>
+      <Animated.View style={[styles.logoSparkOne, { opacity: motion.haloOpacity, transform: [{ rotate: motion.orbitRotate }] }]}>
+        <SparkleIcon />
+      </Animated.View>
+      <Animated.View style={[styles.logoSparkTwo, { opacity: motion.haloOpacity, transform: [{ scale: motion.logoScale }] }]}>
+        <SparkleIcon />
+      </Animated.View>
     </Animated.View>
   );
 }
@@ -434,7 +431,7 @@ export function PrototypeChatPanel() {
                 <Text style={styles.heroSubtitle}>Ask any questions you have — your AI voice chatbot is always listening.</Text>
               </View>
 
-              <HeroOrb />
+              <HeroLogo />
 
               <View style={styles.tileGrid}>
                 <FeatureTile icon={<MicIcon />} label={'Voice\nChat AI'} />
@@ -597,19 +594,31 @@ const styles = StyleSheet.create({
     width: 30,
   },
   glassCircleShadow: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
     shadowColor: '#6F60C7',
     shadowOffset: { height: 10, width: 0 },
-    shadowOpacity: 0.14,
+    shadowOpacity: 0.18,
     shadowRadius: 16,
   },
   glassCircle: {
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    borderColor: 'rgba(255,255,255,0.34)',
-    borderRadius: 999,
+    borderColor: 'rgba(255,255,255,0.56)',
     borderWidth: 1,
     justifyContent: 'center',
     overflow: 'hidden',
+    position: 'relative',
+  },
+  glassCircleHighlight: {
+    backgroundColor: 'rgba(255,255,255,0.36)',
+    borderRadius: 999,
+    height: '52%',
+    left: 7,
+    opacity: 0.58,
+    position: 'absolute',
+    top: 5,
+    width: '52%',
   },
   heroCopy: {
     alignItems: 'center',
@@ -637,6 +646,80 @@ const styles = StyleSheet.create({
     height: 170,
     justifyContent: 'center',
     marginTop: 0,
+  },
+  logoHaloOuter: {
+    backgroundColor: 'rgba(107,153,255,0.22)',
+    borderColor: 'rgba(255,255,255,0.36)',
+    borderRadius: 999,
+    borderWidth: 1,
+    height: 138,
+    position: 'absolute',
+    width: 138,
+  },
+  logoOrbitRing: {
+    alignItems: 'center',
+    borderColor: 'rgba(255,255,255,0.4)',
+    borderRadius: 999,
+    borderWidth: 1,
+    height: 154,
+    justifyContent: 'center',
+    position: 'absolute',
+    width: 154,
+  },
+  logoOrbitDot: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 999,
+    height: 8,
+    position: 'absolute',
+    right: 13,
+    top: 30,
+    width: 8,
+  },
+  logoOrbitDotSoft: {
+    backgroundColor: '#9ECAFF',
+    borderRadius: 999,
+    bottom: 24,
+    height: 6,
+    left: 18,
+    position: 'absolute',
+    width: 6,
+  },
+  logoCard: {
+    alignItems: 'center',
+    borderRadius: 999,
+    height: 118,
+    justifyContent: 'center',
+    shadowColor: '#5F8CFF',
+    shadowOffset: { height: 18, width: 0 },
+    shadowOpacity: 0.24,
+    shadowRadius: 22,
+    width: 118,
+  },
+  logoCardGlass: {
+    alignItems: 'center',
+    borderColor: 'rgba(255,255,255,0.62)',
+    borderRadius: 999,
+    borderWidth: 1,
+    height: 118,
+    justifyContent: 'center',
+    overflow: 'hidden',
+    width: 118,
+  },
+  heroLogoImage: {
+    height: 100,
+    width: 100,
+  },
+  logoSparkOne: {
+    position: 'absolute',
+    right: 45,
+    top: 17,
+  },
+  logoSparkTwo: {
+    bottom: 20,
+    left: 47,
+    opacity: 0.5,
+    position: 'absolute',
+    transform: [{ scale: 0.58 }],
   },
   tileGrid: {
     flexDirection: 'row',
