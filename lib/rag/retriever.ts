@@ -79,6 +79,10 @@ const intentRules: { categories: RagCategory[]; terms: string[] }[] = [
     terms: ['ตรวจสุขภาพ', 'ตรวจเลือด', 'เตรียมตัว', 'งดอาหาร', 'เจาะเลือด', 'blood test', 'lab test', 'fasting', 'checkup'],
   },
   {
+    categories: ['marketplace.product'],
+    terms: ['แพ็กเกจ', 'package', 'สินค้า', 'ราคา', 'บริการ', 'โรงพยาบาล', 'รวมอะไร', 'มีอะไรบ้าง', 'product'],
+  },
+  {
     categories: ['care.patient_education', 'safety.escalation'],
     terms: ['ความเสี่ยง', 'เสี่ยง', 'อายุ', 'น้ำหนัก', 'ส่วนสูง', 'เพศชาย', 'เพศหญิง', 'bmi', 'risk'],
   },

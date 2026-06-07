@@ -25,7 +25,13 @@ The mobile app does not call OpenAI directly and no longer sends client-built RA
 - RAG governance migration: `supabase/migrations/20260604020000_rag_governance_taxonomy.sql`
 - Patient health data vault migration: `supabase/migrations/20260604030000_patient_health_data_vault.sql`
 - Chatbot production hardening migration: `supabase/migrations/20260605000000_chatbot_production_hardening.sql`
+- Hospital product portal migrations:
+  - `supabase/migrations/20260605010000_hospital_product_portal.sql`
+  - `supabase/migrations/20260605011000_hospital_product_location_fields.sql`
+  - `supabase/migrations/20260605012000_hospital_product_management_policies.sql`
+- RAG vector embedding migration: `supabase/migrations/20260605013000_rag_vector_embeddings.sql`
 - Edge Function: `supabase/functions/gemini-chat/index.ts`
+- RAG embedding Edge Function: `supabase/functions/rag-embed/index.ts`
 - Deploy helper: `scripts/deploy-gemini-chat.ps1`
 
 ## Required `.env.local`
@@ -97,6 +103,13 @@ Apply these migrations to the Supabase project:
 - `supabase/migrations/20260604040000_health_fact_autosave_triggers.sql`
 - `supabase/migrations/20260604050000_blood_test_and_health_risk_rag.sql`
 - `supabase/migrations/20260605000000_chatbot_production_hardening.sql`
+- `supabase/migrations/20260605010000_hospital_product_portal.sql`
+- `supabase/migrations/20260605011000_hospital_product_location_fields.sql`
+- `supabase/migrations/20260605012000_hospital_product_management_policies.sql`
+- `supabase/migrations/20260605013000_rag_vector_embeddings.sql`
+- `supabase/migrations/20260605070000_clean_mobile_chat_prompt.sql`
+- `supabase/migrations/20260605080000_human_mobile_chat_prompt.sql`
+- `supabase/migrations/20260605090000_clinical_advisor_chat_prompt.sql`
 - `supabase/migrations/20260605100000_user_nickname_chat_prompt.sql`
 
 Safe options:
@@ -111,6 +124,15 @@ The patient health data vault migration creates consent, chat history, health fa
 The production hardening migration creates `app_user_roles`, `prompt_versions`, `ai_request_logs`, `rag_retrieval_logs`, `api_process_logs`, `health_memory_logs`, `chat_eval_cases`, `ai_rate_limits`, and the `increment_ai_rate_limit` RPC.
 
 The user nickname prompt migration archives older active chatbot prompts and activates `mira-health-chatbot-v5-user-nickname`, which addresses the default user as `คุณบอส` and avoids self-references like AI, chatbot, Mira, or doctor in normal answers.
+
+The hospital product portal migrations create `hospital_products`, add hospital address/map fields, allow `marketplace.product` RAG chunks, and add prototype RLS policies for authenticated staff to add products, auto-publish product RAG, and read their managed archived products from `/hospital-products`.
+
+The vector embedding migration enables `pgvector`, adds `rag_chunks.embedding`, and creates:
+
+- `match_rag_chunks`: vector search RPC used by `gemini-chat`.
+- `update_rag_chunk_embedding`: authenticated RPC used by `rag-embed` after product RAG publish.
+
+`rag-embed` and vector retrieval use the Supabase Edge Function secret `GEMINI_API_KEY` plus optional `GEMINI_EMBEDDING_MODEL` defaulting to `gemini-embedding-001`. Chat answers still use OpenAI Responses API. Embeddings store 768-dimension vectors, so any model/dimension change requires a coordinated DB migration and re-embedding.
 
 ## Verify Function Endpoint
 
@@ -189,6 +211,8 @@ Before using real medical content:
 - Use the dotted taxonomy in `docs/rag-source-plan.md` so unrelated chunks are not sent to the model.
 - Keep `summary` short and set `token_budget` per chunk.
 - Keep emergency escalation rules in system policy, not only in RAG content.
+- Product RAG from `/hospital-portal` is for marketplace/package awareness. Before production, add a review queue before approving medical preparation notes.
 
 See `docs/rag-source-plan.md` for recommended source strategy.
 See `docs/patient-health-data-vault.md` for user-specific health memory, consent, and audit rules.
+See `docs/hospital-product-portal.md` for the portal product-to-RAG prototype flow.

@@ -8,6 +8,8 @@ const menuItems = [
   { title: 'Order and booking', body: 'Post-payment instruction and booking status.', href: '/order-status' },
   { title: 'Partner referral', body: 'Referral links, commission, and payouts.', href: '/partner' },
   { title: 'Hospital admin', body: 'Lookup order by phone, ID card, or order id.', href: '/admin-booking' },
+  { title: 'Hospital product portal', body: 'Add products, auto-categorize, and publish product RAG.', href: '/hospital-portal' },
+  { title: 'Hospital product management', body: 'Search, archive, restore, and monitor product RAG status.', href: '/hospital-products' },
   { title: 'User profile', body: 'Identity, consent, goals, and health timeline.', href: '/user-profile' },
 ] as const;
 

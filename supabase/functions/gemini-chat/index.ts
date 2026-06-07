@@ -41,6 +41,18 @@ type OpenAIResponse = {
   status?: string;
 };
 
+type GeminiEmbeddingResponse = {
+  embedding?: {
+    values?: number[];
+  };
+  error?: {
+    message?: string;
+  };
+  usageMetadata?: {
+    promptTokenCount?: number;
+  };
+};
+
 type JwtPayload = {
   app_metadata?: Record<string, unknown>;
   sub?: string;
@@ -50,6 +62,7 @@ type JwtPayload = {
 type RagCategory =
   | 'care.checkup_preparation'
   | 'care.patient_education'
+  | 'marketplace.product'
   | 'ops.booking'
   | 'ops.call_center'
   | 'ops.payment'
@@ -103,7 +116,12 @@ type RagChunkRow = {
 
 type RagMatch = RagChunk & {
   matchedCategories: RagCategory[];
+  retrievalMode?: 'keyword' | 'vector';
   score: number;
+};
+
+type RagVectorMatchRow = RagChunkRow & {
+  similarity: number | null;
 };
 
 type PromptVersion = {
@@ -125,6 +143,8 @@ const corsHeaders = {
 const DEFAULT_CONTEXT_CHARS = 1800;
 const DEFAULT_LIMIT = 3;
 const DEFAULT_USER_NICKNAME = 'บอส';
+const EMBEDDING_DIMENSIONS = 768;
+const DEFAULT_EMBEDDING_MODEL = 'gemini-embedding-001';
 const DEFAULT_SYSTEM_PROMPT = `You are a clinical health advisor for a Thai healthcare marketplace.
 
 Role-play as a senior preventive-health physician persona who gives warm consultation-style guidance.
@@ -203,6 +223,10 @@ const intentRules: { categories: RagCategory[]; terms: string[] }[] = [
   {
     categories: ['care.checkup_preparation'],
     terms: ['ตรวจสุขภาพ', 'ตรวจเลือด', 'เตรียมตัว', 'งดอาหาร', 'เจาะเลือด', 'blood test', 'lab test', 'fasting', 'checkup'],
+  },
+  {
+    categories: ['marketplace.product'],
+    terms: ['แพ็กเกจ', 'package', 'สินค้า', 'ราคา', 'บริการ', 'โรงพยาบาล', 'รวมอะไร', 'มีอะไรบ้าง', 'product'],
   },
   {
     categories: ['care.patient_education', 'safety.escalation'],
@@ -453,6 +477,66 @@ async function callRpc<T>(functionName: string, body: Record<string, unknown>, a
   return (await response.json()) as T;
 }
 
+function normalizeGeminiModelName(model: string) {
+  return model.replace(/^models\//, '').trim();
+}
+
+function geminiModelResource(model: string) {
+  return `models/${normalizeGeminiModelName(model)}`;
+}
+
+function vectorLiteral(values: number[]) {
+  return `[${values.map((value) => Number(value).toFixed(8)).join(',')}]`;
+}
+
+async function generateGeminiEmbedding({
+  apiBaseUrl,
+  geminiApiKey,
+  model,
+  taskType,
+  text,
+  title,
+}: {
+  apiBaseUrl: string;
+  geminiApiKey: string;
+  model: string;
+  taskType: 'RETRIEVAL_DOCUMENT' | 'RETRIEVAL_QUERY';
+  text: string;
+  title?: string;
+}) {
+  const normalizedModel = normalizeGeminiModelName(model);
+  const response = await fetch(`${apiBaseUrl}/${geminiModelResource(normalizedModel)}:embedContent`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-goog-api-key': geminiApiKey,
+    },
+    body: JSON.stringify({
+      model: geminiModelResource(normalizedModel),
+      content: {
+        parts: [{ text }],
+      },
+      embedContentConfig: {
+        autoTruncate: true,
+        outputDimensionality: EMBEDDING_DIMENSIONS,
+        taskType,
+        ...(title ? { title } : {}),
+      },
+    }),
+  });
+  const data = (await response.json()) as GeminiEmbeddingResponse;
+
+  if (!response.ok || !data.embedding?.values?.length) {
+    throw new Error(data.error?.message ?? 'Gemini embedding request failed.');
+  }
+
+  return {
+    model: normalizedModel,
+    usageMetadata: data.usageMetadata,
+    values: data.embedding.values,
+  };
+}
+
 function normalizeInput(input: string) {
   return input.toLowerCase().replace(/[^\p{L}\p{M}\p{N}\s.-]/gu, ' ');
 }
@@ -557,6 +641,62 @@ async function fetchApprovedRagChunks(authorization: string) {
   return rows.length ? rows.map(toRagChunk).filter((chunk) => chunk.reviewStatus === 'approved') : localFallbackKnowledge;
 }
 
+async function retrieveVectorRagContext({
+  apiBaseUrl,
+  authorization,
+  geminiApiKey,
+  limit,
+  preferredCategories,
+  question,
+}: {
+  apiBaseUrl: string;
+  authorization: string;
+  geminiApiKey: string;
+  limit: number;
+  preferredCategories: RagCategory[];
+  question: string;
+}) {
+  const config = getSupabaseConfig();
+
+  if (!config) {
+    return [];
+  }
+
+  const embeddingModel = Deno.env.get('GEMINI_EMBEDDING_MODEL') ?? DEFAULT_EMBEDDING_MODEL;
+  const embedding = await generateGeminiEmbedding({
+    apiBaseUrl,
+    geminiApiKey,
+    model: embeddingModel,
+    taskType: 'RETRIEVAL_QUERY',
+    text: question,
+  });
+  const matchThreshold = getNumberEnv('RAG_VECTOR_MATCH_THRESHOLD', 0.62);
+  const rows = await callRpc<RagVectorMatchRow[]>(
+    'match_rag_chunks',
+    {
+      category_filter: preferredCategories,
+      match_count: Math.max(limit, DEFAULT_LIMIT),
+      match_threshold: matchThreshold,
+      query_embedding: vectorLiteral(embedding.values),
+    },
+    authorization,
+  );
+
+  return trimToBudget(
+    (rows ?? [])
+      .map((row) => ({
+        ...toRagChunk(row),
+        matchedCategories: preferredCategories,
+        retrievalMode: 'vector' as const,
+        score: Math.round((row.similarity ?? 0) * 1000),
+      }))
+      .filter((match) => match.reviewStatus === 'approved')
+      .sort((a, b) => b.score - a.score || a.priority - b.priority || a.title.localeCompare(b.title))
+      .slice(0, limit),
+    DEFAULT_CONTEXT_CHARS,
+  );
+}
+
 function scoreChunk(queryTokens: string[], preferredCategories: RagCategory[], chunk: RagChunk) {
   const normalizedQuery = queryTokens.join(' ');
   const haystack = `${chunk.title} ${chunk.category} ${chunk.topic} ${chunk.keywords.join(' ')} ${chunk.summary} ${
@@ -624,13 +764,18 @@ function retrieveRagContext(query: string, chunks: RagChunk[], limit = DEFAULT_L
         .slice()
         .sort((a, b) => a.priority - b.priority || a.title.localeCompare(b.title))
         .slice(0, limit)
-        .map((chunk) => ({ ...chunk, matchedCategories: preferredCategories, score: 0 })),
+        .map((chunk) => ({ ...chunk, matchedCategories: preferredCategories, retrievalMode: 'keyword' as const, score: 0 })),
       DEFAULT_CONTEXT_CHARS,
     );
   }
 
   const scoredMatches = candidates
-    .map((chunk) => ({ ...chunk, matchedCategories: preferredCategories, score: scoreChunk(queryTokens, preferredCategories, chunk) }))
+    .map((chunk) => ({
+      ...chunk,
+      matchedCategories: preferredCategories,
+      retrievalMode: 'keyword' as const,
+      score: scoreChunk(queryTokens, preferredCategories, chunk),
+    }))
     .filter((match) => match.score > 0)
     .sort((a, b) => b.score - a.score || a.priority - b.priority || a.title.localeCompare(b.title))
     .slice(0, limit);
@@ -903,6 +1048,8 @@ Deno.serve(async (req) => {
 
   const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
   const apiBaseUrl = Deno.env.get('OPENAI_API_BASE_URL') ?? 'https://api.openai.com/v1';
+  const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
+  const embeddingApiBaseUrl = Deno.env.get('GEMINI_API_BASE_URL') ?? 'https://generativelanguage.googleapis.com/v1beta';
 
   try {
     const body = (await req.json()) as ChatRequest;
@@ -1035,8 +1182,36 @@ Deno.serve(async (req) => {
       );
     }
 
-    const chunks = await fetchApprovedRagChunks(authorization);
-    const ragMatches = retrieveRagContext(question, chunks, DEFAULT_LIMIT);
+    const preferredCategories = uniqueCategories(classifyRagIntent(question));
+    let retrievalMode: 'keyword' | 'vector' = 'vector';
+    let embeddingErrorMessage: string | null = null;
+    let ragMatches: RagMatch[] = [];
+
+    if (geminiApiKey) {
+      try {
+        ragMatches = await retrieveVectorRagContext({
+          apiBaseUrl: embeddingApiBaseUrl,
+          authorization,
+          geminiApiKey,
+          limit: DEFAULT_LIMIT,
+          preferredCategories,
+          question,
+        });
+      } catch (embeddingError) {
+        embeddingErrorMessage = embeddingError instanceof Error ? embeddingError.message : 'Vector retrieval failed.';
+      }
+    } else {
+      embeddingErrorMessage = 'Missing GEMINI_API_KEY for vector retrieval; using keyword fallback.';
+    }
+
+    let chunks: RagChunk[] = [];
+
+    if (ragMatches.length === 0) {
+      retrievalMode = 'keyword';
+      chunks = await fetchApprovedRagChunks(authorization);
+      ragMatches = retrieveRagContext(question, chunks, DEFAULT_LIMIT);
+    }
+
     const ragContext = formatRagContext(ragMatches);
     const ragStatus = ragMatches.length > 0 ? 'success' : chunks === localFallbackKnowledge ? 'fallback' : 'empty';
 
@@ -1052,6 +1227,8 @@ Deno.serve(async (req) => {
         status: ragStatus,
         metadata: {
           backend_rag: true,
+          embedding_error: embeddingErrorMessage,
+          retrieval_mode: retrievalMode,
           scores: ragMatches.map((match) => ({ id: match.id, score: match.score })),
         },
       },
@@ -1074,6 +1251,7 @@ Deno.serve(async (req) => {
         metadata: {
           admin_prompt_override: adminRequest && Boolean(body.systemPromptOverride?.trim()),
           rag_chunk_ids: ragMatches.map((match) => match.id),
+          rag_retrieval_mode: retrievalMode,
           rate_limit_count: rateStatus?.request_count,
         },
       },
@@ -1166,6 +1344,7 @@ Deno.serve(async (req) => {
         metadata: {
           retried,
           rag_chunk_ids: ragMatches.map((match) => match.id),
+          rag_retrieval_mode: retrievalMode,
         },
       },
       authorization,

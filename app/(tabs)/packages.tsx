@@ -1,14 +1,60 @@
 import { Link } from 'expo-router';
+import { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { ActionButton, Card, Pill, Screen, SectionHeader } from '@/components/MiraUI';
 import { BiomarkerBar, StatusRing } from '@/components/HealthVisuals';
 import { MiraDesign, softShadow } from '@/constants/Design';
+import { loadActiveHospitalProducts, type HospitalProduct } from '@/lib/marketplace/hospitalProducts';
 import { formatMoney, healthPackages } from '@/services/mockBackend';
 
 const categories = ['All', 'Heart', 'Cancer', 'Longevity', 'Metabolic'];
 
 export default function PackagesScreen() {
+  const [hospitalProducts, setHospitalProducts] = useState<HospitalProduct[]>([]);
+  const [isLoadingProducts, setIsLoadingProducts] = useState(true);
+  const visibleProducts = useMemo(
+    () => [
+      ...hospitalProducts.map((product) => ({
+        id: product.id,
+        title: product.title,
+        hospital: product.hospitalName,
+        category: product.category,
+        price: { amount: product.priceAmount, currency: 'THB' as const },
+        duration: product.duration ?? 'Confirm with hospital',
+        location: product.hospitalAddress ?? product.location ?? 'Confirm with hospital',
+        tags: product.tags.length ? product.tags : ['Hospital product'],
+        includes: product.includes,
+        bestFor: product.description,
+        aiReason: product.ragChunkId
+          ? 'Added by hospital portal and published into chatbot RAG.'
+          : 'Added by hospital portal.',
+      })),
+      ...healthPackages,
+    ],
+    [hospitalProducts],
+  );
+
+  useEffect(() => {
+    let isMounted = true;
+
+    loadActiveHospitalProducts()
+      .then((products) => {
+        if (isMounted) {
+          setHospitalProducts(products);
+        }
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsLoadingProducts(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   return (
     <Screen>
       <View style={styles.hero}>
@@ -28,8 +74,11 @@ export default function PackagesScreen() {
         ))}
       </View>
 
-      <SectionHeader title="แพ็กเกจแนะนำ" meta={`${healthPackages.length} offers`} />
-      {healthPackages.map((item, index) => {
+      <SectionHeader
+        title="แพ็กเกจแนะนำ"
+        meta={isLoadingProducts ? 'syncing portal' : `${visibleProducts.length} offers`}
+      />
+      {visibleProducts.map((item, index) => {
         const match = [86, 79, 73][index] ?? 70;
 
         return (

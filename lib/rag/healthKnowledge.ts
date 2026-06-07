@@ -1,6 +1,7 @@
 export const ragCategories = [
   'care.checkup_preparation',
   'care.patient_education',
+  'marketplace.product',
   'ops.booking',
   'ops.call_center',
   'ops.payment',
