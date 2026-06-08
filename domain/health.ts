@@ -19,6 +19,26 @@ export type HealthPackage = {
   aiReason: string;
 };
 
+export type PackageCategory = {
+  id: string;
+  code: 'A' | 'B' | 'C' | 'D';
+  title: string;
+  description: string;
+  packageId: string;
+  popularity: string;
+};
+
+export type HospitalBranch = {
+  id: string;
+  name: string;
+  hospital: string;
+  address: string;
+  district: string;
+  distanceKm: number;
+  nextSlot: string;
+  supportedPackageIds: string[];
+};
+
 export type UserProfile = {
   id: string;
   name: string;

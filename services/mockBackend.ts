@@ -1,4 +1,4 @@
-import type { HealthMetric, HealthPackage, PurchaseOrder, ReferralPartner, UserProfile } from '@/domain/health';
+import type { HealthMetric, HealthPackage, HospitalBranch, PackageCategory, PurchaseOrder, ReferralPartner, UserProfile } from '@/domain/health';
 
 export const currentUser: UserProfile = {
   id: 'usr_demo_001',
@@ -60,6 +60,84 @@ export const healthPackages: HealthPackage[] = [
 ];
 
 export const featuredPackage = healthPackages[0];
+
+export const packageCategories: PackageCategory[] = [
+  {
+    id: 'cat_basic_screening',
+    code: 'A',
+    title: 'Basic Health Check',
+    description: 'ตรวจพื้นฐานประจำปี เลือด ไขมัน น้ำตาล ตับ ไต',
+    packageId: 'pkg_heart_metabolic',
+    popularity: 'Most booked',
+  },
+  {
+    id: 'cat_heart_metabolic',
+    code: 'B',
+    title: 'Heart & Metabolic',
+    description: 'เหมาะกับความเครียด น้ำหนัก ไขมัน และความเสี่ยงเบาหวาน',
+    packageId: 'pkg_heart_metabolic',
+    popularity: 'AI pick',
+  },
+  {
+    id: 'cat_cancer_baseline',
+    code: 'C',
+    title: 'Cancer Baseline',
+    description: 'คัดกรองมะเร็งพื้นฐาน พร้อม ultrasound และ tumor markers',
+    packageId: 'pkg_cancer_baseline',
+    popularity: 'Preventive',
+  },
+  {
+    id: 'cat_longevity',
+    code: 'D',
+    title: 'Longevity Deep Check',
+    description: 'ตรวจเชิงลึกสำหรับ hormone, inflammation และ optimization',
+    packageId: 'pkg_executive_full',
+    popularity: 'Premium',
+  },
+];
+
+export const hospitalBranches: HospitalBranch[] = [
+  {
+    id: 'branch_aster_rama9',
+    name: 'Aster Rama 9',
+    hospital: 'Aster International Hospital',
+    address: 'Rama 9 Medical Campus',
+    district: 'Rama 9',
+    distanceKm: 3.8,
+    nextSlot: 'พรุ่งนี้ 10:30',
+    supportedPackageIds: ['pkg_heart_metabolic', 'pkg_executive_full'],
+  },
+  {
+    id: 'branch_aster_sathorn',
+    name: 'Aster Sathorn',
+    hospital: 'Aster International Hospital',
+    address: 'Sathorn Wellness Tower',
+    district: 'Sathorn',
+    distanceKm: 6.1,
+    nextSlot: 'เสาร์นี้ 09:00',
+    supportedPackageIds: ['pkg_heart_metabolic'],
+  },
+  {
+    id: 'branch_sukhumvit_wellness',
+    name: 'Sukhumvit Wellness',
+    hospital: 'Sukhumvit Wellness Center',
+    address: 'Sukhumvit 49 Health Plaza',
+    district: 'Sukhumvit',
+    distanceKm: 4.6,
+    nextSlot: 'ศุกร์นี้ 13:30',
+    supportedPackageIds: ['pkg_cancer_baseline', 'pkg_executive_full'],
+  },
+  {
+    id: 'branch_mira_life_center',
+    name: 'Mira Life Center',
+    hospital: 'Mira Partner Hospital',
+    address: 'Wireless Road Life Science Center',
+    district: 'Wireless',
+    distanceKm: 5.4,
+    nextSlot: 'จันทร์หน้า 08:30',
+    supportedPackageIds: ['pkg_executive_full', 'pkg_cancer_baseline'],
+  },
+];
 
 export const packageRecommendations = healthPackages.map((item, index) => ({
   packageId: item.id,
@@ -135,5 +213,5 @@ export const formatMoney = (money: { amount: number; currency: 'THB' }) =>
 export const mockBackendStatus = {
   mode: 'mock',
   readyForSupabase: true,
-  nextIntegration: ['auth.users', 'profiles', 'health_packages', 'orders', 'referrals', 'health_records', 'agent_memory'],
+  nextIntegration: ['auth.users', 'profiles', 'health_packages', 'hospital_branches', 'orders', 'referrals', 'health_records', 'agent_memory'],
 };

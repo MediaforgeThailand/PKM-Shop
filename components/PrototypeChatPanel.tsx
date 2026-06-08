@@ -1,5 +1,6 @@
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
@@ -24,19 +25,35 @@ import { transcribeAudio } from '@/lib/ai/openaiTranscription';
 import { useAuthSession } from '@/lib/auth/useAuthSession';
 import { localHealthKnowledge } from '@/lib/rag/healthKnowledge';
 import { retrieveRagContext } from '@/lib/rag/retriever';
+import { formatMoney, healthPackages, hospitalBranches, packageCategories } from '@/services/mockBackend';
 
 const logo = require('@/assets/images/mira-orbit-logo.png');
 const iconInk = '#536491';
 const prototypeUserNickname = DEFAULT_USER_NICKNAME;
 
-function createMessage(role: ChatMessage['role'], content: string, sources?: ChatMessage['sources']): ChatMessage {
+type CommercePayload = { type: 'category-picker' } | { categoryId: string; type: 'location-map' };
+
+type PrototypeChatMessage = ChatMessage & {
+  commerce?: CommercePayload;
+};
+
+function createMessage(role: ChatMessage['role'], content: string, sources?: ChatMessage['sources'], commerce?: CommercePayload): PrototypeChatMessage {
   return {
     id: `${role}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     role,
     content,
     createdAt: new Date().toISOString(),
+    commerce,
     sources,
   };
+}
+
+function hasPackagePurchaseIntent(question: string) {
+  const normalized = question.toLowerCase();
+  const buyTerms = ['ซื้อ', 'จ่าย', 'ชำระ', 'checkout', 'buy', 'pay'];
+  const packageTerms = ['แพ็กเกจ', 'แพ็คเกจ', 'ตรวจสุขภาพ', 'checkup', 'package'];
+
+  return buyTerms.some((term) => normalized.includes(term)) && packageTerms.some((term) => normalized.includes(term));
 }
 
 function createDemoAnswer(question: string) {
@@ -349,7 +366,101 @@ function ChatAvatar() {
   );
 }
 
-function ChatMessageBubble({ index, message }: { index: number; message: ChatMessage }) {
+function CategoryPickerCard({ onSelectCategory }: { onSelectCategory: (categoryId: string) => void }) {
+  return (
+    <View style={styles.commerceCard}>
+      <View style={styles.commerceHeader}>
+        <Text style={styles.commerceEyebrow}>Popular checkups</Text>
+        <Text style={styles.commerceTitle}>เลือกหมวดตรวจสุขภาพ</Text>
+      </View>
+      <View style={styles.categoryGrid}>
+        {packageCategories.map((category) => {
+          const item = healthPackages.find((entry) => entry.id === category.packageId) ?? healthPackages[0];
+
+          return (
+            <Pressable key={category.id} onPress={() => onSelectCategory(category.id)} style={({ pressed }) => [styles.categoryTile, pressed ? styles.categoryTilePressed : null]}>
+              <LinearGradient colors={['rgba(255,255,255,0.68)', 'rgba(232,244,255,0.34)']} style={styles.categoryTileGlass}>
+                <View style={styles.categoryTopLine}>
+                  <Text style={styles.categoryCode}>{category.code}</Text>
+                  <Text style={styles.categoryPopularity}>{category.popularity}</Text>
+                </View>
+                <Text numberOfLines={2} style={styles.categoryTitle}>
+                  {category.title}
+                </Text>
+                <Text numberOfLines={2} style={styles.categoryDescription}>
+                  {category.description}
+                </Text>
+                <Text style={styles.categoryPrice}>{formatMoney(item.price)}</Text>
+              </LinearGradient>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+function LocationMapCard({ categoryId, onSelectBranch }: { categoryId: string; onSelectBranch: (categoryId: string, branchId: string) => void }) {
+  const category = packageCategories.find((entry) => entry.id === categoryId) ?? packageCategories[0];
+  const item = healthPackages.find((entry) => entry.id === category.packageId) ?? healthPackages[0];
+  const branches = hospitalBranches.filter((branch) => branch.supportedPackageIds.includes(item.id));
+
+  return (
+    <View style={styles.commerceCard}>
+      <View style={styles.commerceHeader}>
+        <Text style={styles.commerceEyebrow}>Available locations</Text>
+        <Text style={styles.commerceTitle}>{item.title}</Text>
+      </View>
+
+      <View style={styles.mapPreview}>
+        <View style={styles.mapRouteOne} />
+        <View style={styles.mapRouteTwo} />
+        {branches.slice(0, 4).map((branch, index) => (
+          <View
+            key={branch.id}
+            style={[
+              styles.mapPin,
+              index === 0 ? styles.mapPinOne : index === 1 ? styles.mapPinTwo : index === 2 ? styles.mapPinThree : styles.mapPinFour,
+            ]}>
+            <Text style={styles.mapPinText}>{index + 1}</Text>
+          </View>
+        ))}
+        <Text style={styles.mapLabel}>{branches.length} branches near Bangkok</Text>
+      </View>
+
+      <View style={styles.branchList}>
+        {branches.map((branch, index) => (
+          <Pressable key={branch.id} onPress={() => onSelectBranch(category.id, branch.id)} style={({ pressed }) => [styles.branchRow, pressed ? styles.branchRowPressed : null]}>
+            <View style={styles.branchNumber}>
+              <Text style={styles.branchNumberText}>{index + 1}</Text>
+            </View>
+            <View style={styles.branchCopy}>
+              <Text numberOfLines={1} style={styles.branchName}>
+                {branch.name}
+              </Text>
+              <Text numberOfLines={1} style={styles.branchMeta}>
+                {branch.district} · {branch.distanceKm.toFixed(1)} km · {branch.nextSlot}
+              </Text>
+            </View>
+            <Text style={styles.branchAction}>เลือก</Text>
+          </Pressable>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function ChatMessageBubble({
+  index,
+  message,
+  onSelectBranch,
+  onSelectCategory,
+}: {
+  index: number;
+  message: PrototypeChatMessage;
+  onSelectBranch: (categoryId: string, branchId: string) => void;
+  onSelectCategory: (categoryId: string) => void;
+}) {
   const opacity = useRef(new Animated.Value(0)).current;
   const translate = useRef(new Animated.Value(14)).current;
 
@@ -373,9 +484,13 @@ function ChatMessageBubble({ index, message }: { index: number; message: ChatMes
   return (
     <Animated.View style={[styles.assistantChatRow, { opacity, transform: [{ translateY: translate }] }]}>
       <ChatAvatar />
-      <BlurView intensity={30} tint="light" style={styles.assistantChatBubble}>
-        <Text style={styles.assistantChatText}>{message.content}</Text>
-      </BlurView>
+      <View style={styles.assistantStack}>
+        <BlurView intensity={30} tint="light" style={styles.assistantChatBubble}>
+          <Text style={styles.assistantChatText}>{message.content}</Text>
+        </BlurView>
+        {message.commerce?.type === 'category-picker' ? <CategoryPickerCard onSelectCategory={onSelectCategory} /> : null}
+        {message.commerce?.type === 'location-map' ? <LocationMapCard categoryId={message.commerce.categoryId} onSelectBranch={onSelectBranch} /> : null}
+      </View>
     </Animated.View>
   );
 }
@@ -483,6 +598,7 @@ function BackgroundSheen() {
 
 export function PrototypeChatPanel() {
   const auth = useAuthSession();
+  const router = useRouter();
   const { height, width } = useWindowDimensions();
   const audioChunksRef = useRef<Blob[]>([]);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -492,7 +608,7 @@ export function PrototypeChatPanel() {
   const [isRecording, setIsRecording] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<PrototypeChatMessage[]>([]);
   const [viewMode, setViewMode] = useState<'chat' | 'home'>('home');
   const [voiceStatus, setVoiceStatus] = useState<string | null>(null);
 
@@ -621,6 +737,51 @@ export function PrototypeChatPanel() {
     void startVoiceRecording();
   }
 
+  function showPackageCategoryPicker() {
+    setMessages((current) => [
+      ...current,
+      createMessage(
+        'assistant',
+        'ได้ค่ะคุณบอส เลือกหมวดตรวจสุขภาพที่สนใจก่อนนะคะ',
+        undefined,
+        { type: 'category-picker' },
+      ),
+    ]);
+  }
+
+  function selectPackageCategory(categoryId: string) {
+    const category = packageCategories.find((entry) => entry.id === categoryId) ?? packageCategories[0];
+    const item = healthPackages.find((entry) => entry.id === category.packageId) ?? healthPackages[0];
+
+    setViewMode('chat');
+    setMessages((current) => [
+      ...current,
+      createMessage('user', `แพ็กเกจตรวจสุขภาพ ${category.code}: ${category.title}`),
+      createMessage(
+        'assistant',
+        `แพ็กเกจนี้คือ ${item.title} ราคา ${formatMoney(item.price)} เลือกสาขาที่สะดวกได้เลยค่ะ`,
+        undefined,
+        { categoryId: category.id, type: 'location-map' },
+      ),
+    ]);
+  }
+
+  function selectBranch(categoryId: string, branchId: string) {
+    const category = packageCategories.find((entry) => entry.id === categoryId) ?? packageCategories[0];
+    const item = healthPackages.find((entry) => entry.id === category.packageId) ?? healthPackages[0];
+    const branch = hospitalBranches.find((entry) => entry.id === branchId) ?? hospitalBranches[0];
+
+    setMessages((current) => [
+      ...current,
+      createMessage('user', `เลือกสาขา ${branch.name}`),
+      createMessage('assistant', `ได้ค่ะ จะพาไปชำระเงินสำหรับ ${item.title} ที่ ${branch.name}`),
+    ]);
+
+    setTimeout(() => {
+      router.push(`/checkout?packageId=${encodeURIComponent(item.id)}&branchId=${encodeURIComponent(branch.id)}`);
+    }, 420);
+  }
+
   async function sendMessage() {
     const question = input.trim();
 
@@ -637,6 +798,12 @@ export function PrototypeChatPanel() {
     setVoiceStatus(null);
 
     try {
+      if (hasPackagePurchaseIntent(question)) {
+        await new Promise((resolve) => setTimeout(resolve, 260));
+        showPackageCategoryPicker();
+        return;
+      }
+
       const smallTalkAnswer = createSmallTalkAnswer(question);
 
       if (smallTalkAnswer) {
@@ -728,7 +895,19 @@ export function PrototypeChatPanel() {
                   </View>
 
                   <ScrollView ref={scrollRef} contentContainerStyle={styles.chatMessages} showsVerticalScrollIndicator={false}>
-                    {messages.length === 0 ? <EmptyChatHint /> : messages.map((message, index) => <ChatMessageBubble key={message.id} index={index} message={message} />)}
+                    {messages.length === 0 ? (
+                      <EmptyChatHint />
+                    ) : (
+                      messages.map((message, index) => (
+                        <ChatMessageBubble
+                          key={message.id}
+                          index={index}
+                          message={message}
+                          onSelectBranch={selectBranch}
+                          onSelectCategory={selectPackageCategory}
+                        />
+                      ))
+                    )}
                     {isSending ? (
                       <View style={styles.assistantChatRow}>
                         <ChatAvatar />
@@ -1134,11 +1313,231 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     width: 205,
   },
+  assistantStack: {
+    gap: 8,
+  },
   assistantChatText: {
     color: '#40527B',
     fontSize: 11.6,
     fontWeight: '600',
     lineHeight: 16.6,
+  },
+  commerceCard: {
+    backgroundColor: 'rgba(255,255,255,0.24)',
+    borderColor: 'rgba(255,255,255,0.62)',
+    borderRadius: 20,
+    borderWidth: 1,
+    overflow: 'hidden',
+    padding: 10,
+    shadowColor: '#718DFF',
+    shadowOffset: { height: 12, width: 0 },
+    shadowOpacity: 0.12,
+    shadowRadius: 18,
+    width: 205,
+  },
+  commerceHeader: {
+    gap: 2,
+    marginBottom: 8,
+  },
+  commerceEyebrow: {
+    color: 'rgba(63,82,125,0.72)',
+    fontSize: 8.4,
+    fontWeight: '900',
+    letterSpacing: 0,
+    textTransform: 'uppercase',
+  },
+  commerceTitle: {
+    color: '#334675',
+    fontSize: 12.4,
+    fontWeight: '900',
+    lineHeight: 16,
+  },
+  categoryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 7,
+  },
+  categoryTile: {
+    borderRadius: 15,
+    overflow: 'hidden',
+    width: 89,
+  },
+  categoryTilePressed: {
+    opacity: 0.74,
+    transform: [{ scale: 0.97 }],
+  },
+  categoryTileGlass: {
+    borderColor: 'rgba(255,255,255,0.64)',
+    borderRadius: 15,
+    borderWidth: 1,
+    minHeight: 108,
+    padding: 8,
+  },
+  categoryTopLine: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  categoryCode: {
+    backgroundColor: 'rgba(92,140,255,0.18)',
+    borderRadius: 999,
+    color: '#4D6FEA',
+    fontSize: 9.5,
+    fontWeight: '900',
+    height: 20,
+    lineHeight: 20,
+    textAlign: 'center',
+    width: 20,
+  },
+  categoryPopularity: {
+    color: '#6B7FAA',
+    fontSize: 7.8,
+    fontWeight: '900',
+  },
+  categoryTitle: {
+    color: '#31446F',
+    fontSize: 10.6,
+    fontWeight: '900',
+    lineHeight: 13,
+    marginTop: 7,
+  },
+  categoryDescription: {
+    color: '#607099',
+    fontSize: 8.4,
+    fontWeight: '600',
+    lineHeight: 11.4,
+    marginTop: 4,
+    minHeight: 23,
+  },
+  categoryPrice: {
+    color: '#4F79F5',
+    fontSize: 9.4,
+    fontWeight: '900',
+    marginTop: 6,
+  },
+  mapPreview: {
+    backgroundColor: 'rgba(226,241,255,0.54)',
+    borderColor: 'rgba(255,255,255,0.68)',
+    borderRadius: 17,
+    borderWidth: 1,
+    height: 108,
+    marginBottom: 8,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  mapRouteOne: {
+    backgroundColor: 'rgba(126,161,255,0.18)',
+    borderRadius: 999,
+    height: 140,
+    left: 46,
+    position: 'absolute',
+    top: -18,
+    transform: [{ rotate: '50deg' }],
+    width: 22,
+  },
+  mapRouteTwo: {
+    backgroundColor: 'rgba(255,255,255,0.45)',
+    borderRadius: 999,
+    height: 150,
+    left: 106,
+    position: 'absolute',
+    top: -24,
+    transform: [{ rotate: '-42deg' }],
+    width: 18,
+  },
+  mapPin: {
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderColor: 'rgba(92,124,255,0.72)',
+    borderRadius: 999,
+    borderWidth: 1,
+    height: 23,
+    justifyContent: 'center',
+    position: 'absolute',
+    shadowColor: '#637CFF',
+    shadowOffset: { height: 5, width: 0 },
+    shadowOpacity: 0.22,
+    shadowRadius: 8,
+    width: 23,
+  },
+  mapPinOne: {
+    left: 27,
+    top: 24,
+  },
+  mapPinTwo: {
+    right: 33,
+    top: 22,
+  },
+  mapPinThree: {
+    left: 72,
+    top: 61,
+  },
+  mapPinFour: {
+    right: 20,
+    top: 68,
+  },
+  mapPinText: {
+    color: '#4F70EE',
+    fontSize: 9.8,
+    fontWeight: '900',
+  },
+  mapLabel: {
+    bottom: 8,
+    color: '#5C6F9B',
+    fontSize: 9.2,
+    fontWeight: '800',
+    left: 10,
+    position: 'absolute',
+  },
+  branchList: {
+    gap: 6,
+  },
+  branchRow: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.42)',
+    borderColor: 'rgba(255,255,255,0.66)',
+    borderRadius: 15,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 8,
+    minHeight: 48,
+    paddingHorizontal: 8,
+  },
+  branchRowPressed: {
+    opacity: 0.72,
+    transform: [{ scale: 0.98 }],
+  },
+  branchNumber: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(85,130,255,0.16)',
+    borderRadius: 999,
+    height: 24,
+    justifyContent: 'center',
+    width: 24,
+  },
+  branchNumberText: {
+    color: '#4F70EE',
+    fontSize: 9.5,
+    fontWeight: '900',
+  },
+  branchCopy: {
+    flex: 1,
+  },
+  branchName: {
+    color: '#344875',
+    fontSize: 10.8,
+    fontWeight: '900',
+  },
+  branchMeta: {
+    color: '#6B7A9F',
+    fontSize: 8.5,
+    fontWeight: '700',
+    marginTop: 2,
+  },
+  branchAction: {
+    color: '#5A7BFF',
+    fontSize: 9.4,
+    fontWeight: '900',
   },
   userChatRow: {
     alignSelf: 'flex-end',
