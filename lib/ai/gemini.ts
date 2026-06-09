@@ -56,6 +56,9 @@ export const DEFAULT_SYSTEM_PROMPT = [
   'Sound like a calm human in a private mobile chat, not a brochure or legal notice.',
   'For greetings, thanks, or tiny small-talk, reply in 1 short natural sentence only.',
   'Greeting example: สวัสดีค่ะคุณบอส วันนี้อยากให้ฉันช่วยเรื่องอะไรคะ',
+  "Do not repeat the user's facts back as a summary unless the user asks you to confirm them.",
+  'Avoid sales language early. For broad checkup questions, give clinical reasoning first and ask one missing context question before mentioning packages.',
+  'Every health recommendation should include one short why sentence, like a doctor explaining the reason in plain language.',
   'Use relevant RAG context for Mira packages, booking, policies, and hospital-specific details.',
   'If RAG context is missing or irrelevant, do not mention database, RAG, system data, snippets, or missing context to the user.',
   'When safe, answer from general health knowledge like a careful clinical advisor, then ask one useful follow-up question if needed.',
@@ -384,12 +387,12 @@ export function createOfflineRagAnswer(question: string, ragMatches: RagMatch[])
   if (ragMatches.length === 0) {
     return [
       'เรื่องนี้ฉันช่วยมองเป็นคำแนะนำทั่วไปให้ได้ค่ะ',
-      'ถ้าอยากให้แนะนำด้านสุขภาพแบบตรงจุด บอกอายุ อาการ หรือเป้าหมายที่อยากดูแลเพิ่มนิดหนึ่งนะคะ',
+      'ถ้าจะเริ่มจริงจัง ให้ดูตรวจพื้นฐานก่อน เพราะช่วยเห็นภาพน้ำตาล ไขมัน ตับ ไต และความดันได้ไวค่ะ',
     ].join('\n');
   }
 
   return [
-    'จากที่เล่ามา ฉันแนะนำให้เริ่มจากจุดเสี่ยงหลักก่อนค่ะ',
+    'แนะนำให้เริ่มจากการตรวจพื้นฐานก่อนค่ะ เพราะเป็นฐานข้อมูลสุขภาพที่ใช้ต่อยอดได้ดีที่สุด',
     ...ragMatches.slice(0, 2).map((match, index) => {
       if (match.category === 'ops.booking') {
         return `${index + 1}. หลังซื้อแพ็กเกจ ให้ใช้เลข order เพื่อจองคิวกับโรงพยาบาล`;
@@ -400,8 +403,8 @@ export function createOfflineRagAnswer(question: string, ragMatches: RagMatch[])
       if (match.category === 'safety.escalation') {
         return `${index + 1}. ถ้ามีอาการรุนแรงหรือเฉียบพลัน ควรพบแพทย์ทันที`;
       }
-      return `${index + 1}. เลือกแพ็กเกจตามอายุ ความเสี่ยง และเป้าหมายสุขภาพหลัก`;
+      return `${index + 1}. เริ่มจากหมวดตรวจที่ตรงกับความเสี่ยงหลักก่อน`;
     }),
-    'อยากให้ช่วยคัดตามอายุ งบ หรือโรงพยาบาลใกล้บ้านไหมคะ',
+    'ตรวจล่าสุดเมื่อไหร่คะ ถ้าจำไม่ได้ตอบคร่าวๆ ได้เลย',
   ].join('\n');
 }

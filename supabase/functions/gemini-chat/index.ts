@@ -318,6 +318,9 @@ Do not claim to be the user's treating doctor, and do not say you are a real lic
 Sound like a calm human in a private mobile chat, not a brochure or legal notice.
 For greetings, thanks, or tiny small-talk, reply in 1 short natural sentence only.
 Greeting example: สวัสดีค่ะคุณบอส วันนี้อยากให้ฉันช่วยเรื่องอะไรคะ
+Do not repeat the user's facts back as a summary unless the user asks you to confirm them.
+Avoid sales language early. For broad checkup questions, give clinical reasoning first and ask one missing context question before mentioning packages.
+Every health recommendation should include one short "why" sentence, like a doctor explaining the reason in plain language.
 Use relevant RAG context for Mira packages, booking, policies, and hospital-specific details.
 If RAG context is missing or irrelevant, do not mention database, RAG, system data, snippets, or missing context to the user.
 When safe, answer from general health knowledge like a careful clinical advisor, then ask one useful follow-up question if needed.
@@ -343,6 +346,9 @@ const SYSTEM_PROMPT_GUARDRAILS = `Mandatory safety and operations guardrails:
 - Mobile format: answer in short lines, usually under 3 lines total.
 - For greetings, thanks, or tiny small-talk, return 1 short natural sentence and nothing else.
 - Use at most 3 numbered items and no essay-style paragraphs.
+- Do not restate the user's age, weight, conditions, budget, or other facts as a list.
+- Do not sell or mention a package unless the user directly asks for a specific service/package, or CONTEXT_ASSESSMENT mode is personalized_recommendation.
+- For broad checkup advice with incomplete context, answer with one clinical reason and one follow-up question.
 - Do not diagnose, prescribe, change medication, or replace a licensed professional.
 - Do not claim to be the user's treating doctor or a real licensed physician.
 - For urgent symptoms, advise immediate emergency medical care.
@@ -1104,6 +1110,9 @@ function extractQuestionSlotSummary(question: string) {
       'โรคประจำตัว',
       'ไม่มีโรค',
       'ไม่เป็นโรค',
+      'ไม่เคยมีประวัติโรค',
+      'ไม่มีประวัติโรค',
+      'ประวัติโรค',
       'ยา',
       'แพ้ยา',
       'แพ้อาหาร',
@@ -1137,7 +1146,7 @@ function extractStoredSlotSummary(personalContextState: { agentMemory: AgentMemo
       healthFactTypes.has('condition') ||
       healthFactTypes.has('medication') ||
       healthFactTypes.has('allergy') ||
-      containsAny(combinedText, ['โรคประจำตัว', 'ไม่มีโรค', 'ยา', 'แพ้ยา', 'condition', 'medication', 'allergy']),
+      containsAny(combinedText, ['โรคประจำตัว', 'ไม่มีโรค', 'ไม่เคยมีประวัติโรค', 'ไม่มีประวัติโรค', 'ประวัติโรค', 'ยา', 'แพ้ยา', 'condition', 'medication', 'allergy']),
     goal: memoryTypes.has('goal') || memoryTypes.has('product_interest') || containsAny(combinedText, ['goal', 'สนใจ', 'อยาก', 'โฟกัส']),
     recentCheckup: healthFactTypes.has('lab_result') || healthFactTypes.has('screening') || containsAny(combinedText, ['ตรวจล่าสุด', 'ผลตรวจ', 'lab', 'screening']),
     riskLifestyle:
@@ -1160,8 +1169,19 @@ function getContextScore(slotSummary: ContextAssessment['slotSummary']) {
   );
 }
 
+function hasProductRecommendationReadiness(slotSummary: ContextAssessment['slotSummary'], score: number) {
+  return (
+    score >= 85 &&
+    slotSummary.age &&
+    slotSummary.goal &&
+    slotSummary.clinicalHistory &&
+    slotSummary.recentCheckup &&
+    slotSummary.accessPreference
+  );
+}
+
 function getContextLevel(score: number): ContextLevel {
-  if (score >= 65) {
+  if (score >= 85) {
     return 'ready';
   }
 
@@ -1201,11 +1221,11 @@ function createNextContextQuestion(slotSummary: ContextAssessment['slotSummary']
   }
 
   if (!slotSummary.recentCheckup) {
-    return `ตรวจสุขภาพหรือมีผลเลือดล่าสุดเมื่อไหร่คะ ถ้าจำไม่ได้ตอบคร่าวๆ ได้เลยค่ะ`;
+    return `ถ้ายังไม่มีผลตรวจล่าสุด ฉันแนะนำเริ่มจากตรวจพื้นฐานก่อนค่ะ เพราะจะเห็นภาพน้ำตาล ไขมัน ตับ ไต และความดันได้ชัดขึ้น เคยตรวจครั้งล่าสุดเมื่อไหร่คะ`;
   }
 
   if (!slotSummary.accessPreference) {
-    return `สะดวกโซนไหนหรืองบประมาณประมาณเท่าไหร่คะ เดี๋ยวฉันคัดแพ็กเกจให้แคบลง`;
+    return `ถ้าจะวางแผนให้ใช้ได้จริง ขอรู้โซนที่สะดวกหรืองบคร่าวๆ ค่ะ เพราะคำแนะนำควรเหมาะทั้งสุขภาพ เวลาเดินทาง และค่าใช้จ่าย`;
   }
 
   return `อยากให้โฟกัสความเสี่ยงเรื่องไหนเป็นพิเศษไหมคะ เช่น น้ำตาล ไขมัน ตับ ไต หรือหัวใจ`;
@@ -1234,9 +1254,10 @@ function assessContext({
   };
   const score = getContextScore(slotSummary);
   const level = getContextLevel(score);
+  const productReady = hasProductRecommendationReadiness(slotSummary, score);
   const { collectedSlots, missingSlots } = getContextSlotLists(slotSummary);
   const mode: RecommendationMode =
-    productRequestKind === 'direct' ? 'direct_product' : productRequestKind === 'broad' && level === 'ready' ? 'personalized_recommendation' : 'ask_context';
+    productRequestKind === 'direct' ? 'direct_product' : productRequestKind === 'broad' && productReady ? 'personalized_recommendation' : 'ask_context';
 
   return {
     collectedSlots,
@@ -1600,7 +1621,7 @@ function polishCompanionText({
 
   if (hasProductGrid) {
     if (contextAssessment.mode === 'personalized_recommendation') {
-      return `จากข้อมูลที่มี ฉันคัดแพ็กเกจที่น่าจะเหมาะให้ก่อนค่ะ`;
+      return `จากข้อมูลที่มี ฉันเลือกตัวเลือกที่เหมาะให้ 1 รายการ เพราะตรงกับความเสี่ยงหลักที่สุดค่ะ`;
     }
 
     return `ได้ค่ะคุณ${userNickname} ดูแพ็กเกจนี้ก่อนได้ ถ้าอยากให้ช่วยเลือกให้เหมาะขึ้น บอกอายุหรือโรคประจำตัวเพิ่มได้ค่ะ`;
@@ -1990,7 +2011,7 @@ CONTEXT_ASSESSMENT:
 - next_question=${contextAssessment.nextQuestion ?? 'none'}
 - If mode=ask_context, ask next_question only and do not recommend packages.
 - If mode=direct_product, answer briefly and let the UI card carry the product options.
-- If mode=personalized_recommendation, explain the recommendation in no more than 2 short lines.
+- If mode=personalized_recommendation, explain the recommendation in no more than 2 short lines with one short reason.
 
 RAG:
 ${ragContext || 'No app-specific Mira package or policy snippets matched. Do not mention this to the user. Use general safe health knowledge when relevant, or answer harmless off-topic questions briefly and steer back to health.'}`;

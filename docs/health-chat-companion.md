@@ -31,8 +31,8 @@ The prototype chat reads product cards from `hospital_products` through the back
 Expected flow:
 
 1. User asks broadly for a checkup.
-2. If context score is below 65, chat asks one short follow-up question and returns no product card.
-3. If the user asks for a specific service, or context score is ready, chat returns product cards from `hospital_products`.
+2. If context score is below 85, or key slots like latest checkup and location/budget are missing, chat asks one short follow-up question and returns no product card.
+3. If the user asks for a specific service, or context score is truly ready, chat returns product cards from `hospital_products`.
 4. Personalized recommendations show one product card; direct browsing can show up to four.
 5. User taps a product, sees one `branch_location` card, then lands on checkout with `productId` and `branchId`.
 

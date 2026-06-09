@@ -189,7 +189,7 @@ function createPrototypeContextAssessment(question: string, productRequestKind: 
   const slotSummary = {
     accessPreference: includesAnyTerm(userText, ['งบ', 'บาท', 'ราคา', 'budget', 'ใกล้', 'แถว', 'อยู่', 'สะดวก']),
     age: hasAgeSlot(userText),
-    clinicalHistory: includesAnyTerm(userText, ['โรคประจำตัว', 'ไม่มีโรค', 'ไม่เป็นโรค', 'ยา', 'แพ้ยา', 'เบาหวาน', 'ความดัน', 'ไขมัน', 'หัวใจ']),
+    clinicalHistory: includesAnyTerm(userText, ['โรคประจำตัว', 'ไม่มีโรค', 'ไม่เป็นโรค', 'ไม่เคยมีประวัติโรค', 'ไม่มีประวัติโรค', 'ประวัติโรค', 'ยา', 'แพ้ยา', 'เบาหวาน', 'ความดัน', 'ไขมัน', 'หัวใจ']),
     goal: includesAnyTerm(userText, ['อยากเช็ค', 'อยากเช็ก', 'โฟกัส', 'กังวล', 'เป้าหมาย', 'ลดน้ำหนัก', 'น้ำตาล', 'ไขมัน', 'สุขภาพ', 'check']),
     recentCheckup: includesAnyTerm(userText, ['ตรวจล่าสุด', 'ผลตรวจ', 'เคยตรวจ', 'ไม่เคยตรวจ', 'ปีที่แล้ว', 'เดือนที่แล้ว', 'ล่าสุด']),
     riskLifestyle: includesAnyTerm(userText, ['น้ำหนัก', 'ส่วนสูง', 'bmi', 'สูบ', 'เหล้า', 'นอน', 'เครียด', 'ครอบครัว', 'เหนื่อย']),
@@ -201,7 +201,14 @@ function createPrototypeContextAssessment(question: string, productRequestKind: 
     (slotSummary.recentCheckup ? 15 : 0) +
     (slotSummary.accessPreference ? 15 : 0) +
     (slotSummary.riskLifestyle ? 10 : 0);
-  const level = score >= 65 ? 'ready' : score >= 35 ? 'partial' : 'insufficient';
+  const productReady =
+    score >= 85 &&
+    slotSummary.age &&
+    slotSummary.goal &&
+    slotSummary.clinicalHistory &&
+    slotSummary.recentCheckup &&
+    slotSummary.accessPreference;
+  const level = score >= 85 ? 'ready' : score >= 35 ? 'partial' : 'insufficient';
   const labels = {
     accessPreference: 'พื้นที่สะดวกหรืองบประมาณ',
     age: 'อายุหรือช่วงอายุ',
@@ -214,7 +221,7 @@ function createPrototypeContextAssessment(question: string, productRequestKind: 
   const mode =
     productRequestKind === 'direct'
       ? 'direct_product'
-      : productRequestKind === 'broad' && level === 'ready'
+      : productRequestKind === 'broad' && productReady
         ? 'personalized_recommendation'
         : 'ask_context';
   const nextQuestion = !slotSummary.age || !slotSummary.goal
@@ -222,8 +229,8 @@ function createPrototypeContextAssessment(question: string, productRequestKind: 
     : !slotSummary.clinicalHistory
       ? 'ขอเพิ่มอีกนิดค่ะคุณบอส มีโรคประจำตัว ยาที่กินประจำ หรือแพ้ยาอะไรไหมคะ'
       : !slotSummary.recentCheckup
-        ? 'ตรวจสุขภาพหรือมีผลเลือดล่าสุดเมื่อไหร่คะ ถ้าจำไม่ได้ตอบคร่าวๆ ได้เลยค่ะ'
-        : 'สะดวกโซนไหนหรืองบประมาณประมาณเท่าไหร่คะ เดี๋ยวฉันคัดแพ็กเกจให้แคบลง';
+        ? 'ถ้ายังไม่มีผลตรวจล่าสุด ฉันแนะนำเริ่มจากตรวจพื้นฐานก่อนค่ะ เพราะจะเห็นภาพน้ำตาล ไขมัน ตับ ไต และความดันได้ชัดขึ้น เคยตรวจครั้งล่าสุดเมื่อไหร่คะ'
+        : 'ถ้าจะวางแผนให้ใช้ได้จริง ขอรู้โซนที่สะดวกหรืองบคร่าวๆ ค่ะ เพราะคำแนะนำควรเหมาะทั้งสุขภาพ เวลาเดินทาง และค่าใช้จ่าย';
 
   return {
     collectedSlots: slotEntries.filter(([, exists]) => exists).map(([key]) => labels[key]),
@@ -296,7 +303,7 @@ function createDemoAnswer(question: string) {
     return {
       content: [
         'เรื่องนี้ฉันช่วยมองเป็นคำแนะนำทั่วไปให้ได้ค่ะ',
-        'ถ้าอยากให้แนะนำด้านสุขภาพแบบตรงจุด บอกอายุ อาการ หรือเป้าหมายที่อยากดูแลเพิ่มนิดหนึ่งนะคะ',
+        'ถ้าจะเริ่มจริงจัง ให้ดูตรวจพื้นฐานก่อน เพราะช่วยเห็นภาพน้ำตาล ไขมัน ตับ ไต และความดันได้ไวค่ะ',
       ].join('\n'),
       sources: [],
     };
@@ -312,14 +319,14 @@ function createDemoAnswer(question: string) {
     if (match.category === 'safety.escalation') {
       return `${index + 1}. ถ้ามีอาการรุนแรง ให้พบแพทย์ทันที`;
     }
-    return `${index + 1}. เลือกแพ็กเกจตามความเสี่ยงและเป้าหมายหลัก`;
+    return `${index + 1}. เริ่มจากหมวดตรวจที่ตรงกับความเสี่ยงหลักก่อน`;
   });
 
   return {
     content: [
-      'แนะนำให้เริ่มจากแพ็กเกจที่ตรงกับความเสี่ยงหลักก่อนค่ะ',
+      'แนะนำให้เริ่มจากการตรวจพื้นฐานก่อนค่ะ เพราะเป็นฐานข้อมูลสุขภาพที่ใช้ต่อยอดได้ดีที่สุด',
       ...compactTips,
-      'อยากให้คัดตามงบ หรือโรงพยาบาลใกล้บ้านไหมคะ',
+      'ตรวจล่าสุดเมื่อไหร่คะ ถ้าจำไม่ได้ตอบคร่าวๆ ได้เลย',
     ].join('\n'),
     sources: matches.map((match) => ({
       category: match.category,
@@ -765,7 +772,7 @@ function EmptyChatHint() {
     <View style={styles.emptyChatWrap}>
       <ChatAvatar />
       <BlurView intensity={28} tint="light" style={styles.emptyChatBubble}>
-        <Text style={styles.emptyChatText}>พร้อมคุยแล้วค่ะ พิมพ์หรือกดไมค์เพื่อให้ฉันช่วยเลือกแพ็กเกจสุขภาพ</Text>
+        <Text style={styles.emptyChatText}>พร้อมคุยแล้วค่ะ พิมพ์หรือกดไมค์เพื่อให้ฉันช่วยวางแผนตรวจสุขภาพ</Text>
       </BlurView>
     </View>
   );
@@ -1030,7 +1037,7 @@ export function PrototypeChatPanel() {
       createMessage(
         'assistant',
         mode === 'personalized_recommendation'
-          ? 'จากข้อมูลที่มี ฉันคัดแพ็กเกจที่น่าจะเหมาะให้ก่อนค่ะ'
+          ? 'จากข้อมูลที่มี ฉันเลือกตัวเลือกที่เหมาะให้ 1 รายการ เพราะตรงกับความเสี่ยงหลักที่สุดค่ะ'
           : 'ได้ค่ะคุณบอส ดูแพ็กเกจนี้ก่อนได้ ถ้าอยากให้ช่วยเลือกให้เหมาะขึ้น บอกอายุหรือโรคประจำตัวเพิ่มได้ค่ะ',
         undefined,
         [productGridCard((sourceProducts.length ? sourceProducts : fallbackProducts).slice(0, mode === 'personalized_recommendation' ? 1 : 4))],
@@ -1128,7 +1135,7 @@ export function PrototypeChatPanel() {
         const uiCards = shouldShowProducts ? withProductGridCard(backendCards, sourceForMode) : backendCards;
         const answerText = hasProductGridCard(uiCards)
           ? contextMode === 'personalized_recommendation'
-            ? 'จากข้อมูลที่มี ฉันคัดแพ็กเกจที่น่าจะเหมาะให้ก่อนค่ะ'
+            ? 'จากข้อมูลที่มี ฉันเลือกตัวเลือกที่เหมาะให้ 1 รายการ เพราะตรงกับความเสี่ยงหลักที่สุดค่ะ'
             : cleanProductAssistantText(result.text)
           : result.text;
         const answer = createMessage('assistant', answerText, result.ragMatches, uiCards);
@@ -1226,12 +1233,11 @@ export function PrototypeChatPanel() {
                       ))
                     )}
                     {isSending ? (
-                      <View style={styles.assistantChatRow}>
+                      <View style={[styles.assistantChatRow, styles.typingChatRow]}>
                         <ChatAvatar />
-                        <BlurView intensity={30} tint="light" style={[styles.assistantChatBubble, styles.typingChatBubble]}>
+                        <View style={styles.typingSpinnerOnly}>
                           <ActivityIndicator color="#5E8DFF" size="small" />
-                          <Text style={styles.assistantChatText}>กำลังคิดคำตอบ...</Text>
-                        </BlurView>
+                        </View>
                       </View>
                     ) : null}
                   </ScrollView>
@@ -1842,10 +1848,14 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     lineHeight: 16.8,
   },
-  typingChatBubble: {
+  typingChatRow: {
     alignItems: 'center',
-    flexDirection: 'row',
-    gap: 8,
+  },
+  typingSpinnerOnly: {
+    alignItems: 'center',
+    height: 30,
+    justifyContent: 'center',
+    width: 30,
   },
   emptyChatWrap: {
     alignItems: 'flex-start',
