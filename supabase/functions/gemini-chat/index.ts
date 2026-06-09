@@ -131,7 +131,7 @@ type RagChunkRow = {
 
 type RagMatch = RagChunk & {
   matchedCategories: RagCategory[];
-  retrievalMode?: 'keyword' | 'vector';
+  retrievalMode?: 'keyword' | 'skipped' | 'vector';
   score: number;
 };
 
@@ -145,6 +145,42 @@ type PublicRagMatch = {
   summary: string;
   title: string;
   topic: string;
+};
+
+type PublicSearchSource = {
+  domain: string;
+  title: string;
+  trustTier: number;
+  url: string;
+};
+
+type RetrievalRoute =
+  | 'controlled_web_search'
+  | 'emergency'
+  | 'none'
+  | 'personal_memory_deep'
+  | 'policy_rag'
+  | 'product_rag'
+  | 'recent_chat';
+
+type RouterDecision = {
+  emergency: boolean;
+  reasons: Record<string, string>;
+  routes: RetrievalRoute[];
+  routesRejected: Record<string, string>;
+  stage: 'heuristic' | 'llm';
+};
+
+type RouterMeta = {
+  cacheHit?: boolean;
+  latencyMs: {
+    router: number;
+    total?: number;
+  };
+  reasons: Record<string, string>;
+  routes: RetrievalRoute[];
+  routesRejected: Record<string, string>;
+  stage: 'heuristic' | 'llm';
 };
 
 type RagVectorMatchRow = RagChunkRow & {
@@ -248,10 +284,32 @@ type StoredChatMessageRow = ChatMessage & {
   created_at?: string;
 };
 
+type CompanionSessionContext = {
+  messages: ChatMessage[];
+  rollingSummary?: string | null;
+  sessionId?: string | null;
+};
+
+type CompanionSessionRow = {
+  id: string;
+  rolling_summary?: string | null;
+};
+
 type PersonalContextState = {
   agentMemory: AgentMemoryRow[];
   healthFacts: HealthFactContextRow[];
   recentMessages: ChatMessage[];
+  rollingSummary?: string | null;
+  sessionId?: string | null;
+};
+
+type WebSearchSourceRow = {
+  display_name: string;
+  domain: string;
+  id: string;
+  source_type: string;
+  topics: string[] | null;
+  trust_tier: number;
 };
 
 type HospitalProductRow = {
@@ -762,6 +820,20 @@ function restHeaders(authorization: string, extra?: Record<string, string>) {
   };
 }
 
+async function updateRest(pathAndQuery: string, body: Record<string, unknown>, authorization: string) {
+  const config = getSupabaseConfig();
+
+  if (!config) {
+    return;
+  }
+
+  await fetch(`${config.supabaseUrl}/rest/v1/${pathAndQuery}`, {
+    method: 'PATCH',
+    headers: restHeaders(authorization, { Prefer: 'return=minimal' }),
+    body: JSON.stringify(body),
+  });
+}
+
 async function insertRest(table: string, body: Record<string, unknown> | Record<string, unknown>[], authorization: string) {
   const config = getSupabaseConfig();
 
@@ -1112,9 +1184,9 @@ function trimToBudget(matches: RagMatch[], maxContextChars: number) {
   });
 }
 
-function retrieveRagContext(query: string, chunks: RagChunk[], limit = DEFAULT_LIMIT): RagMatch[] {
+function retrieveRagContext(query: string, chunks: RagChunk[], limit = DEFAULT_LIMIT, preferredCategoriesOverride?: RagCategory[]): RagMatch[] {
   const queryTokens = tokenize(query);
-  const preferredCategories = uniqueCategories(classifyRagIntent(query));
+  const preferredCategories = uniqueCategories(preferredCategoriesOverride ?? classifyRagIntent(query));
   const candidates = eligibleChunks(chunks, preferredCategories);
 
   if (queryTokens.length === 0) {
@@ -1520,6 +1592,139 @@ function inferHealthChatIntent(question: string, preferredCategories: RagCategor
   return containsAny(question, ['หนัง', 'เพลง', 'เกม', 'movie', 'song', 'game']) ? 'off_topic' : 'health_advice';
 }
 
+function uniqueRoutes(routes: RetrievalRoute[]) {
+  return [...new Set(routes)];
+}
+
+function hasRoute(decision: RouterDecision, route: RetrievalRoute) {
+  return decision.routes.includes(route);
+}
+
+function estimateTokenCount(text: string) {
+  return Math.ceil(text.length / 4);
+}
+
+function routeTurn({
+  activeProductRequestKind,
+  consentGranted,
+  contextAssessment,
+  intent,
+  preferredCategories,
+  question,
+}: {
+  activeProductRequestKind: ProductRequestKind;
+  consentGranted: boolean;
+  contextAssessment: ContextAssessment;
+  intent: HealthChatIntent;
+  preferredCategories: RagCategory[];
+  question: string;
+}): RouterDecision {
+  const routes: RetrievalRoute[] = [];
+  const reasons: Record<string, string> = {};
+  const routesRejected: Record<string, string> = {};
+
+  if (intent === 'safety_escalation' || preferredCategories.includes('safety.escalation')) {
+    return {
+      emergency: true,
+      reasons: { emergency: 'safety pre-check matched urgent symptoms' },
+      routes: ['emergency'],
+      routesRejected,
+      stage: 'heuristic',
+    };
+  }
+
+  if (containsAny(question, ['เมื่อกี้', 'ที่คุย', 'ก่อนหน้า', 'สรุป', 'จำได้ไหม', 'what did we discuss', 'previous'])) {
+    routes.push('recent_chat');
+    reasons.recent_chat = 'user referenced prior conversation';
+  }
+
+  if (consentGranted && (intent === 'health_advice' || intent === 'product_recommendation' || intent === 'product_compare' || activeProductRequestKind !== 'none')) {
+    routes.push('personal_memory_deep');
+    reasons.personal_memory_deep = 'health or product answer may depend on durable user context';
+  } else if (!consentGranted) {
+    routesRejected.personal_memory_deep = 'chat_health_memory consent is not granted';
+  }
+
+  const shouldRouteProducts =
+    intent === 'product_compare' ||
+    activeProductRequestKind === 'direct' ||
+    contextAssessment.mode === 'direct_product' ||
+    contextAssessment.mode === 'personalized_recommendation' ||
+    (preferredCategories.includes('marketplace.product') && contextAssessment.mode !== 'ask_context');
+
+  if (shouldRouteProducts) {
+    routes.push('product_rag');
+    reasons.product_rag = 'product or package intent detected';
+  } else if (activeProductRequestKind === 'broad' && contextAssessment.mode === 'ask_context') {
+    routesRejected.product_rag = 'broad checkup request needs more user context before product retrieval';
+  }
+
+  if (
+    intent === 'booking' ||
+    intent === 'checkout' ||
+    preferredCategories.some((category) => category.startsWith('ops.') || category === 'privacy.consent')
+  ) {
+    routes.push('policy_rag');
+    reasons.policy_rag = 'booking, payment, referral, call center, or consent policy may be needed';
+  }
+
+  const medicalSearchLikely =
+    intent === 'health_advice' &&
+    contextAssessment.mode !== 'ask_context' &&
+    containsAny(question, [
+      'ยา',
+      'วัคซีน',
+      'ผลข้างเคียง',
+      'ค่าเลือด',
+      'lab',
+      'metformin',
+      'dose',
+      'dosage',
+      'guideline',
+      'โรค',
+      'อาการ',
+      'ควรทำยังไง',
+    ]);
+
+  if (medicalSearchLikely || contextAssessment.mode === 'personalized_recommendation') {
+    routes.push('controlled_web_search');
+    reasons.controlled_web_search = medicalSearchLikely
+      ? 'medical fact may need controlled external source'
+      : 'personalized recommendation should have current medical context when internal medical RAG is missing';
+  }
+
+  if (routes.length === 0) {
+    routes.push('none');
+    reasons.none = 'small talk, off-topic, or current-turn context is sufficient';
+  }
+
+  return {
+    emergency: false,
+    reasons,
+    routes: uniqueRoutes(routes),
+    routesRejected,
+    stage: 'heuristic',
+  };
+}
+
+function categoriesForRouterRoutes(routes: RetrievalRoute[], preferredCategories: RagCategory[]) {
+  const categories: RagCategory[] = [];
+
+  if (routes.includes('product_rag')) {
+    categories.push('marketplace.product');
+  }
+
+  if (routes.includes('policy_rag')) {
+    categories.push(...preferredCategories.filter((category) => category.startsWith('ops.') || category === 'privacy.consent'));
+  }
+
+  if (routes.includes('controlled_web_search')) {
+    categories.push(...preferredCategories.filter((category) => category === 'care.checkup_preparation' || category === 'care.patient_education'));
+  }
+
+  return uniqueCategories(categories.length ? categories : preferredCategories.filter((category) => category !== 'safety.escalation'));
+}
+
 async function getLatestHealthMemoryConsent(userId: string, authorization: string): Promise<ConsentRow | null> {
   const rows = await selectRest<ConsentRow[]>(
     `consents?select=id,status&user_id=eq.${encodeURIComponent(userId)}&purpose=eq.chat_health_memory&order=created_at.desc&limit=1`,
@@ -1529,10 +1734,10 @@ async function getLatestHealthMemoryConsent(userId: string, authorization: strin
   return rows?.[0] ?? null;
 }
 
-async function fetchRecentCompanionMessages(userId: string, authorization: string) {
-  const sessions = await selectRest<InsertedIdRow[]>(
+async function fetchCompanionSessionContext(userId: string, authorization: string): Promise<CompanionSessionContext> {
+  const sessions = await selectRest<CompanionSessionRow[]>(
     [
-      'chat_sessions?select=id',
+      'chat_sessions?select=id,rolling_summary',
       `user_id=eq.${encodeURIComponent(userId)}`,
       'source=eq.companion_timeline',
       'ended_at=is.null',
@@ -1544,7 +1749,7 @@ async function fetchRecentCompanionMessages(userId: string, authorization: strin
   const sessionId = sessions?.[0]?.id;
 
   if (!sessionId) {
-    return [] as ChatMessage[];
+    return { messages: [] };
   }
 
   const rows = await selectRest<StoredChatMessageRow[]>(
@@ -1558,10 +1763,14 @@ async function fetchRecentCompanionMessages(userId: string, authorization: strin
     authorization,
   );
 
-  return (rows ?? [])
-    .filter((message) => (message.role === 'user' || message.role === 'assistant') && message.content?.trim())
-    .reverse()
-    .map((message) => ({ content: message.content.trim(), role: message.role }));
+  return {
+    messages: (rows ?? [])
+      .filter((message) => (message.role === 'user' || message.role === 'assistant') && message.content?.trim())
+      .reverse()
+      .map((message) => ({ content: message.content.trim(), role: message.role })),
+    rollingSummary: sessions?.[0]?.rolling_summary ?? null,
+    sessionId,
+  };
 }
 
 async function fetchPersonalContext(userId: string, authorization: string, consentGranted: boolean) {
@@ -1570,10 +1779,12 @@ async function fetchPersonalContext(userId: string, authorization: string, conse
       agentMemory: [] as AgentMemoryRow[],
       healthFacts: [] as HealthFactContextRow[],
       recentMessages: [] as ChatMessage[],
+      rollingSummary: null,
+      sessionId: null,
     };
   }
 
-  const [healthFacts, agentMemory, recentMessages] = await Promise.all([
+  const [healthFacts, agentMemory, sessionContext] = await Promise.all([
     selectRest<HealthFactContextRow[]>(
       [
         'health_facts?select=fact_type,label,value,unit,observed_at,confidence',
@@ -1594,13 +1805,15 @@ async function fetchPersonalContext(userId: string, authorization: string, conse
       ].join('&'),
       authorization,
     ),
-    fetchRecentCompanionMessages(userId, authorization),
+    fetchCompanionSessionContext(userId, authorization),
   ]);
 
   return {
     agentMemory: agentMemory ?? [],
     healthFacts: healthFacts ?? [],
-    recentMessages: recentMessages ?? [],
+    recentMessages: sessionContext.messages,
+    rollingSummary: sessionContext.rollingSummary ?? null,
+    sessionId: sessionContext.sessionId ?? null,
   };
 }
 
@@ -1609,11 +1822,13 @@ function formatPersonalContext({
   consentGranted,
   healthFacts,
   recentMessages,
+  rollingSummary,
 }: {
   agentMemory: AgentMemoryRow[];
   consentGranted: boolean;
   healthFacts: HealthFactContextRow[];
   recentMessages: ChatMessage[];
+  rollingSummary?: string | null;
 }) {
   if (!consentGranted) {
     return 'Health memory consent is not granted. Do not store or rely on personal memory. You may answer the current question only.';
@@ -1629,12 +1844,13 @@ function formatPersonalContext({
     return `- agent_memory type=${memory.memory_type} summary=${memory.summary} value=${memory.value ?? ''} confidence=${memory.confidence ?? 0}${validUntil}`;
   });
   const conversationLines = recentMessages.slice(-6).map((message) => `- recent_chat ${message.role}: ${clipText(message.content, 140)}`);
+  const summaryLine = rollingSummary?.trim() ? [`- conversation_summary: ${clipText(rollingSummary.trim(), 500)}`] : [];
 
-  if (factLines.length === 0 && memoryLines.length === 0 && conversationLines.length === 0) {
+  if (factLines.length === 0 && memoryLines.length === 0 && conversationLines.length === 0 && summaryLine.length === 0) {
     return 'No confirmed personal memory yet. Ask one useful follow-up question if personalization is needed.';
   }
 
-  return [...factLines, ...memoryLines, ...conversationLines].join('\n');
+  return [...factLines, ...memoryLines, ...summaryLine, ...conversationLines].join('\n');
 }
 
 async function getOrCreateCompanionSession(userId: string, authorization: string, question: string) {
@@ -1674,7 +1890,9 @@ async function createTimelineMessage({
   model,
   ragChunkIds,
   role,
+  routerRoutes,
   sessionId,
+  tokenEstimate,
   userId,
 }: {
   authorization: string;
@@ -1682,7 +1900,9 @@ async function createTimelineMessage({
   model?: string;
   ragChunkIds?: string[];
   role: 'assistant' | 'user';
+  routerRoutes?: RetrievalRoute[];
   sessionId: string;
+  tokenEstimate?: number;
   userId: string;
 }) {
   return insertRestReturningId(
@@ -1695,8 +1915,47 @@ async function createTimelineMessage({
       model,
       rag_chunk_ids: ragChunkIds ?? [],
       role,
+      router_route: routerRoutes ?? [],
       session_id: sessionId,
+      token_estimate: tokenEstimate ?? estimateTokenCount(content),
       user_id: userId,
+    },
+    authorization,
+  );
+}
+
+async function updateCompanionRollingSummary({
+  authorization,
+  sessionId,
+}: {
+  authorization: string;
+  sessionId: string;
+}) {
+  const rows = await selectRest<StoredChatMessageRow[]>(
+    [
+      'chat_messages?select=role,content,created_at',
+      `session_id=eq.${encodeURIComponent(sessionId)}`,
+      'order=created_at.desc',
+      'limit=8',
+    ].join('&'),
+    authorization,
+  );
+  const messages = (rows ?? [])
+    .filter((message) => (message.role === 'user' || message.role === 'assistant') && message.content?.trim())
+    .reverse();
+
+  if (messages.length === 0) {
+    return;
+  }
+
+  const rollingSummary = messages.map((message) => `${message.role}: ${clipText(message.content.trim(), 140)}`).join(' | ');
+
+  await updateRest(
+    `chat_sessions?id=eq.${encodeURIComponent(sessionId)}`,
+    {
+      message_count: messages.length,
+      rolling_summary: clipText(rollingSummary, 900),
+      summary_updated_at: new Date().toISOString(),
     },
     authorization,
   );
@@ -2129,16 +2388,68 @@ function toPublicRagMatch(match: RagMatch): PublicRagMatch {
   };
 }
 
+async function fetchApprovedWebSearchSources(authorization: string) {
+  const rows = await selectRest<WebSearchSourceRow[]>(
+    [
+      'web_search_sources?select=id,domain,display_name,source_type,topics,trust_tier',
+      'status=eq.approved',
+      'order=trust_tier.asc,domain.asc',
+      'limit=12',
+    ].join('&'),
+    authorization,
+  );
+
+  return rows ?? [];
+}
+
+function getUrlDomain(url: string) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '').toLowerCase();
+  } catch {
+    return '';
+  }
+}
+
+function sourceMatchesApprovedDomain(url: string, sources: WebSearchSourceRow[]) {
+  const domain = getUrlDomain(url);
+
+  return Boolean(domain) && sources.some((source) => domain === source.domain || domain.endsWith(`.${source.domain}`));
+}
+
+function toPublicSearchSource(match: PublicRagMatch, sources: WebSearchSourceRow[]): PublicSearchSource | null {
+  if (!match.sourceUrl) {
+    return null;
+  }
+
+  const domain = getUrlDomain(match.sourceUrl);
+  const source = sources.find((candidate) => domain === candidate.domain || domain.endsWith(`.${candidate.domain}`));
+
+  if (!domain || !source) {
+    return null;
+  }
+
+  return {
+    domain,
+    title: match.title,
+    trustTier: source.trust_tier,
+    url: match.sourceUrl,
+  };
+}
+
 function shouldEnableWebSearch({
+  approvedSources,
   contextAssessment,
   intent,
   ragMatches,
+  routerDecision,
 }: {
+  approvedSources: WebSearchSourceRow[];
   contextAssessment: ContextAssessment;
   intent: HealthChatIntent;
   ragMatches: RagMatch[];
+  routerDecision: RouterDecision;
 }) {
-  if (intent === 'safety_escalation' || contextAssessment.mode === 'ask_context') {
+  if (!hasRoute(routerDecision, 'controlled_web_search') || approvedSources.length === 0 || intent === 'safety_escalation' || contextAssessment.mode === 'ask_context') {
     return false;
   }
 
@@ -2187,6 +2498,87 @@ function extractWebSearchMatches(data: OpenAIResponse): PublicRagMatch[] {
   return matches.slice(0, 3);
 }
 
+function filterApprovedWebSearchMatches(matches: PublicRagMatch[], approvedSources: WebSearchSourceRow[]) {
+  return matches.filter((match) => match.sourceUrl && sourceMatchesApprovedDomain(match.sourceUrl, approvedSources)).slice(0, 3);
+}
+
+function uniqueSearchSources(matches: PublicRagMatch[], approvedSources: WebSearchSourceRow[]) {
+  const seen = new Set<string>();
+  const sources: PublicSearchSource[] = [];
+
+  for (const match of matches) {
+    const source = toPublicSearchSource(match, approvedSources);
+
+    if (!source || seen.has(source.url)) {
+      continue;
+    }
+
+    seen.add(source.url);
+    sources.push(source);
+  }
+
+  return sources;
+}
+
+async function insertRetrievalLog({
+  authorization,
+  cacheHit,
+  contextAssessment,
+  intent,
+  messageId,
+  ragMatches,
+  requestId,
+  routerLatencyMs,
+  routerDecision,
+  sessionId,
+  totalLatencyMs,
+  userId,
+  webSearchMatches,
+}: {
+  authorization: string;
+  cacheHit: boolean;
+  contextAssessment: ContextAssessment;
+  intent: HealthChatIntent;
+  messageId?: string | null;
+  ragMatches: RagMatch[];
+  requestId: string;
+  routerLatencyMs: number;
+  routerDecision: RouterDecision;
+  sessionId?: string | null;
+  totalLatencyMs: number;
+  userId: string;
+  webSearchMatches: PublicRagMatch[];
+}) {
+  await insertRest(
+    'retrieval_logs',
+    {
+      cache_hit: cacheHit,
+      fetch_stats: {
+        internal_rag_count: ragMatches.length,
+        web_search_count: webSearchMatches.length,
+      },
+      message_id: messageId ?? null,
+      model_intent: intent,
+      router_input: {
+        context_level: contextAssessment.level,
+        context_mode: contextAssessment.mode,
+        context_score: contextAssessment.score,
+        request_id: requestId,
+      },
+      router_latency_ms: routerLatencyMs,
+      routes_rejected: routerDecision.routesRejected,
+      routes_selected: routerDecision.routes,
+      session_id: sessionId ?? null,
+      total_context_tokens:
+        ragMatches.reduce((total, match) => total + Math.max(1, match.tokenBudget), 0) +
+        webSearchMatches.reduce((total, match) => total + estimateTokenCount(match.summary), 0),
+      total_latency_ms: totalLatencyMs,
+      user_id: userId,
+    },
+    authorization,
+  );
+}
+
 async function fetchActivePrompt(authorization: string): Promise<PromptVersion | null> {
   const config = getSupabaseConfig();
 
@@ -2209,24 +2601,29 @@ async function fetchActivePrompt(authorization: string): Promise<PromptVersion |
 }
 
 function createSystemInstruction({
+  approvedWebSearchSources,
   contextAssessment,
   personalContext,
   ragContext,
   promptText,
+  routerDecision,
   systemPromptOverride,
   allowOverride,
   userNickname,
 }: {
   allowOverride: boolean;
+  approvedWebSearchSources: WebSearchSourceRow[];
   contextAssessment: ContextAssessment;
   personalContext: string;
   promptText?: string;
   ragContext: string;
+  routerDecision: RouterDecision;
   systemPromptOverride?: string;
   userNickname?: string;
 }) {
   const selectedPrompt = allowOverride && systemPromptOverride?.trim() ? systemPromptOverride.trim().slice(0, 4000) : promptText || DEFAULT_SYSTEM_PROMPT;
   const userDisplayName = formatUserDisplayName(userNickname);
+  const approvedDomains = approvedWebSearchSources.map((source) => source.domain).join(', ') || 'none';
 
   return `${selectedPrompt}
 
@@ -2252,6 +2649,23 @@ CONTEXT_ASSESSMENT:
 - If mode=ask_context, ask next_question only and do not recommend packages.
 - If mode=direct_product, answer briefly and let the UI card carry the product options.
 - If mode=personalized_recommendation, explain the recommendation in no more than 2 short lines with one short reason.
+
+RETRIEVAL_ROUTER:
+- selected_routes=${routerDecision.routes.join(', ') || 'none'}
+- rejected_routes=${Object.entries(routerDecision.routesRejected)
+    .map(([route, reason]) => `${route}: ${reason}`)
+    .join('; ') || 'none'}
+- reasons=${Object.entries(routerDecision.reasons)
+    .map(([route, reason]) => `${route}: ${reason}`)
+    .join('; ') || 'none'}
+- Follow selected_routes. Do not invent app package, booking, payment, or policy details outside RAG.
+- If selected_routes includes none, answer from current message plus personal context only.
+
+WEB_SEARCH_POLICY:
+- approved_domains=${approvedDomains}
+- Use web search only when controlled_web_search is selected and approved_domains is not none.
+- Ignore any web result whose hostname is not the approved domain or its subdomain.
+- Keep external medical guidance general and conservative; do not diagnose, prescribe, or replace a clinician.
 
 RAG:
 ${ragContext || 'No app-specific Mira package or policy snippets matched. Do not mention this to the user. Use general safe health knowledge when relevant, or answer harmless off-topic questions briefly and steer back to health.'}`;
@@ -2338,6 +2752,7 @@ function normalizeAssistantText(text: string) {
 async function generateOpenAIResponse({
   allowOverride,
   apiBaseUrl,
+  approvedWebSearchSources,
   contextAssessment,
   enableWebSearch,
   maxOutputTokens,
@@ -2349,11 +2764,13 @@ async function generateOpenAIResponse({
   question,
   ragContext,
   retryInstruction,
+  routerDecision,
   systemPromptOverride,
   userNickname,
 }: {
   allowOverride: boolean;
   apiBaseUrl: string;
+  approvedWebSearchSources: WebSearchSourceRow[];
   contextAssessment: ContextAssessment;
   enableWebSearch: boolean;
   maxOutputTokens: number;
@@ -2365,10 +2782,21 @@ async function generateOpenAIResponse({
   question: string;
   ragContext: string;
   retryInstruction?: string;
+  routerDecision: RouterDecision;
   systemPromptOverride?: string;
   userNickname?: string;
 }) {
-  const baseInstruction = createSystemInstruction({ allowOverride, contextAssessment, personalContext, promptText, ragContext, systemPromptOverride, userNickname });
+  const baseInstruction = createSystemInstruction({
+    allowOverride,
+    approvedWebSearchSources,
+    contextAssessment,
+    personalContext,
+    promptText,
+    ragContext,
+    routerDecision,
+    systemPromptOverride,
+    userNickname,
+  });
   const systemText = retryInstruction ? `${baseInstruction}\n\n${retryInstruction}` : baseInstruction;
   const tools = enableWebSearch ? [{ search_context_size: 'low', type: 'web_search' }] : undefined;
   const response = await fetch(`${apiBaseUrl.replace(/\/$/, '')}/responses`, {
@@ -2463,11 +2891,22 @@ Deno.serve(async (req) => {
       question,
       userNickname,
     });
+    const routerStartedAt = Date.now();
+    const routerDecision = routeTurn({
+      activeProductRequestKind,
+      consentGranted,
+      contextAssessment,
+      intent,
+      preferredCategories,
+      question,
+    });
+    const routerLatencyMs = Date.now() - routerStartedAt;
     const personalContext = formatPersonalContext({
       agentMemory: personalContextState.agentMemory,
       consentGranted,
       healthFacts: personalContextState.healthFacts,
       recentMessages: personalContextState.recentMessages,
+      rollingSummary: personalContextState.rollingSummary,
     });
     let timelineSessionId: string | null = null;
     let userTimelineMessageId: string | null = null;
@@ -2480,6 +2919,7 @@ Deno.serve(async (req) => {
           authorization,
           content: question,
           role: 'user',
+          routerRoutes: routerDecision.routes,
           sessionId: timelineSessionId,
           userId,
         });
@@ -2507,6 +2947,8 @@ Deno.serve(async (req) => {
           active_product_request_kind: activeProductRequestKind,
           product_request_kind: productRequestKind,
           question_chars: question.length,
+          router_routes: routerDecision.routes,
+          router_routes_rejected: routerDecision.routesRejected,
         },
       },
       authorization,
@@ -2524,9 +2966,11 @@ Deno.serve(async (req) => {
           model,
           ragChunkIds: [],
           role: 'assistant',
+          routerRoutes: routerDecision.routes,
           sessionId: timelineSessionId,
           userId,
         });
+        await updateCompanionRollingSummary({ authorization, sessionId: timelineSessionId });
       }
 
       await insertRest(
@@ -2573,12 +3017,24 @@ Deno.serve(async (req) => {
         mode: 'supabase-edge-function',
         model,
         nextActions: [],
-        promptVersion: null,
-        ragMatches: [],
-        requestId: resolvedRequestId,
-        contextAssessment: toPublicContextAssessment(contextAssessment),
-        text: smallTalkAnswer,
-        uiCards: [],
+          promptVersion: null,
+          ragMatches: [],
+          requestId: resolvedRequestId,
+          routerMeta: {
+            cacheHit: false,
+            latencyMs: {
+              router: routerLatencyMs,
+              total: latencyMs,
+            },
+            reasons: routerDecision.reasons,
+            routes: routerDecision.routes,
+            routesRejected: routerDecision.routesRejected,
+            stage: routerDecision.stage,
+          },
+          searchSources: [],
+          contextAssessment: toPublicContextAssessment(contextAssessment),
+          text: smallTalkAnswer,
+          uiCards: [],
       });
     }
 
@@ -2633,38 +3089,44 @@ Deno.serve(async (req) => {
       );
     }
 
-    let retrievalMode: 'keyword' | 'vector' = 'vector';
+    const routedCategories = categoriesForRouterRoutes(routerDecision.routes, preferredCategories);
+    const shouldRetrieveInternalRag =
+      !routerDecision.emergency &&
+      routedCategories.length > 0 &&
+      routerDecision.routes.some((route) => route === 'product_rag' || route === 'policy_rag' || route === 'controlled_web_search');
+    let retrievalMode: 'keyword' | 'skipped' | 'vector' = shouldRetrieveInternalRag ? 'vector' : 'skipped';
     let embeddingErrorMessage: string | null = null;
     let ragMatches: RagMatch[] = [];
 
-    if (geminiApiKey) {
+    if (shouldRetrieveInternalRag && geminiApiKey) {
       try {
         ragMatches = await retrieveVectorRagContext({
           apiBaseUrl: embeddingApiBaseUrl,
           authorization,
           geminiApiKey,
           limit: DEFAULT_LIMIT,
-          preferredCategories,
+          preferredCategories: routedCategories,
           question,
         });
       } catch (embeddingError) {
         embeddingErrorMessage = embeddingError instanceof Error ? embeddingError.message : 'Vector retrieval failed.';
       }
-    } else {
+    } else if (shouldRetrieveInternalRag) {
       embeddingErrorMessage = 'Missing GEMINI_API_KEY for vector retrieval; using keyword fallback.';
     }
 
     let chunks: RagChunk[] = [];
 
-    if (ragMatches.length === 0) {
+    if (shouldRetrieveInternalRag && ragMatches.length === 0) {
       retrievalMode = 'keyword';
       chunks = await fetchApprovedRagChunks(authorization);
-      ragMatches = retrieveRagContext(question, chunks, DEFAULT_LIMIT);
+      ragMatches = retrieveRagContext(question, chunks, DEFAULT_LIMIT, routedCategories);
     }
 
     const ragContext = formatRagContext(ragMatches);
-    const ragStatus = ragMatches.length > 0 ? 'success' : chunks === localFallbackKnowledge ? 'fallback' : 'empty';
+    const ragStatus = !shouldRetrieveInternalRag ? 'skipped' : ragMatches.length > 0 ? 'success' : chunks === localFallbackKnowledge ? 'fallback' : 'empty';
     const shouldFetchProducts =
+      hasRoute(routerDecision, 'product_rag') &&
       contextAssessment.mode !== 'ask_context' &&
       (intent === 'product_recommendation' || intent === 'product_compare' || intent === 'checkout');
     const productRows =
@@ -2709,6 +3171,9 @@ Deno.serve(async (req) => {
           active_product_request_kind: activeProductRequestKind,
           product_request_kind: productRequestKind,
           retrieval_mode: retrievalMode,
+          routed_categories: routedCategories,
+          router_routes: routerDecision.routes,
+          router_routes_rejected: routerDecision.routesRejected,
           scores: ragMatches.map((match) => ({ id: match.id, score: match.score })),
         },
       },
@@ -2717,7 +3182,11 @@ Deno.serve(async (req) => {
 
     const promptVersion = await fetchActivePrompt(authorization);
     const maxOutputTokens = getNumberEnv('OPENAI_MAX_OUTPUT_TOKENS', 450);
-    const enableWebSearch = shouldEnableWebSearch({ contextAssessment, intent, ragMatches });
+    const approvedWebSearchSources = hasRoute(routerDecision, 'controlled_web_search') ? await fetchApprovedWebSearchSources(authorization) : [];
+    if (hasRoute(routerDecision, 'controlled_web_search') && approvedWebSearchSources.length === 0) {
+      routerDecision.routesRejected.controlled_web_search = 'no approved web search sources are configured';
+    }
+    const enableWebSearch = shouldEnableWebSearch({ approvedSources: approvedWebSearchSources, contextAssessment, intent, ragMatches, routerDecision });
 
     await insertRest(
       'ai_request_logs',
@@ -2745,6 +3214,9 @@ Deno.serve(async (req) => {
           rag_chunk_ids: ragMatches.map((match) => match.id),
           rag_retrieval_mode: retrievalMode,
           rate_limit_count: rateStatus?.request_count,
+          approved_web_search_domains: approvedWebSearchSources.map((source) => source.domain),
+          router_routes: routerDecision.routes,
+          router_routes_rejected: routerDecision.routesRejected,
           web_search_enabled: enableWebSearch,
         },
       },
@@ -2754,6 +3226,7 @@ Deno.serve(async (req) => {
     const { data, response: openaiResponse } = await generateOpenAIResponse({
       allowOverride: adminRequest,
       apiBaseUrl,
+      approvedWebSearchSources,
       contextAssessment,
       enableWebSearch,
       maxOutputTokens,
@@ -2764,6 +3237,7 @@ Deno.serve(async (req) => {
       promptText: promptVersion?.prompt_text,
       question,
       ragContext,
+      routerDecision,
       systemPromptOverride: body.systemPromptOverride,
       userNickname,
     });
@@ -2801,6 +3275,7 @@ Deno.serve(async (req) => {
       const { data: retryData, response: retryResponse } = await generateOpenAIResponse({
         allowOverride: !looksLikePromptLeak(text) && adminRequest,
         apiBaseUrl,
+        approvedWebSearchSources,
         contextAssessment,
         enableWebSearch,
         maxOutputTokens: Math.max(maxOutputTokens, 900),
@@ -2812,6 +3287,7 @@ Deno.serve(async (req) => {
         question,
         ragContext,
         retryInstruction,
+        routerDecision,
         systemPromptOverride: body.systemPromptOverride,
         userNickname,
       });
@@ -2828,7 +3304,9 @@ Deno.serve(async (req) => {
     }
 
     const latencyMs = Date.now() - startedAt;
-    const webSearchMatches = enableWebSearch ? extractWebSearchMatches(finalOpenAIData) : [];
+    const rawWebSearchMatches = enableWebSearch ? extractWebSearchMatches(finalOpenAIData) : [];
+    const webSearchMatches = enableWebSearch ? filterApprovedWebSearchMatches(rawWebSearchMatches, approvedWebSearchSources) : [];
+    const searchSources = uniqueSearchSources(webSearchMatches, approvedWebSearchSources);
     const memoryCandidates = extractAgentMemoryCandidates(question);
     const memoryWrites = await saveAgentMemoryWrites({
       authorization,
@@ -2868,17 +3346,37 @@ Deno.serve(async (req) => {
       userNickname,
     });
 
+    let assistantTimelineMessageId: string | null = null;
+
     if (timelineSessionId) {
-      await createTimelineMessage({
+      assistantTimelineMessageId = await createTimelineMessage({
         authorization,
         content: finalText,
         model,
         ragChunkIds: ragMatches.map((match) => match.id),
         role: 'assistant',
+        routerRoutes: routerDecision.routes,
         sessionId: timelineSessionId,
         userId,
       });
+      await updateCompanionRollingSummary({ authorization, sessionId: timelineSessionId });
     }
+
+    await insertRetrievalLog({
+      authorization,
+      cacheHit: false,
+      contextAssessment,
+      intent,
+      messageId: assistantTimelineMessageId,
+      ragMatches,
+      requestId: resolvedRequestId,
+      routerDecision,
+      routerLatencyMs,
+      sessionId: timelineSessionId,
+      totalLatencyMs: latencyMs,
+      userId,
+      webSearchMatches,
+    });
 
     await insertRest(
       'ai_request_logs',
@@ -2903,9 +3401,11 @@ Deno.serve(async (req) => {
           retried,
           rag_chunk_ids: ragMatches.map((match) => match.id),
           rag_retrieval_mode: retrievalMode,
+          router_routes: routerDecision.routes,
+          router_routes_rejected: routerDecision.routesRejected,
           ui_card_types: uiCards.map((card) => card.type),
           web_search_enabled: enableWebSearch,
-          web_search_sources: webSearchMatches.map((match) => match.sourceUrl).filter(Boolean),
+          web_search_sources: searchSources,
         },
       },
       authorization,
@@ -2928,6 +3428,8 @@ Deno.serve(async (req) => {
           intent,
           memory_write_count: memoryWrites.filter((memory) => memory.status === 'saved').length,
           rag_count: ragMatches.length,
+          router_routes: routerDecision.routes,
+          router_routes_rejected: routerDecision.routesRejected,
           ui_card_count: uiCards.length,
           web_search_count: webSearchMatches.length,
         },
@@ -2947,6 +3449,18 @@ Deno.serve(async (req) => {
       promptVersion: promptVersion ? { id: promptVersion.id, versionKey: promptVersion.version_key } : null,
       ragMatches: [...ragMatches.map(toPublicRagMatch), ...webSearchMatches],
       requestId: resolvedRequestId,
+      routerMeta: {
+        cacheHit: false,
+        latencyMs: {
+          router: routerLatencyMs,
+          total: latencyMs,
+        },
+        reasons: routerDecision.reasons,
+        routes: routerDecision.routes,
+        routesRejected: routerDecision.routesRejected,
+        stage: routerDecision.stage,
+      },
+      searchSources,
       text: finalText,
       uiCards,
     });

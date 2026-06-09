@@ -1,6 +1,15 @@
 import type { RagMatch } from '@/lib/rag/retriever';
 import { supabase, supabaseConfigStatus } from '@/lib/supabase';
-import type { ChatContextAssessment, ChatMemoryWrite, ChatNextAction, ChatUiCard, HealthChatIntent } from './healthChatTypes';
+import type {
+  ChatContextAssessment,
+  ChatMemoryWrite,
+  ChatNextAction,
+  ChatRetrievalRoute,
+  ChatRouterMeta,
+  ChatSearchSource,
+  ChatUiCard,
+  HealthChatIntent,
+} from './healthChatTypes';
 
 export type ChatRole = 'user' | 'assistant';
 
@@ -31,6 +40,8 @@ export type AskAiResult = {
   promptVersion?: PromptVersionInfo | null;
   ragMatches: ChatSource[];
   requestId?: string;
+  routerMeta?: ChatRouterMeta;
+  searchSources: ChatSearchSource[];
   text: string;
   uiCards: ChatUiCard[];
 };
@@ -142,6 +153,8 @@ async function callProxy({
       promptVersion: parsePromptVersion(data?.promptVersion),
       ragMatches: parseChatSources(data?.ragMatches),
       requestId: typeof data?.requestId === 'string' ? data.requestId : undefined,
+      routerMeta: parseRouterMeta(data?.routerMeta),
+      searchSources: parseSearchSources(data?.searchSources),
       text,
       uiCards: parseUiCards(data?.uiCards),
     };
@@ -179,6 +192,8 @@ async function callProxy({
     promptVersion: parsePromptVersion(data?.promptVersion),
     ragMatches: parseChatSources(data?.ragMatches),
     requestId: typeof data?.requestId === 'string' ? data.requestId : undefined,
+    routerMeta: parseRouterMeta(data?.routerMeta),
+    searchSources: parseSearchSources(data?.searchSources),
     text,
     uiCards: parseUiCards(data?.uiCards),
   };
@@ -278,6 +293,85 @@ function parseChatSources(value: unknown): ChatSource[] {
       };
     })
     .filter((item): item is ChatSource => Boolean(item));
+}
+
+function parseSearchSources(value: unknown): ChatSearchSource[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((item): ChatSearchSource | null => {
+      if (!item || typeof item !== 'object') {
+        return null;
+      }
+
+      const source = item as Record<string, unknown>;
+      const domain = typeof source.domain === 'string' ? source.domain : '';
+      const title = typeof source.title === 'string' ? source.title : domain;
+      const url = typeof source.url === 'string' ? source.url : '';
+
+      if (!domain || !url) {
+        return null;
+      }
+
+      return {
+        domain,
+        title,
+        trustTier: typeof source.trustTier === 'number' ? source.trustTier : 3,
+        url,
+      };
+    })
+    .filter((item): item is ChatSearchSource => Boolean(item));
+}
+
+function parseRouterMeta(value: unknown): ChatRouterMeta | undefined {
+  if (!value || typeof value !== 'object') {
+    return undefined;
+  }
+
+  const candidate = value as Record<string, unknown>;
+  const allowedRoutes: ChatRetrievalRoute[] = [
+    'controlled_web_search',
+    'emergency',
+    'none',
+    'personal_memory_deep',
+    'policy_rag',
+    'product_rag',
+    'recent_chat',
+  ];
+  const routes = Array.isArray(candidate.routes)
+    ? candidate.routes.filter((route): route is ChatRetrievalRoute => typeof route === 'string' && allowedRoutes.includes(route as ChatRetrievalRoute))
+    : [];
+
+  if (routes.length === 0) {
+    return undefined;
+  }
+
+  const latency = candidate.latencyMs && typeof candidate.latencyMs === 'object' ? (candidate.latencyMs as Record<string, unknown>) : {};
+
+  return {
+    cacheHit: typeof candidate.cacheHit === 'boolean' ? candidate.cacheHit : undefined,
+    latencyMs: {
+      router: typeof latency.router === 'number' ? latency.router : undefined,
+      total: typeof latency.total === 'number' ? latency.total : undefined,
+    },
+    reasons: parseStringRecord(candidate.reasons),
+    routes,
+    routesRejected: parseStringRecord(candidate.routesRejected),
+    stage: candidate.stage === 'heuristic' || candidate.stage === 'llm' ? candidate.stage : undefined,
+  };
+}
+
+function parseStringRecord(value: unknown): Record<string, string> | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const entries = Object.entries(value as Record<string, unknown>)
+    .filter((entry): entry is [string, string] => typeof entry[1] === 'string');
+
+  return entries.length ? Object.fromEntries(entries) : undefined;
 }
 
 export async function askAiWithRag({

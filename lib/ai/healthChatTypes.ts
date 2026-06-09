@@ -14,6 +14,34 @@ export type ChatContextLevel = 'insufficient' | 'partial' | 'ready';
 
 export type ChatRecommendationMode = 'ask_context' | 'direct_product' | 'personalized_recommendation';
 
+export type ChatRetrievalRoute =
+  | 'controlled_web_search'
+  | 'emergency'
+  | 'none'
+  | 'personal_memory_deep'
+  | 'policy_rag'
+  | 'product_rag'
+  | 'recent_chat';
+
+export type ChatRouterMeta = {
+  cacheHit?: boolean;
+  latencyMs?: {
+    router?: number;
+    total?: number;
+  };
+  reasons?: Record<string, string>;
+  routes: ChatRetrievalRoute[];
+  routesRejected?: Record<string, string>;
+  stage?: 'heuristic' | 'llm';
+};
+
+export type ChatSearchSource = {
+  domain: string;
+  title: string;
+  trustTier: number;
+  url: string;
+};
+
 export type ChatContextAssessment = {
   collectedSlots: string[];
   confidence: number;

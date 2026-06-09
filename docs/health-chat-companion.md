@@ -13,16 +13,40 @@ Mira chat is designed as one continuous health companion timeline, not a generic
 - `contextAssessment`: score 0-100 for whether Mira knows enough to recommend a package, with `mode = ask_context | direct_product | personalized_recommendation`.
 - `nextActions`: lightweight action hints for the app UI.
 - `ragMatches`: approved public/product/policy RAG chunks used for the answer.
+- `routerMeta`: backend-owned retrieval decision, including selected routes, rejected routes, and router latency.
+- `searchSources`: approved public sources surfaced from controlled web search.
 
 The mobile app should never send full RAG or personal memory context. The Edge Function owns retrieval, prompt assembly, logging, and structured action selection.
+
+## Router-First Retrieval
+
+Every turn runs through a backend router before retrieval. The router decides which context sources are allowed:
+
+- `recent_chat`: when the user references prior conversation.
+- `personal_memory_deep`: when consent exists and the answer may depend on durable user context.
+- `product_rag`: direct product/package requests or ready personalized recommendations.
+- `policy_rag`: booking, payment, consent, referral, and call-center questions.
+- `controlled_web_search`: prototype fallback for general medical knowledge when internal medical RAG is missing.
+- `emergency`: urgent symptoms; do not retrieve or sell products.
+- `none`: current message plus already loaded context is enough.
+
+Broad requests like "อยากตรวจสุขภาพ" should not route to `product_rag` until context is sufficient. They should ask one useful context question first.
 
 ## Context Boundaries
 
 - Personal memory: `health_facts` and `agent_memory`, only after `chat_health_memory` consent is granted.
 - Product knowledge: `hospital_products` and `rag_chunks` with `category = marketplace.product`.
 - Policy and safety knowledge: booking, payment, consent, referral, and safety RAG categories.
+- Controlled web search: `web_search_sources` allowlists trusted domains; returned sources are filtered again before being exposed to the app.
 
 Personal health data must not be written into RAG. It belongs in the health data vault and must remain user-scoped through RLS.
+
+## Persistence And Audit
+
+- `chat_sessions.rolling_summary` keeps a compact companion timeline summary so future turns can avoid repeated questions even when the app sends a short message list.
+- `chat_messages.router_route` stores the routes used for that message.
+- `retrieval_logs` records router input, selected/rejected routes, fetch counts, cache status, latency, and context token estimates.
+- `web_search_sources` and `web_search_cache` are the governance layer for fail-safe public medical search.
 
 ## Product Flow
 
