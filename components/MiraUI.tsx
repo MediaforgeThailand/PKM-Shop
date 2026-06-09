@@ -1,8 +1,10 @@
 import type { ReactNode } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View, type PressableProps, type StyleProp, type ViewStyle } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View, type PressableProps, type StyleProp, type ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { MiraDesign, shadow } from '@/constants/Design';
+
+const brandLogo = require('@/assets/images/mira-care-logo.png');
 
 type ScreenProps = {
   children: ReactNode;
@@ -36,8 +38,7 @@ export function BrandHeader({
   return (
     <View style={[uiStyles.header, compact ? uiStyles.compactHeader : null]}>
       <View style={uiStyles.brandRow}>
-        <View style={uiStyles.brandMark} />
-        <Text style={uiStyles.brandText}>mira health</Text>
+        <Image source={brandLogo} resizeMode="contain" style={uiStyles.brandLogo} />
       </View>
       <Text style={uiStyles.eyebrow}>{eyebrow}</Text>
       <Text style={[uiStyles.title, compact ? uiStyles.compactTitle : null]}>{title}</Text>
@@ -130,19 +131,9 @@ export const uiStyles = StyleSheet.create({
     gap: MiraDesign.space.sm,
     marginBottom: MiraDesign.space.sm,
   },
-  brandMark: {
-    backgroundColor: MiraDesign.color.primary,
-    borderColor: '#B8DAFF',
-    borderRadius: MiraDesign.radius.pill,
-    borderWidth: 5,
-    height: 20,
-    transform: [{ rotate: '-24deg' }],
-    width: 34,
-  },
-  brandText: {
-    color: MiraDesign.color.ink,
-    fontSize: 17,
-    fontWeight: '900',
+  brandLogo: {
+    height: 42,
+    width: 154,
   },
   eyebrow: {
     color: MiraDesign.color.primaryDeep,

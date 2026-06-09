@@ -13,6 +13,22 @@ export const currentUser: UserProfile = {
 
 export const healthPackages: HealthPackage[] = [
   {
+    id: 'pkg_basic_blood',
+    title: 'Basic Blood Checkup',
+    hospital: 'Mira Partner Hospital',
+    category: 'Lab checkup',
+    price: { amount: 3500, currency: 'THB' },
+    gpRate: 0.05,
+    referralRate: 0.05,
+    duration: '45-60 mins',
+    location: 'Bangkok',
+    tags: ['Lab', 'Blood test', 'Popular'],
+    includes: ['CBC', 'Fasting blood sugar', 'HbA1c', 'Lipid profile', 'Liver and kidney screen'],
+    bestFor: 'Users who want a quick baseline for sugar, cholesterol, liver, kidney, and blood count.',
+    aiReason: 'A good first package when the user asks for blood testing or has no recent lab baseline.',
+    previewImageKey: 'blood',
+  },
+  {
     id: 'pkg_heart_metabolic',
     title: 'Heart & Metabolic Advanced',
     hospital: 'Aster International Hospital',
@@ -26,6 +42,7 @@ export const healthPackages: HealthPackage[] = [
     includes: ['CBC and chemistry panel', 'HbA1c and insulin resistance', 'Lipid profile', 'ECG', 'Doctor summary'],
     bestFor: 'Users with family history, high stress, or early metabolic risk.',
     aiReason: 'Recommended because your last profile mentioned fatigue, late meals, and no recent lipid panel.',
+    previewImageKey: 'heart',
   },
   {
     id: 'pkg_cancer_baseline',
@@ -41,6 +58,7 @@ export const healthPackages: HealthPackage[] = [
     includes: ['Doctor risk intake', 'Core tumor markers', 'Ultrasound abdomen', 'Lifestyle risk report'],
     bestFor: 'Users who want a structured annual cancer screening plan.',
     aiReason: 'Recommended as a baseline because your agent profile has no oncology screening record yet.',
+    previewImageKey: 'cancer',
   },
   {
     id: 'pkg_executive_full',
@@ -56,10 +74,11 @@ export const healthPackages: HealthPackage[] = [
     includes: ['Advanced blood biomarkers', 'Inflammation markers', 'Hormone panel', 'Nutrition and sleep review'],
     bestFor: 'Users who want deep health optimization and trend tracking.',
     aiReason: 'Recommended if you want the richest dashboard after hospital results are uploaded.',
+    previewImageKey: 'longevity',
   },
 ];
 
-export const featuredPackage = healthPackages[0];
+export const featuredPackage = healthPackages.find((item) => item.id === 'pkg_heart_metabolic') ?? healthPackages[0];
 
 export const packageCategories: PackageCategory[] = [
   {
@@ -67,7 +86,7 @@ export const packageCategories: PackageCategory[] = [
     code: 'A',
     title: 'Basic Health Check',
     description: 'ตรวจพื้นฐานประจำปี เลือด ไขมัน น้ำตาล ตับ ไต',
-    packageId: 'pkg_heart_metabolic',
+    packageId: 'pkg_basic_blood',
     popularity: 'Most booked',
   },
   {
@@ -105,7 +124,7 @@ export const hospitalBranches: HospitalBranch[] = [
     district: 'Rama 9',
     distanceKm: 3.8,
     nextSlot: 'พรุ่งนี้ 10:30',
-    supportedPackageIds: ['pkg_heart_metabolic', 'pkg_executive_full'],
+    supportedPackageIds: ['pkg_basic_blood', 'pkg_heart_metabolic', 'pkg_executive_full'],
   },
   {
     id: 'branch_aster_sathorn',
@@ -135,7 +154,7 @@ export const hospitalBranches: HospitalBranch[] = [
     district: 'Wireless',
     distanceKm: 5.4,
     nextSlot: 'จันทร์หน้า 08:30',
-    supportedPackageIds: ['pkg_executive_full', 'pkg_cancer_baseline'],
+    supportedPackageIds: ['pkg_basic_blood', 'pkg_executive_full', 'pkg_cancer_baseline'],
   },
 ];
 

@@ -8,13 +8,17 @@ import { MiraDesign, softShadow } from '@/constants/Design';
 import { useAuthSession, useSignOut } from '@/lib/auth/useAuthSession';
 import {
   deleteHealthFact,
+  deleteAgentMemory,
   exportHealthDataSnapshot,
   getHealthFactTypeLabel,
   getHealthMemoryStatus,
+  grantHealthMemoryConsent,
+  listAgentMemory,
   listConfirmedHealthFacts,
   revokeHealthMemoryConsent,
   type HealthDataSnapshot,
   type HealthMemoryStatus,
+  type StoredAgentMemory,
   type StoredHealthFact,
 } from '@/lib/health/healthDataVault';
 
@@ -22,6 +26,7 @@ export default function UserProfileScreen() {
   const auth = useAuthSession();
   const signOut = useSignOut();
   const [facts, setFacts] = useState<StoredHealthFact[]>([]);
+  const [agentMemory, setAgentMemory] = useState<StoredAgentMemory[]>([]);
   const [healthMemoryStatus, setHealthMemoryStatus] = useState<HealthMemoryStatus | null>(null);
   const [snapshot, setSnapshot] = useState<HealthDataSnapshot | null>(null);
   const [isBusy, setIsBusy] = useState(false);
@@ -30,14 +35,16 @@ export default function UserProfileScreen() {
   const refreshProfile = useCallback(async () => {
     if (!auth.user) {
       setFacts([]);
+      setAgentMemory([]);
       setHealthMemoryStatus(null);
       setSnapshot(null);
       return;
     }
 
-    const [nextStatus, nextFacts] = await Promise.all([getHealthMemoryStatus(), listConfirmedHealthFacts()]);
+    const [nextStatus, nextFacts, nextAgentMemory] = await Promise.all([getHealthMemoryStatus(), listConfirmedHealthFacts(), listAgentMemory()]);
     setHealthMemoryStatus(nextStatus);
     setFacts(nextFacts);
+    setAgentMemory(nextAgentMemory);
   }, [auth.user]);
 
   useEffect(() => {
@@ -56,6 +63,36 @@ export default function UserProfileScreen() {
       setMessage('ลบข้อมูลสุขภาพรายการนี้แล้ว');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'ลบข้อมูลไม่สำเร็จ');
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
+  async function handleDeleteAgentMemory(memoryId: string) {
+    setIsBusy(true);
+    setMessage(null);
+
+    try {
+      await deleteAgentMemory(memoryId);
+      await refreshProfile();
+      setMessage('ลบสิ่งที่ผู้ช่วยจำไว้แล้ว');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'ลบ memory ไม่สำเร็จ');
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
+  async function handleGrantConsent() {
+    setIsBusy(true);
+    setMessage(null);
+
+    try {
+      await grantHealthMemoryConsent();
+      await refreshProfile();
+      setMessage('เปิด health memory แล้ว หลังจากนี้ผู้ช่วยจะจำข้อมูลสำคัญแบบเงียบๆ');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'เปิด health memory ไม่สำเร็จ');
     } finally {
       setIsBusy(false);
     }
@@ -97,6 +134,7 @@ export default function UserProfileScreen() {
     try {
       await signOut();
       setFacts([]);
+      setAgentMemory([]);
       setSnapshot(null);
       setHealthMemoryStatus(null);
     } catch (error) {
@@ -151,8 +189,8 @@ export default function UserProfileScreen() {
           <StatusRing value={facts.length ? 74 : 24} label="Context" size={118} color={MiraDesign.color.blue} />
           <View style={styles.contextBox}>
             <Text style={styles.contextLabel}>Health memory</Text>
-            <Text style={styles.contextValue}>{facts.length} facts</Text>
-            <FreshnessDots active={Math.min(4, Math.max(1, facts.length))} />
+            <Text style={styles.contextValue}>{facts.length + agentMemory.length} items</Text>
+            <FreshnessDots active={Math.min(4, Math.max(1, facts.length + agentMemory.length))} />
           </View>
         </View>
       </View>
@@ -169,6 +207,11 @@ export default function UserProfileScreen() {
           <View style={consentGranted ? styles.consentDot : [styles.consentDot, styles.consentAmber]} />
           <Text style={styles.consentTitle}>Chat health memory</Text>
           <Text style={styles.consentValue}>{consentGranted ? 'On' : 'Off'}</Text>
+          {!consentGranted ? (
+            <Pressable disabled={isBusy} onPress={handleGrantConsent} style={styles.inlineAction}>
+              <Text style={styles.inlineActionText}>Enable</Text>
+            </Pressable>
+          ) : null}
         </View>
         <View style={styles.consentCard}>
           <View style={[styles.consentDot, styles.consentAmber]} />
@@ -176,6 +219,33 @@ export default function UserProfileScreen() {
           <Text style={styles.consentValue}>Off</Text>
         </View>
       </View>
+
+      <SectionHeader title="สิ่งที่จำเกี่ยวกับคุณ" meta={`${agentMemory.length} items`} />
+      {agentMemory.length === 0 ? (
+        <Card>
+          <Text style={styles.cardTitle}>ยังไม่มี personal memory</Text>
+          <Text style={styles.cardBody}>หลังเปิด consent ผู้ช่วยจะจำข้อมูลอย่างเช่นงบ พื้นที่สะดวก เป้าหมายสุขภาพ และความสนใจแพ็กเกจ</Text>
+        </Card>
+      ) : (
+        <View style={styles.factList}>
+          {agentMemory.map((memory) => (
+            <View key={memory.id} style={styles.factCard}>
+              <View style={styles.factHeader}>
+                <View style={styles.factCopy}>
+                  <Text style={styles.factType}>{memory.memoryType}</Text>
+                  <Text style={styles.factValue}>{memory.summary}</Text>
+                  {memory.value ? <Text style={styles.factMeta}>{memory.value}</Text> : null}
+                </View>
+                <Pill label={`${Math.round(memory.confidence * 100)}%`} tone="blue" />
+              </View>
+              <Text style={styles.factMeta}>จำเมื่อ {new Date(memory.observedAt).toLocaleDateString('th-TH')}</Text>
+              <Pressable disabled={isBusy} onPress={() => handleDeleteAgentMemory(memory.id)} style={styles.textButton}>
+                <Text style={styles.textButtonDanger}>ลบ memory นี้</Text>
+              </Pressable>
+            </View>
+          ))}
+        </View>
+      )}
 
       <SectionHeader title="Confirmed health facts" meta={`${facts.length} records`} />
       {facts.length === 0 ? (
@@ -210,8 +280,8 @@ export default function UserProfileScreen() {
       <Card>
         <View style={styles.freshTop}>
           <View>
-            <Text style={styles.cardTitle}>ข้อมูลจากแชทต้องมี user confirmation</Text>
-            <Text style={styles.cardBody}>ข้อมูลที่ยังไม่ได้ยืนยันจะไม่ถูกใช้เป็น Health Profile สำหรับ analytics</Text>
+            <Text style={styles.cardTitle}>Auto-save หลัง consent เท่านั้น</Text>
+            <Text style={styles.cardBody}>ข้อมูลความมั่นใจต่ำจะไม่ถูกบันทึก และสามารถ export, revoke หรือ delete ได้จากหน้านี้</Text>
           </View>
           <Pill label="MVP" tone="amber" />
         </View>
@@ -341,6 +411,19 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '900',
   },
+  inlineAction: {
+    alignSelf: 'flex-start',
+    backgroundColor: MiraDesign.color.primarySoft,
+    borderRadius: MiraDesign.radius.pill,
+    marginTop: MiraDesign.space.xs,
+    paddingHorizontal: MiraDesign.space.md,
+    paddingVertical: MiraDesign.space.xs,
+  },
+  inlineActionText: {
+    color: MiraDesign.color.primaryDeep,
+    fontSize: 12,
+    fontWeight: '900',
+  },
   factList: {
     gap: MiraDesign.space.md,
   },
@@ -357,6 +440,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: MiraDesign.space.md,
     justifyContent: 'space-between',
+  },
+  factCopy: {
+    flex: 1,
   },
   factType: {
     color: MiraDesign.color.primaryDeep,

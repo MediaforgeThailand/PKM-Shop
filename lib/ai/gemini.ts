@@ -1,5 +1,6 @@
 import type { RagMatch } from '@/lib/rag/retriever';
 import { supabase, supabaseConfigStatus } from '@/lib/supabase';
+import type { ChatContextAssessment, ChatMemoryWrite, ChatNextAction, ChatUiCard, HealthChatIntent } from './healthChatTypes';
 
 export type ChatRole = 'user' | 'assistant';
 
@@ -19,14 +20,19 @@ export type PromptVersionInfo = {
 };
 
 export type AskAiResult = {
+  contextAssessment?: ChatContextAssessment;
   finishReason?: string;
+  intent?: HealthChatIntent;
   latencyMs: number;
+  memoryWrites: ChatMemoryWrite[];
   mode: 'external-proxy' | 'supabase-edge-function';
   model: string;
+  nextActions: ChatNextAction[];
   promptVersion?: PromptVersionInfo | null;
   ragMatches: ChatSource[];
   requestId?: string;
   text: string;
+  uiCards: ChatUiCard[];
 };
 
 const FALLBACK_USER_NICKNAME = 'บอส';
@@ -119,14 +125,19 @@ async function callProxy({
     }
 
     return {
+      contextAssessment: parseContextAssessment(data?.contextAssessment),
       finishReason: typeof data?.finishReason === 'string' ? data.finishReason : undefined,
+      intent: parseIntent(data?.intent),
       latencyMs: Date.now() - startedAt,
+      memoryWrites: parseMemoryWrites(data?.memoryWrites),
       mode: 'supabase-edge-function',
       model: String(data?.model ?? aiChatConfig.model),
+      nextActions: parseNextActions(data?.nextActions),
       promptVersion: parsePromptVersion(data?.promptVersion),
       ragMatches: parseChatSources(data?.ragMatches),
       requestId: typeof data?.requestId === 'string' ? data.requestId : undefined,
       text,
+      uiCards: parseUiCards(data?.uiCards),
     };
   }
 
@@ -151,14 +162,66 @@ async function callProxy({
   }
 
   return {
+    contextAssessment: parseContextAssessment(data?.contextAssessment),
     finishReason: typeof data?.finishReason === 'string' ? data.finishReason : undefined,
+    intent: parseIntent(data?.intent),
     latencyMs: Date.now() - startedAt,
+    memoryWrites: parseMemoryWrites(data?.memoryWrites),
     mode: 'external-proxy',
     model: String(data?.model ?? aiChatConfig.model),
+    nextActions: parseNextActions(data?.nextActions),
     promptVersion: parsePromptVersion(data?.promptVersion),
     ragMatches: parseChatSources(data?.ragMatches),
     requestId: typeof data?.requestId === 'string' ? data.requestId : undefined,
     text,
+    uiCards: parseUiCards(data?.uiCards),
+  };
+}
+
+function parseIntent(value: unknown): HealthChatIntent | undefined {
+  const allowed: HealthChatIntent[] = [
+    'booking',
+    'checkout',
+    'health_advice',
+    'off_topic',
+    'product_compare',
+    'product_recommendation',
+    'safety_escalation',
+    'small_talk',
+  ];
+
+  return typeof value === 'string' && allowed.includes(value as HealthChatIntent) ? (value as HealthChatIntent) : undefined;
+}
+
+function parseContextAssessment(value: unknown): ChatContextAssessment | undefined {
+  if (!value || typeof value !== 'object') {
+    return undefined;
+  }
+
+  const candidate = value as Record<string, unknown>;
+  const level = candidate.level;
+  const mode = candidate.mode;
+  const score = typeof candidate.score === 'number' ? Math.max(0, Math.min(100, candidate.score)) : undefined;
+
+  if (
+    score === undefined ||
+    (level !== 'insufficient' && level !== 'partial' && level !== 'ready') ||
+    (mode !== 'ask_context' && mode !== 'direct_product' && mode !== 'personalized_recommendation')
+  ) {
+    return undefined;
+  }
+
+  const toStringList = (input: unknown) => (Array.isArray(input) ? input.filter((item): item is string => typeof item === 'string') : []);
+
+  return {
+    collectedSlots: toStringList(candidate.collectedSlots),
+    confidence: typeof candidate.confidence === 'number' ? Math.max(0, Math.min(1, candidate.confidence)) : 0.7,
+    level,
+    missingSlots: toStringList(candidate.missingSlots),
+    mode,
+    nextQuestion: typeof candidate.nextQuestion === 'string' ? candidate.nextQuestion : null,
+    purpose: 'health_package_recommendation',
+    score,
   };
 }
 
@@ -224,6 +287,56 @@ export async function askAiWithRag({
     return callProxy({ messages, question, systemPrompt });
   }
   throw new Error('Missing AI proxy. Configure Supabase or EXPO_PUBLIC_AI_PROXY_URL.');
+}
+
+function parseUiCards(value: unknown): ChatUiCard[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.filter((item): item is ChatUiCard => {
+    if (!item || typeof item !== 'object') {
+      return false;
+    }
+
+    const candidate = item as Record<string, unknown>;
+    return (
+      candidate.type === 'product_grid' ||
+      candidate.type === 'branch_location' ||
+      candidate.type === 'checkout_draft' ||
+      candidate.type === 'memory_saved'
+    );
+  });
+}
+
+function parseMemoryWrites(value: unknown): ChatMemoryWrite[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.filter((item): item is ChatMemoryWrite => {
+    if (!item || typeof item !== 'object') {
+      return false;
+    }
+
+    const candidate = item as Record<string, unknown>;
+    return typeof candidate.summary === 'string' && typeof candidate.memoryType === 'string';
+  });
+}
+
+function parseNextActions(value: unknown): ChatNextAction[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.filter((item): item is ChatNextAction => {
+    if (!item || typeof item !== 'object') {
+      return false;
+    }
+
+    const candidate = item as Record<string, unknown>;
+    return typeof candidate.label === 'string' && typeof candidate.type === 'string';
+  });
 }
 
 export function createSmallTalkAnswer(question: string, userNickname = DEFAULT_USER_NICKNAME) {

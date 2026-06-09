@@ -28,7 +28,7 @@ export type PersistHealthFactsResult =
       status: 'saved';
     }
   | {
-      reason: 'supabase_not_configured' | 'not_authenticated' | 'no_facts';
+      reason: 'consent_not_granted' | 'low_confidence' | 'supabase_not_configured' | 'not_authenticated' | 'no_facts';
       savedCount: 0;
       status: 'skipped';
     };
@@ -46,14 +46,42 @@ export type StoredHealthFact = {
 };
 
 export type HealthDataSnapshot = {
+  agentMemory: StoredAgentMemory[];
   consents: {
     createdAt: string;
     purpose: ConsentPurpose;
     status: 'granted' | 'revoked';
     version: string;
   }[];
+  contextScores: StoredContextScore[];
   facts: StoredHealthFact[];
   exportedAt: string;
+};
+
+export type StoredAgentMemory = {
+  confidence: number;
+  createdAt: string;
+  id: string;
+  memoryType: string;
+  observedAt: string;
+  source: string;
+  status: 'active' | 'deleted' | 'expired';
+  summary: string;
+  validUntil?: string | null;
+  value?: string | null;
+};
+
+export type StoredContextScore = {
+  calculatedAt: string;
+  collectedSlots: string[];
+  confidence: number;
+  id: string;
+  level: 'insufficient' | 'partial' | 'ready';
+  missingSlots: string[];
+  mode: 'ask_context' | 'direct_product' | 'personalized_recommendation';
+  purpose: 'health_package_recommendation';
+  score: number;
+  status: 'active' | 'deleted' | 'expired';
 };
 
 type ConsentRow = {
@@ -75,6 +103,32 @@ type HealthFactRow = {
   status: StoredHealthFact['status'];
   created_at: string;
   updated_at: string;
+};
+
+type AgentMemoryRow = {
+  confidence: number;
+  created_at: string;
+  id: string;
+  memory_type: string;
+  observed_at: string;
+  source: string;
+  status: StoredAgentMemory['status'];
+  summary: string;
+  valid_until: string | null;
+  value: string | null;
+};
+
+type ContextScoreRow = {
+  calculated_at: string;
+  collected_slots: string[] | null;
+  confidence: number;
+  id: string;
+  level: StoredContextScore['level'];
+  missing_slots: string[] | null;
+  purpose: StoredContextScore['purpose'];
+  recommendation_mode: StoredContextScore['mode'];
+  score: number;
+  status: StoredContextScore['status'];
 };
 
 type ConsentSnapshotRow = {
@@ -199,14 +253,14 @@ async function grantConsent(userId: string, purpose: ConsentPurpose) {
   return data as ConsentRow;
 }
 
-async function ensureHealthMemoryConsent(userId: string) {
+async function getGrantedHealthMemoryConsent(userId: string) {
   const latestConsent = await getLatestConsent(userId, HEALTH_MEMORY_PURPOSE);
 
   if (latestConsent?.status === 'granted') {
     return latestConsent;
   }
 
-  return grantConsent(userId, HEALTH_MEMORY_PURPOSE);
+  return null;
 }
 
 async function createChatSession(userId: string, question: string) {
@@ -289,6 +343,36 @@ function toHealthFactRow(fact: ExtractedHealthFact, userId: string, consentId: s
   };
 }
 
+function toStoredContextScore(row: ContextScoreRow): StoredContextScore {
+  return {
+    calculatedAt: row.calculated_at,
+    collectedSlots: row.collected_slots ?? [],
+    confidence: row.confidence,
+    id: row.id,
+    level: row.level,
+    missingSlots: row.missing_slots ?? [],
+    mode: row.recommendation_mode,
+    purpose: row.purpose,
+    score: row.score,
+    status: row.status,
+  };
+}
+
+function toStoredAgentMemory(row: AgentMemoryRow): StoredAgentMemory {
+  return {
+    confidence: row.confidence,
+    createdAt: row.created_at,
+    id: row.id,
+    memoryType: row.memory_type,
+    observedAt: row.observed_at,
+    source: row.source,
+    status: row.status,
+    summary: row.summary,
+    validUntil: row.valid_until,
+    value: row.value,
+  };
+}
+
 async function createAuditLogs(userId: string, facts: InsertedId[]) {
   if (facts.length === 0) {
     return;
@@ -343,6 +427,35 @@ export async function getHealthMemoryStatus(): Promise<HealthMemoryStatus> {
   };
 }
 
+export async function grantHealthMemoryConsent() {
+  if (!supabaseConfigStatus.isConfigured) {
+    throw new Error('Supabase is not configured.');
+  }
+
+  const userId = await getCurrentUserId();
+
+  if (!userId) {
+    throw new Error('ต้อง login ก่อนเปิด health memory');
+  }
+
+  const consent = await grantConsent(userId, HEALTH_MEMORY_PURPOSE);
+
+  await supabase.from('data_access_logs').insert({
+    user_id: userId,
+    actor_user_id: userId,
+    actor_type: 'user',
+    action: 'create',
+    resource_type: 'consent',
+    resource_id: consent.id,
+    purpose: HEALTH_MEMORY_PURPOSE,
+    metadata: {
+      source: 'profile',
+    },
+  });
+
+  return consent;
+}
+
 export async function listConfirmedHealthFacts(): Promise<StoredHealthFact[]> {
   const userId = await getCurrentUserId();
 
@@ -362,6 +475,88 @@ export async function listConfirmedHealthFacts(): Promise<StoredHealthFact[]> {
   }
 
   return (data as HealthFactRow[]).map(toStoredHealthFact);
+}
+
+export async function listAgentMemory(): Promise<StoredAgentMemory[]> {
+  const userId = await getCurrentUserId();
+
+  if (!userId) {
+    return [];
+  }
+
+  const { data, error } = await supabase
+    .from('agent_memory')
+    .select('id,memory_type,summary,value,source,confidence,status,observed_at,valid_until,created_at')
+    .eq('user_id', userId)
+    .eq('status', 'active')
+    .order('observed_at', { ascending: false })
+    .limit(40);
+
+  if (error || !data) {
+    return [];
+  }
+
+  return (data as AgentMemoryRow[]).map(toStoredAgentMemory);
+}
+
+export async function listUserContextScores(): Promise<StoredContextScore[]> {
+  const userId = await getCurrentUserId();
+
+  if (!userId) {
+    return [];
+  }
+
+  const { data, error } = await supabase
+    .from('user_context_scores')
+    .select('id,purpose,score,level,recommendation_mode,collected_slots,missing_slots,confidence,status,calculated_at')
+    .eq('user_id', userId)
+    .eq('status', 'active')
+    .order('calculated_at', { ascending: false })
+    .limit(20);
+
+  if (error || !data) {
+    return [];
+  }
+
+  return (data as ContextScoreRow[]).map(toStoredContextScore);
+}
+
+export async function deleteAgentMemory(memoryId: string) {
+  const userId = await getCurrentUserId();
+
+  if (!userId) {
+    throw new Error('ต้อง login ก่อนจัดการ memory');
+  }
+
+  const { error } = await supabase
+    .from('agent_memory')
+    .update({
+      status: 'deleted',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', memoryId)
+    .eq('user_id', userId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const { error: logError } = await supabase.from('data_access_logs').insert({
+    user_id: userId,
+    actor_user_id: userId,
+    actor_type: 'user',
+    action: 'delete',
+    resource_type: 'agent_memory',
+    resource_id: memoryId,
+    purpose: HEALTH_MEMORY_PURPOSE,
+    metadata: {
+      source: 'profile',
+    },
+  });
+
+  if (logError) {
+    throw new Error(logError.message);
+  }
 }
 
 export async function deleteHealthFact(factId: string) {
@@ -452,6 +647,28 @@ export async function revokeHealthMemoryConsent() {
     throw new Error(logError.message);
   }
 
+  await supabase
+    .from('agent_memory')
+    .update({
+      status: 'deleted',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('user_id', userId)
+    .eq('status', 'active');
+
+  await supabase
+    .from('user_context_scores')
+    .update({
+      metadata: {
+        deleted_by: 'consent_revoke',
+        source: 'profile',
+      },
+      status: 'deleted',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('user_id', userId)
+    .eq('status', 'active');
+
   await insertHealthMemoryLog(userId, {
     action: 'revoke',
     metadata: {
@@ -469,13 +686,15 @@ export async function exportHealthDataSnapshot(): Promise<HealthDataSnapshot> {
     throw new Error('ต้อง login ก่อน export ข้อมูลสุขภาพ');
   }
 
-  const [{ data: consents, error: consentsError }, facts] = await Promise.all([
+  const [{ data: consents, error: consentsError }, facts, agentMemory, contextScores] = await Promise.all([
     supabase
       .from('consents')
       .select('purpose,status,version,created_at')
       .eq('user_id', userId)
       .order('created_at', { ascending: false }),
     listConfirmedHealthFacts(),
+    listAgentMemory(),
+    listUserContextScores(),
   ]);
 
   if (consentsError) {
@@ -483,12 +702,14 @@ export async function exportHealthDataSnapshot(): Promise<HealthDataSnapshot> {
   }
 
   const snapshot = {
+    agentMemory,
     consents: ((consents as ConsentSnapshotRow[]) ?? []).map((row) => ({
       createdAt: row.created_at,
       purpose: row.purpose,
       status: row.status,
       version: row.version,
     })),
+    contextScores,
     facts,
     exportedAt: new Date().toISOString(),
   };
@@ -536,8 +757,14 @@ export async function persistConfirmedHealthFacts({
   question: string;
   ragChunkIds: string[];
 }): Promise<PersistHealthFactsResult> {
+  const highConfidenceFacts = facts.filter((fact) => fact.confidence >= 0.72);
+
   if (facts.length === 0) {
     return { reason: 'no_facts', savedCount: 0, status: 'skipped' };
+  }
+
+  if (highConfidenceFacts.length === 0) {
+    return { reason: 'low_confidence', savedCount: 0, status: 'skipped' };
   }
 
   if (!supabaseConfigStatus.isConfigured) {
@@ -550,11 +777,11 @@ export async function persistConfirmedHealthFacts({
     return { reason: 'not_authenticated', savedCount: 0, status: 'skipped' };
   }
 
-  const factTypes = uniqueFactTypes(facts);
+  const factTypes = uniqueFactTypes(highConfidenceFacts);
 
   await insertHealthMemoryLog(userId, {
     action: 'auto_save',
-    factCount: facts.length,
+    factCount: highConfidenceFacts.length,
     factTypes,
     metadata: {
       question_chars: question.length,
@@ -564,7 +791,22 @@ export async function persistConfirmedHealthFacts({
   });
 
   try {
-    const consent = await ensureHealthMemoryConsent(userId);
+    const consent = await getGrantedHealthMemoryConsent(userId);
+
+    if (!consent) {
+      await insertHealthMemoryLog(userId, {
+        action: 'auto_save',
+        factCount: highConfidenceFacts.length,
+        factTypes,
+        metadata: {
+          reason: 'consent_not_granted',
+        },
+        status: 'skipped',
+      });
+
+      return { reason: 'consent_not_granted', savedCount: 0, status: 'skipped' };
+    }
+
     const sessionId = await createChatSession(userId, question);
     const userMessageId = await createChatMessage({
       content: question,
@@ -586,7 +828,7 @@ export async function persistConfirmedHealthFacts({
 
     const { data: insertedFacts, error: factsError } = await supabase
       .from('health_facts')
-      .insert(facts.map((fact) => toHealthFactRow(fact, userId, consent.id, userMessageId)))
+      .insert(highConfidenceFacts.map((fact) => toHealthFactRow(fact, userId, consent.id, userMessageId)))
       .select('id');
 
     if (factsError) {
@@ -601,7 +843,7 @@ export async function persistConfirmedHealthFacts({
         health_fact_id: savedFact.id,
         chat_message_id: userMessageId,
         source_type: 'chat_message',
-        evidence_quote: facts[index]?.evidenceQuote,
+        evidence_quote: highConfidenceFacts[index]?.evidenceQuote,
       })),
     );
 
@@ -629,7 +871,7 @@ export async function persistConfirmedHealthFacts({
   } catch (error) {
     await insertHealthMemoryLog(userId, {
       action: 'auto_save',
-      factCount: facts.length,
+      factCount: highConfidenceFacts.length,
       factTypes,
       metadata: {
         error_message: error instanceof Error ? error.message : 'Unable to save health facts.',

@@ -20,12 +20,27 @@ type ChatRequest = {
 };
 
 type OpenAITextContent = {
+  annotations?: {
+    title?: string;
+    type?: string;
+    url?: string;
+  }[];
   text?: string;
   type?: string;
 };
 
 type OpenAIOutputItem = {
+  action?: {
+    queries?: string[];
+    query?: string;
+    sources?: {
+      title?: string;
+      url?: string;
+    }[];
+    type?: string;
+  };
   content?: OpenAITextContent[];
+  id?: string;
   type?: string;
 };
 
@@ -120,6 +135,18 @@ type RagMatch = RagChunk & {
   score: number;
 };
 
+type PublicRagMatch = {
+  category: string;
+  id: string;
+  riskLevel: 'low' | 'medium' | 'high';
+  score: number;
+  source: string;
+  sourceUrl?: string;
+  summary: string;
+  title: string;
+  topic: string;
+};
+
 type RagVectorMatchRow = RagChunkRow & {
   similarity: number | null;
 };
@@ -133,6 +160,142 @@ type PromptVersion = {
 type AppRoleRow = {
   role: string;
 };
+
+type ConsentRow = {
+  id: string;
+  status: 'granted' | 'revoked';
+};
+
+type InsertedIdRow = {
+  id: string;
+};
+
+type HealthChatIntent =
+  | 'booking'
+  | 'checkout'
+  | 'health_advice'
+  | 'off_topic'
+  | 'product_compare'
+  | 'product_recommendation'
+  | 'safety_escalation'
+  | 'small_talk';
+
+type ContextLevel = 'insufficient' | 'partial' | 'ready';
+
+type RecommendationMode = 'ask_context' | 'direct_product' | 'personalized_recommendation';
+
+type ProductRequestKind = 'broad' | 'direct' | 'none';
+
+type ContextSlotKey = 'accessPreference' | 'age' | 'clinicalHistory' | 'goal' | 'recentCheckup' | 'riskLifestyle';
+
+type ContextAssessment = {
+  collectedSlots: string[];
+  confidence: number;
+  level: ContextLevel;
+  missingSlots: string[];
+  mode: RecommendationMode;
+  nextQuestion: string | null;
+  purpose: 'health_package_recommendation';
+  score: number;
+  slotSummary: Record<ContextSlotKey, boolean>;
+};
+
+type AgentMemoryType =
+  | 'budget'
+  | 'communication_preference'
+  | 'goal'
+  | 'lifestyle_preference'
+  | 'location_preference'
+  | 'other'
+  | 'product_interest';
+
+type AgentMemoryRecord = {
+  confidence: number;
+  id?: string;
+  memoryType: AgentMemoryType;
+  status: 'saved' | 'skipped';
+  summary: string;
+  validUntil?: string | null;
+  value?: string | null;
+};
+
+type AgentMemoryRow = {
+  confidence: number | null;
+  memory_type: AgentMemoryType;
+  observed_at: string;
+  summary: string;
+  valid_until: string | null;
+  value: string | null;
+};
+
+type HealthFactContextRow = {
+  confidence: number | null;
+  fact_type: string;
+  label: string;
+  observed_at: string | null;
+  unit: string | null;
+  value: string;
+};
+
+type HospitalProductRow = {
+  booking_note: string | null;
+  category: string;
+  description: string;
+  duration: string | null;
+  hospital_address: string | null;
+  hospital_lat: number | null;
+  hospital_lng: number | null;
+  hospital_map_query: string | null;
+  hospital_name: string;
+  id: string;
+  includes: string[] | null;
+  metadata: {
+    product_image_preview_uri?: string | null;
+  } | null;
+  price_amount: number;
+  rag_chunk_id: string | null;
+  tags: string[] | null;
+  title: string;
+};
+
+type ChatProductCard = {
+  bookingNote?: string | null;
+  category: string;
+  description: string;
+  duration?: string | null;
+  hospitalAddress?: string | null;
+  hospitalLat?: number | null;
+  hospitalLng?: number | null;
+  hospitalMapQuery?: string | null;
+  hospitalName: string;
+  id: string;
+  includes: string[];
+  priceAmount: number;
+  productImagePreviewUri?: string | null;
+  ragChunkId?: string | null;
+  reason?: string;
+  tags: string[];
+  title: string;
+};
+
+type ChatBranchCard = {
+  address?: string | null;
+  distanceLabel?: string;
+  hospitalName: string;
+  id: string;
+  lat?: number | null;
+  lng?: number | null;
+  mapQuery?: string | null;
+  name: string;
+  nextSlot?: string;
+  productId: string;
+};
+
+type ChatUiCard =
+  | { id: string; products: ChatProductCard[]; title: string; type: 'product_grid' }
+  | { branches: ChatBranchCard[]; id: string; product: ChatProductCard; title: string; type: 'branch_location' }
+  | { branch?: ChatBranchCard; id: string; product: ChatProductCard; title: string; type: 'checkout_draft' }
+  | { count: number; id: string; summaries: string[]; type: 'memory_saved' };
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -193,6 +356,28 @@ const SYSTEM_PROMPT_GUARDRAILS = `Mandatory safety and operations guardrails:
 const thaiStopWords = new Set(['ครับ', 'ค่ะ', 'และ', 'หรือ', 'ที่', 'การ', 'ของ', 'ให้', 'ต้อง', 'ทำ', 'ยังไง']);
 const englishStopWords = new Set(['the', 'and', 'for', 'with', 'that', 'this', 'what', 'how', 'can', 'should', 'about']);
 
+const productDiscoveryTerms = [
+  'แพ็กเกจ',
+  'แพ็คเกจ',
+  'ตรวจสุขภาพ',
+  'ตรวจเลือด',
+  'เจาะเลือด',
+  'แล็บ',
+  'โปรดักส์',
+  'โปรดัก',
+  'สินค้า',
+  'บริการ',
+  'รายการตรวจ',
+  'มีอะไรบ้าง',
+  'ทั้งหมด',
+  'ราคา',
+  'blood test',
+  'lab test',
+  'checkup',
+  'package',
+  'product',
+];
+
 const intentRules: { categories: RagCategory[]; terms: string[] }[] = [
   {
     categories: ['safety.escalation'],
@@ -219,6 +404,10 @@ const intentRules: { categories: RagCategory[]; terms: string[] }[] = [
   {
     categories: ['ops.referral'],
     terms: ['referral', 'code', 'โค้ด', 'หมอแนะนำ', 'affiliate', 'commission', 'ค่าคอม'],
+  },
+  {
+    categories: ['marketplace.product'],
+    terms: productDiscoveryTerms,
   },
   {
     categories: ['care.checkup_preparation'],
@@ -475,6 +664,46 @@ async function callRpc<T>(functionName: string, body: Record<string, unknown>, a
   }
 
   return (await response.json()) as T;
+}
+
+async function selectRest<T>(pathAndQuery: string, authorization: string): Promise<T | null> {
+  const config = getSupabaseConfig();
+
+  if (!config) {
+    return null;
+  }
+
+  const response = await fetch(`${config.supabaseUrl}/rest/v1/${pathAndQuery}`, {
+    headers: restHeaders(authorization),
+  });
+
+  if (!response.ok) {
+    return null;
+  }
+
+  return (await response.json()) as T;
+}
+
+async function insertRestReturningId(table: string, body: Record<string, unknown>, authorization: string): Promise<string | null> {
+  const config = getSupabaseConfig();
+
+  if (!config) {
+    return null;
+  }
+
+  const response = await fetch(`${config.supabaseUrl}/rest/v1/${table}?select=id`, {
+    method: 'POST',
+    headers: restHeaders(authorization, { Prefer: 'return=representation' }),
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    return null;
+  }
+
+  const rows = (await response.json()) as InsertedIdRow[];
+
+  return rows[0]?.id ?? null;
 }
 
 function normalizeGeminiModelName(model: string) {
@@ -783,6 +1012,808 @@ function retrieveRagContext(query: string, chunks: RagChunk[], limit = DEFAULT_L
   return trimToBudget(scoredMatches, DEFAULT_CONTEXT_CHARS);
 }
 
+function containsAny(query: string, terms: string[]) {
+  const normalizedQuery = normalizeInput(query);
+
+  return terms.some((term) => normalizedQuery.includes(term.toLowerCase()));
+}
+
+function hasProductDiscoveryIntent(question: string) {
+  const normalizedQuestion = normalizeInput(question);
+  const browseTerms = ['ต้องการ', 'อยาก', 'ควร', 'ควรตรวจ', 'ขอดู', 'แนะนำ', 'มีอะไรบ้าง', 'ทั้งหมด', 'ซื้อ', 'จอง', 'เลือก', 'buy', 'pay'];
+  const mentionsProduct = productDiscoveryTerms.some((term) => normalizedQuestion.includes(term.toLowerCase()));
+  const browsingProducts = browseTerms.some((term) => normalizedQuestion.includes(term.toLowerCase()));
+
+  return mentionsProduct || (browsingProducts && containsAny(question, ['ตรวจ', 'สุขภาพ', 'health', 'product']));
+}
+
+function classifyProductRequest(question: string): ProductRequestKind {
+  const normalizedQuestion = normalizeInput(question);
+
+  if (!hasProductDiscoveryIntent(question)) {
+    return 'none';
+  }
+
+  const directTerms = [
+    'ตรวจเลือด',
+    'เจาะเลือด',
+    'แล็บ',
+    'แลป',
+    'วัคซีน',
+    'มะเร็ง',
+    'หัวใจ',
+    'เบาหวาน',
+    'น้ำตาล',
+    'ไขมัน',
+    'คอเลสเตอรอล',
+    'ตับ',
+    'ไต',
+    'ฮอร์โมน',
+    'ไทรอยด์',
+    'x-ray',
+    'xray',
+    'mri',
+    'ct',
+    'ultrasound',
+    'mammogram',
+    'hpv',
+    'influenza',
+    'blood',
+    'lab',
+    'basic blood',
+    'cancer',
+    'heart',
+    'diabetes',
+    'vaccine',
+  ];
+  const listTerms = ['ทั้งหมด', 'มีอะไรบ้าง', 'ราคา', 'ขอดูแพ็กเกจ', 'ขอดูแพคเกจ', 'show packages', 'list packages'];
+
+  if (directTerms.some((term) => normalizedQuestion.includes(term.toLowerCase()))) {
+    return 'direct';
+  }
+
+  if (listTerms.some((term) => normalizedQuestion.includes(term.toLowerCase()))) {
+    return 'direct';
+  }
+
+  const broadTerms = [
+    'อยากตรวจสุขภาพ',
+    'ต้องการตรวจสุขภาพ',
+    'ตรวจสุขภาพ',
+    'ตรวจประจำปี',
+    'ควรตรวจอะไร',
+    'แนะนำตรวจ',
+    'แนะนำแพ็กเกจ',
+    'แนะนำแพคเกจ',
+    'health checkup',
+    'checkup',
+  ];
+
+  return broadTerms.some((term) => normalizedQuestion.includes(term.toLowerCase())) ? 'broad' : 'direct';
+}
+
+function hasAgeSlot(question: string) {
+  return /(?:อายุ|age)\s*[0-9]{1,3}/i.test(question) || /[0-9]{1,3}\s*(?:ปี|years?\s*old|yo)/i.test(question);
+}
+
+function extractQuestionSlotSummary(question: string) {
+  return {
+    accessPreference: containsAny(question, ['งบ', 'บาท', 'ราคา', 'budget', 'ใกล้', 'แถว', 'อยู่', 'สะดวก', 'โรงพยาบาล']),
+    age: hasAgeSlot(question),
+    clinicalHistory: containsAny(question, [
+      'โรคประจำตัว',
+      'ไม่มีโรค',
+      'ไม่เป็นโรค',
+      'ยา',
+      'แพ้ยา',
+      'แพ้อาหาร',
+      'เบาหวาน',
+      'ความดัน',
+      'ไขมัน',
+      'หัวใจ',
+      'ไทรอยด์',
+      'มะเร็ง',
+      'asthma',
+      'allergy',
+      'medication',
+    ]),
+    goal: containsAny(question, ['อยากเช็ค', 'อยากเช็ก', 'โฟกัส', 'กังวล', 'เป้าหมาย', 'ลดน้ำหนัก', 'น้ำตาล', 'ไขมัน', 'นอน', 'เหนื่อย', 'สุขภาพ', 'check']),
+    recentCheckup: containsAny(question, ['ตรวจล่าสุด', 'ผลตรวจ', 'เคยตรวจ', 'ไม่เคยตรวจ', 'ปีที่แล้ว', 'เดือนที่แล้ว', 'ล่าสุด', 'lab result', 'last checkup']),
+    riskLifestyle: containsAny(question, ['น้ำหนัก', 'ส่วนสูง', 'bmi', 'สูบ', 'เหล้า', 'แอลกอฮอล์', 'ออกกำลัง', 'นอน', 'เครียด', 'ครอบครัว', 'เหนื่อย', 'ปวด']),
+  };
+}
+
+function extractStoredSlotSummary(personalContextState: { agentMemory: AgentMemoryRow[]; healthFacts: HealthFactContextRow[] }) {
+  const healthFactTypes = new Set(personalContextState.healthFacts.map((fact) => fact.fact_type));
+  const healthFactText = personalContextState.healthFacts.map((fact) => `${fact.fact_type} ${fact.label} ${fact.value}`).join(' ');
+  const memoryTypes = new Set(personalContextState.agentMemory.map((memory) => memory.memory_type));
+  const memoryText = personalContextState.agentMemory.map((memory) => `${memory.memory_type} ${memory.summary} ${memory.value ?? ''}`).join(' ');
+  const combinedText = `${healthFactText} ${memoryText}`;
+
+  return {
+    accessPreference: memoryTypes.has('budget') || memoryTypes.has('location_preference') || containsAny(combinedText, ['งบ', 'บาท', 'budget', 'ใกล้', 'แถว']),
+    age: healthFactTypes.has('demographic') || containsAny(combinedText, ['age', 'อายุ']),
+    clinicalHistory:
+      healthFactTypes.has('condition') ||
+      healthFactTypes.has('medication') ||
+      healthFactTypes.has('allergy') ||
+      containsAny(combinedText, ['โรคประจำตัว', 'ไม่มีโรค', 'ยา', 'แพ้ยา', 'condition', 'medication', 'allergy']),
+    goal: memoryTypes.has('goal') || memoryTypes.has('product_interest') || containsAny(combinedText, ['goal', 'สนใจ', 'อยาก', 'โฟกัส']),
+    recentCheckup: healthFactTypes.has('lab_result') || healthFactTypes.has('screening') || containsAny(combinedText, ['ตรวจล่าสุด', 'ผลตรวจ', 'lab', 'screening']),
+    riskLifestyle:
+      healthFactTypes.has('symptom') ||
+      healthFactTypes.has('lifestyle') ||
+      healthFactTypes.has('family_history') ||
+      healthFactTypes.has('vital') ||
+      containsAny(combinedText, ['น้ำหนัก', 'ส่วนสูง', 'bmi', 'นอน', 'สูบ', 'ครอบครัว', 'symptom']),
+  };
+}
+
+function getContextScore(slotSummary: ContextAssessment['slotSummary']) {
+  return (
+    (slotSummary.age ? 20 : 0) +
+    (slotSummary.goal ? 20 : 0) +
+    (slotSummary.clinicalHistory ? 20 : 0) +
+    (slotSummary.recentCheckup ? 15 : 0) +
+    (slotSummary.accessPreference ? 15 : 0) +
+    (slotSummary.riskLifestyle ? 10 : 0)
+  );
+}
+
+function getContextLevel(score: number): ContextLevel {
+  if (score >= 65) {
+    return 'ready';
+  }
+
+  if (score >= 35) {
+    return 'partial';
+  }
+
+  return 'insufficient';
+}
+
+function getContextSlotLists(slotSummary: ContextAssessment['slotSummary']) {
+  const labels: Record<ContextSlotKey, string> = {
+    accessPreference: 'พื้นที่สะดวกหรืองบประมาณ',
+    age: 'อายุหรือช่วงอายุ',
+    clinicalHistory: 'โรคประจำตัว ยา หรือประวัติแพ้',
+    goal: 'เป้าหมายหรือเรื่องที่อยากโฟกัส',
+    recentCheckup: 'ประวัติการตรวจหรือผลตรวจล่าสุด',
+    riskLifestyle: 'น้ำหนัก ไลฟ์สไตล์ หรือความเสี่ยงเพิ่มเติม',
+  };
+  const entries = Object.entries(slotSummary) as [ContextSlotKey, boolean][];
+
+  return {
+    collectedSlots: entries.filter(([, exists]) => exists).map(([key]) => labels[key]),
+    missingSlots: entries.filter(([, exists]) => !exists).map(([key]) => labels[key]),
+  };
+}
+
+function createNextContextQuestion(slotSummary: ContextAssessment['slotSummary'], userNickname: string) {
+  const userDisplayName = formatUserDisplayName(userNickname);
+
+  if (!slotSummary.age && !slotSummary.goal) {
+    return `ได้ค่ะ${userDisplayName} ก่อนคัดแพ็กเกจ ขอรู้ 2 เรื่องสั้นๆ: อายุประมาณเท่าไหร่ และอยากโฟกัสเรื่องไหนเป็นพิเศษคะ`;
+  }
+
+  if (!slotSummary.clinicalHistory) {
+    return `ขอเพิ่มอีกนิดค่ะ${userDisplayName} มีโรคประจำตัว ยาที่กินประจำ หรือแพ้ยาอะไรไหมคะ`;
+  }
+
+  if (!slotSummary.recentCheckup) {
+    return `ตรวจสุขภาพหรือมีผลเลือดล่าสุดเมื่อไหร่คะ ถ้าจำไม่ได้ตอบคร่าวๆ ได้เลยค่ะ`;
+  }
+
+  if (!slotSummary.accessPreference) {
+    return `สะดวกโซนไหนหรืองบประมาณประมาณเท่าไหร่คะ เดี๋ยวฉันคัดแพ็กเกจให้แคบลง`;
+  }
+
+  return `อยากให้โฟกัสความเสี่ยงเรื่องไหนเป็นพิเศษไหมคะ เช่น น้ำตาล ไขมัน ตับ ไต หรือหัวใจ`;
+}
+
+function assessContext({
+  personalContextState,
+  productRequestKind,
+  question,
+  userNickname,
+}: {
+  personalContextState: { agentMemory: AgentMemoryRow[]; healthFacts: HealthFactContextRow[] };
+  productRequestKind: ProductRequestKind;
+  question: string;
+  userNickname: string;
+}): ContextAssessment {
+  const questionSlots = extractQuestionSlotSummary(question);
+  const storedSlots = extractStoredSlotSummary(personalContextState);
+  const slotSummary = {
+    accessPreference: questionSlots.accessPreference || storedSlots.accessPreference,
+    age: questionSlots.age || storedSlots.age,
+    clinicalHistory: questionSlots.clinicalHistory || storedSlots.clinicalHistory,
+    goal: questionSlots.goal || storedSlots.goal,
+    recentCheckup: questionSlots.recentCheckup || storedSlots.recentCheckup,
+    riskLifestyle: questionSlots.riskLifestyle || storedSlots.riskLifestyle,
+  };
+  const score = getContextScore(slotSummary);
+  const level = getContextLevel(score);
+  const { collectedSlots, missingSlots } = getContextSlotLists(slotSummary);
+  const mode: RecommendationMode =
+    productRequestKind === 'direct' ? 'direct_product' : productRequestKind === 'broad' && level === 'ready' ? 'personalized_recommendation' : 'ask_context';
+
+  return {
+    collectedSlots,
+    confidence: Math.min(0.95, collectedSlots.length > 0 ? 0.74 + collectedSlots.length * 0.03 : 0.68),
+    level,
+    missingSlots,
+    mode,
+    nextQuestion: mode === 'ask_context' ? createNextContextQuestion(slotSummary, userNickname) : null,
+    purpose: 'health_package_recommendation',
+    score,
+    slotSummary,
+  };
+}
+
+function toPublicContextAssessment(assessment: ContextAssessment) {
+  return {
+    collectedSlots: assessment.collectedSlots,
+    confidence: assessment.confidence,
+    level: assessment.level,
+    missingSlots: assessment.missingSlots,
+    mode: assessment.mode,
+    nextQuestion: assessment.nextQuestion,
+    purpose: assessment.purpose,
+    score: assessment.score,
+  };
+}
+
+function inferHealthChatIntent(question: string, preferredCategories: RagCategory[]): HealthChatIntent {
+  if (preferredCategories.includes('safety.escalation') && containsAny(question, ['ฉุกเฉิน', 'เจ็บหน้าอก', 'หายใจลำบาก', 'หมดสติ', 'emergency', 'urgent'])) {
+    return 'safety_escalation';
+  }
+
+  if (containsAny(question, ['สวัสดี', 'หวัดดี', 'hello', 'hi', 'thanks', 'thank you', 'ขอบคุณ'])) {
+    return 'small_talk';
+  }
+
+  if (preferredCategories.includes('ops.payment') || containsAny(question, ['checkout', 'ชำระ', 'จ่ายเงิน', 'payment'])) {
+    return 'checkout';
+  }
+
+  if (preferredCategories.includes('ops.booking') || containsAny(question, ['จองคิว', 'นัด', 'appointment', 'booking'])) {
+    return 'booking';
+  }
+
+  if (containsAny(question, ['เปรียบเทียบ', 'เทียบ', 'compare'])) {
+    return 'product_compare';
+  }
+
+  if (hasProductDiscoveryIntent(question)) {
+    return 'product_recommendation';
+  }
+
+  if (preferredCategories.includes('marketplace.product') || containsAny(question, ['แพ็กเกจ', 'แพ็คเกจ', 'ตรวจสุขภาพ', 'package', 'checkup', 'ซื้อ'])) {
+    return 'product_recommendation';
+  }
+
+  if (preferredCategories.includes('care.checkup_preparation') || preferredCategories.includes('care.patient_education')) {
+    return 'health_advice';
+  }
+
+  return containsAny(question, ['หนัง', 'เพลง', 'เกม', 'movie', 'song', 'game']) ? 'off_topic' : 'health_advice';
+}
+
+async function getLatestHealthMemoryConsent(userId: string, authorization: string): Promise<ConsentRow | null> {
+  const rows = await selectRest<ConsentRow[]>(
+    `consents?select=id,status&user_id=eq.${encodeURIComponent(userId)}&purpose=eq.chat_health_memory&order=created_at.desc&limit=1`,
+    authorization,
+  );
+
+  return rows?.[0] ?? null;
+}
+
+async function fetchPersonalContext(userId: string, authorization: string, consentGranted: boolean) {
+  if (!consentGranted) {
+    return {
+      agentMemory: [] as AgentMemoryRow[],
+      healthFacts: [] as HealthFactContextRow[],
+    };
+  }
+
+  const [healthFacts, agentMemory] = await Promise.all([
+    selectRest<HealthFactContextRow[]>(
+      [
+        'health_facts?select=fact_type,label,value,unit,observed_at,confidence',
+        `user_id=eq.${encodeURIComponent(userId)}`,
+        'status=eq.confirmed',
+        'order=created_at.desc',
+        'limit=12',
+      ].join('&'),
+      authorization,
+    ),
+    selectRest<AgentMemoryRow[]>(
+      [
+        'agent_memory?select=memory_type,summary,value,source,confidence,observed_at,valid_until',
+        `user_id=eq.${encodeURIComponent(userId)}`,
+        'status=eq.active',
+        'order=observed_at.desc',
+        'limit=12',
+      ].join('&'),
+      authorization,
+    ),
+  ]);
+
+  return {
+    agentMemory: agentMemory ?? [],
+    healthFacts: healthFacts ?? [],
+  };
+}
+
+function formatPersonalContext({
+  agentMemory,
+  consentGranted,
+  healthFacts,
+}: {
+  agentMemory: AgentMemoryRow[];
+  consentGranted: boolean;
+  healthFacts: HealthFactContextRow[];
+}) {
+  if (!consentGranted) {
+    return 'Health memory consent is not granted. Do not store or rely on personal memory. You may answer the current question only.';
+  }
+
+  const factLines = healthFacts.slice(0, 8).map((fact) => {
+    const unit = fact.unit ? ` ${fact.unit}` : '';
+    const observed = fact.observed_at ? ` observed_at=${fact.observed_at}` : '';
+    return `- health_fact type=${fact.fact_type} label=${fact.label} value=${fact.value}${unit} confidence=${fact.confidence ?? 0}${observed}`;
+  });
+  const memoryLines = agentMemory.slice(0, 8).map((memory) => {
+    const validUntil = memory.valid_until ? ` valid_until=${memory.valid_until}` : '';
+    return `- agent_memory type=${memory.memory_type} summary=${memory.summary} value=${memory.value ?? ''} confidence=${memory.confidence ?? 0}${validUntil}`;
+  });
+
+  if (factLines.length === 0 && memoryLines.length === 0) {
+    return 'No confirmed personal memory yet. Ask one useful follow-up question if personalization is needed.';
+  }
+
+  return [...factLines, ...memoryLines].join('\n');
+}
+
+async function getOrCreateCompanionSession(userId: string, authorization: string, question: string) {
+  const rows = await selectRest<InsertedIdRow[]>(
+    [
+      'chat_sessions?select=id',
+      `user_id=eq.${encodeURIComponent(userId)}`,
+      'source=eq.companion_timeline',
+      'ended_at=is.null',
+      'order=started_at.desc',
+      'limit=1',
+    ].join('&'),
+    authorization,
+  );
+
+  if (rows?.[0]?.id) {
+    return rows[0].id;
+  }
+
+  return insertRestReturningId(
+    'chat_sessions',
+    {
+      metadata: {
+        timeline: 'single_companion',
+      },
+      source: 'companion_timeline',
+      title: question.slice(0, 80),
+      user_id: userId,
+    },
+    authorization,
+  );
+}
+
+async function createTimelineMessage({
+  authorization,
+  content,
+  model,
+  ragChunkIds,
+  role,
+  sessionId,
+  userId,
+}: {
+  authorization: string;
+  content: string;
+  model?: string;
+  ragChunkIds?: string[];
+  role: 'assistant' | 'user';
+  sessionId: string;
+  userId: string;
+}) {
+  return insertRestReturningId(
+    'chat_messages',
+    {
+      content,
+      metadata: {
+        timeline: 'single_companion',
+      },
+      model,
+      rag_chunk_ids: ragChunkIds ?? [],
+      role,
+      session_id: sessionId,
+      user_id: userId,
+    },
+    authorization,
+  );
+}
+
+async function fetchActiveHospitalProducts(authorization: string, limit = 4) {
+  const select = [
+    'id',
+    'title',
+    'hospital_name',
+    'description',
+    'category',
+    'price_amount',
+    'duration',
+    'hospital_address',
+    'hospital_lat',
+    'hospital_lng',
+    'hospital_map_query',
+    'includes',
+    'metadata',
+    'tags',
+    'booking_note',
+    'rag_chunk_id',
+  ].join(',');
+
+  const rows = await selectRest<HospitalProductRow[]>(
+    `hospital_products?select=${encodeURIComponent(select)}&status=eq.active&order=created_at.desc&limit=${limit}`,
+    authorization,
+  );
+
+  return rows ?? [];
+}
+
+function toChatProductCard(product: HospitalProductRow, reason?: string): ChatProductCard {
+  return {
+    bookingNote: product.booking_note,
+    category: product.category,
+    description: product.description,
+    duration: product.duration,
+    hospitalAddress: product.hospital_address,
+    hospitalLat: product.hospital_lat,
+    hospitalLng: product.hospital_lng,
+    hospitalMapQuery: product.hospital_map_query,
+    hospitalName: product.hospital_name,
+    id: product.id,
+    includes: product.includes ?? [],
+    priceAmount: product.price_amount,
+    productImagePreviewUri: product.metadata?.product_image_preview_uri ?? null,
+    ragChunkId: product.rag_chunk_id,
+    reason,
+    tags: product.tags ?? [],
+    title: product.title,
+  };
+}
+
+function createBranchCard(product: ChatProductCard): ChatBranchCard {
+  return {
+    address: product.hospitalAddress,
+    distanceLabel: product.hospitalLat && product.hospitalLng ? 'Map ready' : 'Confirm distance',
+    hospitalName: product.hospitalName,
+    id: `branch-${product.id}`,
+    lat: product.hospitalLat,
+    lng: product.hospitalLng,
+    mapQuery: product.hospitalMapQuery ?? product.hospitalName,
+    name: product.hospitalName,
+    nextSlot: product.bookingNote ? 'Confirm by call center' : 'Next available',
+    productId: product.id,
+  };
+}
+
+function scoreProductForQuestion(product: ChatProductCard, question: string, contextAssessment: ContextAssessment) {
+  const normalizedQuestion = normalizeInput(question);
+  const haystack = normalizeInput(
+    [
+      product.title,
+      product.description,
+      product.category,
+      product.hospitalName,
+      product.includes.join(' '),
+      product.tags.join(' '),
+      product.reason ?? '',
+    ].join(' '),
+  );
+  let score = 0;
+
+  for (const token of tokenize(normalizedQuestion)) {
+    if (haystack.includes(token)) {
+      score += product.title.toLowerCase().includes(token) ? 5 : 2;
+    }
+  }
+
+  if (containsAny(question, ['ตรวจเลือด', 'เจาะเลือด', 'น้ำตาล', 'ไขมัน', 'blood', 'lab']) && product.category === 'lab_test') {
+    score += 14;
+  }
+
+  if (containsAny(question, ['วัคซีน', 'vaccine', 'hpv', 'influenza']) && product.category === 'vaccine') {
+    score += 14;
+  }
+
+  if (containsAny(question, ['สุขภาพ', 'ประจำปี', 'checkup']) && product.category === 'health_checkup') {
+    score += contextAssessment.mode === 'personalized_recommendation' ? 10 : 6;
+  }
+
+  if (containsAny(question, ['มะเร็ง', 'cancer']) && haystack.includes('cancer')) {
+    score += 10;
+  }
+
+  return score;
+}
+
+function rankProductsForQuestion(products: ChatProductCard[], question: string, contextAssessment: ContextAssessment) {
+  return products
+    .slice()
+    .sort((a, b) => scoreProductForQuestion(b, question, contextAssessment) - scoreProductForQuestion(a, question, contextAssessment) || a.priceAmount - b.priceAmount);
+}
+
+function buildUiCards({
+  contextAssessment,
+  intent,
+  products,
+}: {
+  contextAssessment: ContextAssessment;
+  intent: HealthChatIntent;
+  products: ChatProductCard[];
+}): ChatUiCard[] {
+  if (intent === 'safety_escalation' || products.length === 0 || contextAssessment.mode === 'ask_context') {
+    return [];
+  }
+
+  if (intent === 'product_recommendation' || intent === 'product_compare') {
+    return [
+      {
+        id: `product-grid-${Date.now()}`,
+        products: products.slice(0, contextAssessment.mode === 'personalized_recommendation' ? 1 : 4),
+        title: 'แพ็กเกจที่น่าดู',
+        type: 'product_grid',
+      },
+    ];
+  }
+
+  return [];
+}
+
+function polishCompanionText({
+  contextAssessment,
+  intent,
+  text,
+  uiCards,
+  userNickname,
+}: {
+  contextAssessment: ContextAssessment;
+  intent: HealthChatIntent;
+  text: string;
+  uiCards: ChatUiCard[];
+  userNickname: string;
+}) {
+  const hasProductGrid = uiCards.some((card) => card.type === 'product_grid');
+
+  if (contextAssessment.mode === 'ask_context' && contextAssessment.nextQuestion) {
+    return contextAssessment.nextQuestion;
+  }
+
+  if (hasProductGrid) {
+    if (contextAssessment.mode === 'personalized_recommendation') {
+      return `จากข้อมูลที่มี ฉันคัดแพ็กเกจที่น่าจะเหมาะให้ก่อนค่ะ`;
+    }
+
+    return `ได้ค่ะคุณ${userNickname} ดูแพ็กเกจนี้ก่อนได้ ถ้าอยากให้ช่วยเลือกให้เหมาะขึ้น บอกอายุหรือโรคประจำตัวเพิ่มได้ค่ะ`;
+  }
+
+  const trimmed = text.trim();
+
+  if (intent === 'small_talk' && trimmed.length > 90) {
+    return `สวัสดีค่ะคุณ${userNickname} วันนี้อยากดูแลเรื่องไหนก่อนดีคะ`;
+  }
+
+  return trimmed;
+}
+
+function extractAgentMemoryCandidates(question: string): AgentMemoryRecord[] {
+  const memories: AgentMemoryRecord[] = [];
+  const normalized = normalizeInput(question);
+  const now = new Date();
+  const longTermValidUntil = new Date(now);
+  longTermValidUntil.setMonth(longTermValidUntil.getMonth() + 6);
+
+  const budgetMatch = normalized.match(/(?:งบ|budget|ไม่เกิน|ประมาณ)\s*([0-9,]{3,})/i) ?? normalized.match(/([0-9,]{3,})\s*(?:บาท|thb)/i);
+  if (budgetMatch?.[1]) {
+    memories.push({
+      confidence: 0.86,
+      memoryType: 'budget',
+      status: 'skipped',
+      summary: `Budget preference around ${budgetMatch[1]} THB`,
+      validUntil: longTermValidUntil.toISOString(),
+      value: budgetMatch[1].replace(/,/g, ''),
+    });
+  }
+
+  const locationMatch = normalized.match(/(?:แถว|ใกล้|อยู่|สะดวก)\s*([\p{L}\p{M}\p{N}\s.-]{2,40})/iu);
+  if (locationMatch?.[1]) {
+    memories.push({
+      confidence: 0.78,
+      memoryType: 'location_preference',
+      status: 'skipped',
+      summary: `Location preference: ${locationMatch[1].trim()}`,
+      validUntil: longTermValidUntil.toISOString(),
+      value: locationMatch[1].trim(),
+    });
+  }
+
+  if (containsAny(question, ['ตรวจสุขภาพ', 'แพ็กเกจ', 'แพ็คเกจ', 'checkup', 'package'])) {
+    memories.push({
+      confidence: 0.8,
+      memoryType: 'product_interest',
+      status: 'skipped',
+      summary: 'Interested in health checkup packages',
+      validUntil: longTermValidUntil.toISOString(),
+      value: 'health_checkup',
+    });
+  }
+
+  if (containsAny(question, ['อยากลดน้ำหนัก', 'นอนหลับ', 'เหนื่อยง่าย', 'ดูแลสุขภาพ', 'คุมความเสี่ยง', 'preventive'])) {
+    memories.push({
+      confidence: 0.76,
+      memoryType: 'goal',
+      status: 'skipped',
+      summary: clipText(question, 140),
+      validUntil: longTermValidUntil.toISOString(),
+      value: clipText(question, 120),
+    });
+  }
+
+  if (containsAny(question, ['ตอบสั้น', 'ละเอียด', 'ภาษาอังกฤษ', 'english', 'สรุปสั้น'])) {
+    memories.push({
+      confidence: 0.82,
+      memoryType: 'communication_preference',
+      status: 'skipped',
+      summary: clipText(question, 140),
+      value: clipText(question, 120),
+    });
+  }
+
+  return memories.filter((memory) => memory.confidence >= 0.75).slice(0, 3);
+}
+
+async function saveAgentMemoryWrites({
+  authorization,
+  consentGranted,
+  memories,
+  sourceMessageId,
+  userId,
+}: {
+  authorization: string;
+  consentGranted: boolean;
+  memories: AgentMemoryRecord[];
+  sourceMessageId?: string | null;
+  userId: string;
+}) {
+  if (!consentGranted || memories.length === 0 || !sourceMessageId) {
+    return memories.map((memory) => ({ ...memory, status: 'skipped' as const }));
+  }
+
+  const saved: AgentMemoryRecord[] = [];
+
+  for (const memory of memories) {
+    const id = await insertRestReturningId(
+      'agent_memory',
+      {
+        confidence: memory.confidence,
+        memory_type: memory.memoryType,
+        metadata: {
+          captured_by: 'gemini-chat-orchestrator',
+        },
+        source: 'chat',
+        source_message_id: sourceMessageId,
+        summary: memory.summary,
+        user_id: userId,
+        valid_until: memory.validUntil,
+        value: memory.value,
+      },
+      authorization,
+    );
+
+    saved.push({ ...memory, id: id ?? undefined, status: id ? 'saved' : 'skipped' });
+  }
+
+  await insertRest(
+    'health_memory_logs',
+    {
+      action: 'auto_save',
+      fact_count: saved.filter((memory) => memory.status === 'saved').length,
+      fact_types: saved.map((memory) => memory.memoryType),
+      metadata: {
+        memory_ids: saved.map((memory) => memory.id).filter(Boolean),
+        memory_source: 'agent_memory',
+      },
+      status: saved.some((memory) => memory.status === 'saved') ? 'success' : 'skipped',
+      user_id: userId,
+    },
+    authorization,
+  );
+
+  return saved;
+}
+
+async function saveUserContextScore({
+  assessment,
+  authorization,
+  consentGranted,
+  consentId,
+  productRequestKind,
+  sourceMessageId,
+  userId,
+}: {
+  assessment: ContextAssessment;
+  authorization: string;
+  consentGranted: boolean;
+  consentId?: string | null;
+  productRequestKind: ProductRequestKind;
+  sourceMessageId?: string | null;
+  userId: string;
+}) {
+  if (!consentGranted || !consentId || !sourceMessageId) {
+    return null;
+  }
+
+  const validUntil = new Date();
+  validUntil.setDate(validUntil.getDate() + 30);
+
+  const id = await insertRestReturningId(
+    'user_context_scores',
+    {
+      calculated_at: new Date().toISOString(),
+      collected_slots: assessment.collectedSlots,
+      confidence: assessment.confidence,
+      consent_id: consentId,
+      level: assessment.level,
+      missing_slots: assessment.missingSlots,
+      next_question: assessment.nextQuestion,
+      purpose: assessment.purpose,
+      recommendation_mode: assessment.mode,
+      score: assessment.score,
+      slot_summary: assessment.slotSummary,
+      source_message_id: sourceMessageId,
+      status: 'active',
+      user_id: userId,
+      valid_until: validUntil.toISOString(),
+      metadata: {
+        captured_by: 'gemini-chat-orchestrator',
+        product_request_kind: productRequestKind,
+      },
+    },
+    authorization,
+  );
+
+  if (id) {
+    await insertRest(
+      'data_access_logs',
+      {
+        action: 'create',
+        actor_type: 'edge_function',
+        metadata: {
+          level: assessment.level,
+          mode: assessment.mode,
+          score: assessment.score,
+        },
+        purpose: 'chat_health_memory',
+        resource_id: id,
+        resource_type: 'user_context_score',
+        user_id: userId,
+      },
+      authorization,
+    );
+  }
+
+  return id;
+}
+
 function clipText(text: string, maxChars: number) {
   if (text.length <= maxChars) {
     return text;
@@ -823,7 +1854,7 @@ function formatRagContext(matches: RagMatch[], maxContextChars = DEFAULT_CONTEXT
   return blocks.join('\n\n');
 }
 
-function toPublicRagMatch(match: RagMatch) {
+function toPublicRagMatch(match: RagMatch): PublicRagMatch {
   return {
     id: match.id,
     title: match.title,
@@ -835,6 +1866,64 @@ function toPublicRagMatch(match: RagMatch) {
     score: match.score,
     summary: match.summary,
   };
+}
+
+function shouldEnableWebSearch({
+  contextAssessment,
+  intent,
+  ragMatches,
+}: {
+  contextAssessment: ContextAssessment;
+  intent: HealthChatIntent;
+  ragMatches: RagMatch[];
+}) {
+  if (intent === 'safety_escalation' || contextAssessment.mode === 'ask_context') {
+    return false;
+  }
+
+  const hasMedicalRag = ragMatches.some((match) => match.category === 'care.checkup_preparation' || match.category === 'care.patient_education');
+
+  return !hasMedicalRag && (intent === 'health_advice' || contextAssessment.mode === 'personalized_recommendation');
+}
+
+function extractWebSearchMatches(data: OpenAIResponse): PublicRagMatch[] {
+  const seen = new Set<string>();
+  const matches: PublicRagMatch[] = [];
+
+  const addSource = (source: { title?: string; url?: string }, index: number) => {
+    const url = source.url?.trim();
+
+    if (!url || seen.has(url)) {
+      return;
+    }
+
+    seen.add(url);
+    matches.push({
+      category: 'care.patient_education',
+      id: `web-search-${index + 1}`,
+      riskLevel: 'medium',
+      score: Math.max(1, 10 - index),
+      source: 'web_search',
+      sourceUrl: url,
+      summary: source.title?.trim() || url,
+      title: source.title?.trim() || 'Web search source',
+      topic: 'prototype_medical_search',
+    });
+  };
+
+  for (const item of data.output ?? []) {
+    item.action?.sources?.forEach(addSource);
+
+    for (const content of item.content ?? []) {
+      content.annotations?.forEach((annotation, index) => {
+        if (annotation.type === 'url_citation') {
+          addSource(annotation, index);
+        }
+      });
+    }
+  }
+
+  return matches.slice(0, 3);
 }
 
 async function fetchActivePrompt(authorization: string): Promise<PromptVersion | null> {
@@ -859,6 +1948,8 @@ async function fetchActivePrompt(authorization: string): Promise<PromptVersion |
 }
 
 function createSystemInstruction({
+  contextAssessment,
+  personalContext,
   ragContext,
   promptText,
   systemPromptOverride,
@@ -866,6 +1957,8 @@ function createSystemInstruction({
   userNickname,
 }: {
   allowOverride: boolean;
+  contextAssessment: ContextAssessment;
+  personalContext: string;
   promptText?: string;
   ragContext: string;
   systemPromptOverride?: string;
@@ -883,6 +1976,21 @@ USER:
 - address_as=${userDisplayName}
 - Use address_as naturally, especially in greetings. Do not overuse it in every sentence.
 - Prefer talking directly to the user over explaining your own identity.
+
+PERSONAL_MEMORY:
+${personalContext}
+
+CONTEXT_ASSESSMENT:
+- purpose=${contextAssessment.purpose}
+- score=${contextAssessment.score}
+- level=${contextAssessment.level}
+- mode=${contextAssessment.mode}
+- collected_slots=${contextAssessment.collectedSlots.join(', ') || 'none'}
+- missing_slots=${contextAssessment.missingSlots.join(', ') || 'none'}
+- next_question=${contextAssessment.nextQuestion ?? 'none'}
+- If mode=ask_context, ask next_question only and do not recommend packages.
+- If mode=direct_product, answer briefly and let the UI card carry the product options.
+- If mode=personalized_recommendation, explain the recommendation in no more than 2 short lines.
 
 RAG:
 ${ragContext || 'No app-specific Mira package or policy snippets matched. Do not mention this to the user. Use general safe health knowledge when relevant, or answer harmless off-topic questions briefly and steer back to health.'}`;
@@ -969,10 +2077,13 @@ function normalizeAssistantText(text: string) {
 async function generateOpenAIResponse({
   allowOverride,
   apiBaseUrl,
+  contextAssessment,
+  enableWebSearch,
   maxOutputTokens,
   messages,
   model,
   openaiApiKey,
+  personalContext,
   promptText,
   question,
   ragContext,
@@ -982,10 +2093,13 @@ async function generateOpenAIResponse({
 }: {
   allowOverride: boolean;
   apiBaseUrl: string;
+  contextAssessment: ContextAssessment;
+  enableWebSearch: boolean;
   maxOutputTokens: number;
   messages?: ChatMessage[];
   model: string;
   openaiApiKey: string;
+  personalContext: string;
   promptText?: string;
   question: string;
   ragContext: string;
@@ -993,8 +2107,9 @@ async function generateOpenAIResponse({
   systemPromptOverride?: string;
   userNickname?: string;
 }) {
-  const baseInstruction = createSystemInstruction({ allowOverride, promptText, ragContext, systemPromptOverride, userNickname });
+  const baseInstruction = createSystemInstruction({ allowOverride, contextAssessment, personalContext, promptText, ragContext, systemPromptOverride, userNickname });
   const systemText = retryInstruction ? `${baseInstruction}\n\n${retryInstruction}` : baseInstruction;
+  const tools = enableWebSearch ? [{ search_context_size: 'low', type: 'web_search' }] : undefined;
   const response = await fetch(`${apiBaseUrl.replace(/\/$/, '')}/responses`, {
     method: 'POST',
     headers: {
@@ -1002,10 +2117,12 @@ async function generateOpenAIResponse({
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
+      include: enableWebSearch ? ['web_search_call.action.sources'] : undefined,
       input: toOpenAIInput(messages ?? [], question),
       instructions: systemText,
       max_output_tokens: maxOutputTokens,
       model,
+      tools,
     }),
   });
   const data = (await response.json()) as OpenAIResponse;
@@ -1062,6 +2179,39 @@ Deno.serve(async (req) => {
     }
 
     const model = resolveOpenAIModel(body.model, adminRequest);
+    const preferredCategories = uniqueCategories(classifyRagIntent(question));
+    const productRequestKind = classifyProductRequest(question);
+    const intent = inferHealthChatIntent(question, preferredCategories);
+    const healthMemoryConsent = await getLatestHealthMemoryConsent(userId, authorization);
+    const consentGranted = healthMemoryConsent?.status === 'granted';
+    const personalContextState = await fetchPersonalContext(userId, authorization, consentGranted);
+    const contextAssessment = assessContext({
+      personalContextState,
+      productRequestKind,
+      question,
+      userNickname,
+    });
+    const personalContext = formatPersonalContext({
+      agentMemory: personalContextState.agentMemory,
+      consentGranted,
+      healthFacts: personalContextState.healthFacts,
+    });
+    let timelineSessionId: string | null = null;
+    let userTimelineMessageId: string | null = null;
+
+    if (consentGranted) {
+      timelineSessionId = await getOrCreateCompanionSession(userId, authorization, question);
+
+      if (timelineSessionId) {
+        userTimelineMessageId = await createTimelineMessage({
+          authorization,
+          content: question,
+          role: 'user',
+          sessionId: timelineSessionId,
+          userId,
+        });
+      }
+    }
 
     await insertRest(
       'api_process_logs',
@@ -1072,6 +2222,14 @@ Deno.serve(async (req) => {
         status: 'started',
         metadata: {
           backend_rag: true,
+          health_memory_consent: consentGranted,
+          intent,
+          context_level: contextAssessment.level,
+          context_mode: contextAssessment.mode,
+          context_score: contextAssessment.score,
+          personal_context_health_facts: personalContextState.healthFacts.length,
+          personal_context_memories: personalContextState.agentMemory.length,
+          product_request_kind: productRequestKind,
           question_chars: question.length,
         },
       },
@@ -1082,6 +2240,18 @@ Deno.serve(async (req) => {
 
     if (smallTalkAnswer) {
       const latencyMs = Date.now() - startedAt;
+
+      if (timelineSessionId) {
+        await createTimelineMessage({
+          authorization,
+          content: smallTalkAnswer,
+          model,
+          ragChunkIds: [],
+          role: 'assistant',
+          sessionId: timelineSessionId,
+          userId,
+        });
+      }
 
       await insertRest(
         'ai_request_logs',
@@ -1121,13 +2291,18 @@ Deno.serve(async (req) => {
 
       return jsonResponse({
         finishReason: 'small_talk_shortcut',
+        intent: 'small_talk',
         latencyMs,
+        memoryWrites: [],
         mode: 'supabase-edge-function',
         model,
+        nextActions: [],
         promptVersion: null,
         ragMatches: [],
         requestId: resolvedRequestId,
+        contextAssessment: toPublicContextAssessment(contextAssessment),
         text: smallTalkAnswer,
+        uiCards: [],
       });
     }
 
@@ -1182,7 +2357,6 @@ Deno.serve(async (req) => {
       );
     }
 
-    const preferredCategories = uniqueCategories(classifyRagIntent(question));
     let retrievalMode: 'keyword' | 'vector' = 'vector';
     let embeddingErrorMessage: string | null = null;
     let ragMatches: RagMatch[] = [];
@@ -1214,6 +2388,29 @@ Deno.serve(async (req) => {
 
     const ragContext = formatRagContext(ragMatches);
     const ragStatus = ragMatches.length > 0 ? 'success' : chunks === localFallbackKnowledge ? 'fallback' : 'empty';
+    const shouldFetchProducts =
+      contextAssessment.mode !== 'ask_context' &&
+      (intent === 'product_recommendation' || intent === 'product_compare' || intent === 'checkout');
+    const productRows =
+      shouldFetchProducts
+        ? await fetchActiveHospitalProducts(authorization, 4)
+        : [];
+    const products = rankProductsForQuestion(
+      productRows.map((product) => toChatProductCard(product, 'Matched from hospital product portal')),
+      question,
+      contextAssessment,
+    );
+    const baseUiCards = buildUiCards({ contextAssessment, intent, products });
+    const nextActions =
+      baseUiCards.length > 0
+        ? [
+            {
+              label: 'ดูแพ็กเกจ',
+              payload: { count: products.length },
+              type: 'show_products' as const,
+            },
+          ]
+        : [];
 
     await insertRest(
       'rag_retrieval_logs',
@@ -1228,6 +2425,12 @@ Deno.serve(async (req) => {
         metadata: {
           backend_rag: true,
           embedding_error: embeddingErrorMessage,
+          intent,
+          context_level: contextAssessment.level,
+          context_mode: contextAssessment.mode,
+          context_score: contextAssessment.score,
+          product_card_count: products.length,
+          product_request_kind: productRequestKind,
           retrieval_mode: retrievalMode,
           scores: ragMatches.map((match) => ({ id: match.id, score: match.score })),
         },
@@ -1237,6 +2440,7 @@ Deno.serve(async (req) => {
 
     const promptVersion = await fetchActivePrompt(authorization);
     const maxOutputTokens = getNumberEnv('OPENAI_MAX_OUTPUT_TOKENS', 450);
+    const enableWebSearch = shouldEnableWebSearch({ contextAssessment, intent, ragMatches });
 
     await insertRest(
       'ai_request_logs',
@@ -1250,9 +2454,17 @@ Deno.serve(async (req) => {
         question_chars: question.length,
         metadata: {
           admin_prompt_override: adminRequest && Boolean(body.systemPromptOverride?.trim()),
+          context_level: contextAssessment.level,
+          context_mode: contextAssessment.mode,
+          context_score: contextAssessment.score,
+          health_memory_consent: consentGranted,
+          intent,
+          personal_context_health_facts: personalContextState.healthFacts.length,
+          personal_context_memories: personalContextState.agentMemory.length,
           rag_chunk_ids: ragMatches.map((match) => match.id),
           rag_retrieval_mode: retrievalMode,
           rate_limit_count: rateStatus?.request_count,
+          web_search_enabled: enableWebSearch,
         },
       },
       authorization,
@@ -1261,10 +2473,13 @@ Deno.serve(async (req) => {
     const { data, response: openaiResponse } = await generateOpenAIResponse({
       allowOverride: adminRequest,
       apiBaseUrl,
+      contextAssessment,
+      enableWebSearch,
       maxOutputTokens,
       messages: body.messages,
       model,
       openaiApiKey,
+      personalContext,
       promptText: promptVersion?.prompt_text,
       question,
       ragContext,
@@ -1294,6 +2509,7 @@ Deno.serve(async (req) => {
     const finishReason = getFinishReason(data);
     let finalText = text;
     let finalFinishReason = finishReason;
+    let finalOpenAIData = data;
     let retried = false;
 
     if (stoppedForMaxTokens(data) || looksLikePromptLeak(text)) {
@@ -1304,10 +2520,13 @@ Deno.serve(async (req) => {
       const { data: retryData, response: retryResponse } = await generateOpenAIResponse({
         allowOverride: !looksLikePromptLeak(text) && adminRequest,
         apiBaseUrl,
+        contextAssessment,
+        enableWebSearch,
         maxOutputTokens: Math.max(maxOutputTokens, 900),
         messages: body.messages,
         model,
         openaiApiKey,
+        personalContext,
         promptText: promptVersion?.prompt_text,
         question,
         ragContext,
@@ -1322,11 +2541,63 @@ Deno.serve(async (req) => {
         if (!looksLikePromptLeak(retryText)) {
           finalText = retryText;
           finalFinishReason = getFinishReason(retryData);
+          finalOpenAIData = retryData;
         }
       }
     }
 
     const latencyMs = Date.now() - startedAt;
+    const webSearchMatches = enableWebSearch ? extractWebSearchMatches(finalOpenAIData) : [];
+    const memoryCandidates = extractAgentMemoryCandidates(question);
+    const memoryWrites = await saveAgentMemoryWrites({
+      authorization,
+      consentGranted,
+      memories: memoryCandidates,
+      sourceMessageId: userTimelineMessageId,
+      userId,
+    });
+    const contextScoreId = await saveUserContextScore({
+      assessment: contextAssessment,
+      authorization,
+      consentGranted,
+      consentId: healthMemoryConsent?.id,
+      productRequestKind,
+      sourceMessageId: userTimelineMessageId,
+      userId,
+    });
+    const uiCards: ChatUiCard[] = [
+      ...baseUiCards,
+      ...(memoryWrites.some((memory) => memory.status === 'saved')
+        ? [
+            {
+              count: memoryWrites.filter((memory) => memory.status === 'saved').length,
+              id: `memory-saved-${Date.now()}`,
+              summaries: memoryWrites.filter((memory) => memory.status === 'saved').map((memory) => memory.summary),
+              type: 'memory_saved' as const,
+            },
+          ]
+        : []),
+    ];
+
+    finalText = polishCompanionText({
+      contextAssessment,
+      intent,
+      text: finalText,
+      uiCards,
+      userNickname,
+    });
+
+    if (timelineSessionId) {
+      await createTimelineMessage({
+        authorization,
+        content: finalText,
+        model,
+        ragChunkIds: ragMatches.map((match) => match.id),
+        role: 'assistant',
+        sessionId: timelineSessionId,
+        userId,
+      });
+    }
 
     await insertRest(
       'ai_request_logs',
@@ -1342,9 +2613,18 @@ Deno.serve(async (req) => {
         question_chars: question.length,
         answer_chars: finalText.length,
         metadata: {
+          context_level: contextAssessment.level,
+          context_mode: contextAssessment.mode,
+          context_score: contextAssessment.score,
+          context_score_id: contextScoreId,
+          intent,
+          memory_write_count: memoryWrites.filter((memory) => memory.status === 'saved').length,
           retried,
           rag_chunk_ids: ragMatches.map((match) => match.id),
           rag_retrieval_mode: retrievalMode,
+          ui_card_types: uiCards.map((card) => card.type),
+          web_search_enabled: enableWebSearch,
+          web_search_sources: webSearchMatches.map((match) => match.sourceUrl).filter(Boolean),
         },
       },
       authorization,
@@ -1361,21 +2641,33 @@ Deno.serve(async (req) => {
         metadata: {
           answer_chars: finalText.length,
           finish_reason: finalFinishReason,
+          context_level: contextAssessment.level,
+          context_mode: contextAssessment.mode,
+          context_score: contextAssessment.score,
+          intent,
+          memory_write_count: memoryWrites.filter((memory) => memory.status === 'saved').length,
           rag_count: ragMatches.length,
+          ui_card_count: uiCards.length,
+          web_search_count: webSearchMatches.length,
         },
       },
       authorization,
     );
 
     return jsonResponse({
+      contextAssessment: toPublicContextAssessment(contextAssessment),
       finishReason: finalFinishReason,
+      intent,
       latencyMs,
+      memoryWrites,
       mode: 'supabase-edge-function',
       model,
+      nextActions,
       promptVersion: promptVersion ? { id: promptVersion.id, versionKey: promptVersion.version_key } : null,
-      ragMatches: ragMatches.map(toPublicRagMatch),
+      ragMatches: [...ragMatches.map(toPublicRagMatch), ...webSearchMatches],
       requestId: resolvedRequestId,
       text: finalText,
+      uiCards,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unexpected OpenAI proxy error.';

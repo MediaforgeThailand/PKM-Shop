@@ -17,6 +17,7 @@ export type HealthPackage = {
   includes: string[];
   bestFor: string;
   aiReason: string;
+  previewImageKey?: 'blood' | 'cancer' | 'heart' | 'longevity';
 };
 
 export type PackageCategory = {

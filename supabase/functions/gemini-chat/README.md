@@ -56,6 +56,15 @@ Product RAG chunks are embedded by the sibling `rag-embed` Edge Function after `
   "model": "gpt-5.5",
   "finishReason": "completed",
   "requestId": "client-or-generated-request-id",
+  "contextAssessment": {
+    "purpose": "health_package_recommendation",
+    "score": 40,
+    "level": "partial",
+    "mode": "ask_context",
+    "collectedSlots": ["อายุหรือช่วงอายุ"],
+    "missingSlots": ["โรคประจำตัว ยา หรือประวัติแพ้"],
+    "nextQuestion": "ขอเพิ่มอีกนิดค่ะ..."
+  },
   "ragMatches": [],
   "promptVersion": {
     "id": "uuid",

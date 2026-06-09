@@ -1,12 +1,14 @@
 import { Link, router } from 'expo-router';
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { HealthFigure, StatusRing } from '@/components/HealthVisuals';
 import { ActionButton, Card, Screen } from '@/components/MiraUI';
 import { MiraDesign, softShadow } from '@/constants/Design';
 import { signInWithEmailPassword, signUpWithEmailPassword, useAuthSession, useSignOut } from '@/lib/auth/useAuthSession';
 import { supabaseConfigStatus } from '@/lib/supabase';
+
+const brandLogo = require('@/assets/images/mira-care-logo.png');
 
 type AuthMode = 'sign-in' | 'sign-up';
 
@@ -69,9 +71,7 @@ export default function LoginScreen() {
       <Screen>
         <View style={styles.heroCard}>
           <View style={styles.brandRow}>
-            <View style={styles.brandMark} />
-            <Text style={styles.brand}>Mira</Text>
-            <Text style={styles.brandSoft}>Health</Text>
+            <Image source={brandLogo} resizeMode="contain" style={styles.brandLogo} />
           </View>
           <View style={styles.visualRow}>
             <View style={styles.figureWrap}>
@@ -192,21 +192,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: MiraDesign.space.sm,
   },
-  brandMark: {
-    backgroundColor: MiraDesign.color.primary,
-    borderRadius: MiraDesign.radius.pill,
-    height: 18,
-    width: 36,
-  },
-  brand: {
-    color: MiraDesign.color.ink,
-    fontSize: 20,
-    fontWeight: '900',
-  },
-  brandSoft: {
-    color: MiraDesign.color.primary,
-    fontSize: 20,
-    fontWeight: '900',
+  brandLogo: {
+    height: 54,
+    width: 196,
   },
   visualRow: {
     alignItems: 'center',

@@ -67,6 +67,8 @@ export type HospitalProduct = {
   location?: string | null;
   preparationNotes?: string | null;
   priceAmount: number;
+  productImageName?: string | null;
+  productImagePreviewUri?: string | null;
   ragChunkId?: string | null;
   status: 'active' | 'archived' | 'draft';
   tags: string[];
@@ -103,6 +105,10 @@ type HospitalProductRow = {
   id: string;
   includes: string[] | null;
   location: string | null;
+  metadata: {
+    product_image_name?: string | null;
+    product_image_preview_uri?: string | null;
+  } | null;
   preparation_notes: string | null;
   price_amount: number;
   rag_chunk_id: string | null;
@@ -396,6 +402,8 @@ function toHospitalProduct(row: HospitalProductRow): HospitalProduct {
     location: row.location,
     preparationNotes: row.preparation_notes,
     priceAmount: row.price_amount,
+    productImageName: row.metadata?.product_image_name ?? null,
+    productImagePreviewUri: row.metadata?.product_image_preview_uri ?? null,
     ragChunkId: row.rag_chunk_id,
     status: row.status,
     tags: row.tags ?? [],
@@ -417,6 +425,7 @@ function productSelectColumns() {
     'hospital_lat',
     'hospital_lng',
     'location',
+    'metadata',
     'includes',
     'tags',
     'preparation_notes',
@@ -570,6 +579,7 @@ export async function saveHospitalProductWithRag(draft: HospitalProductDraft): P
         },
         classifier: 'client-rule-v1',
         product_image_name: draft.productImageName ?? null,
+        product_image_preview_uri: draft.productImagePreviewUri ?? null,
         rag_auto_publish: true,
       },
       preparation_notes: classification.analysis.extractedPreparationNotes.join(' '),

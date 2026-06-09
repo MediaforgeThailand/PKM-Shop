@@ -21,30 +21,40 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Circle, Defs, LinearGradient as SvgGradient, Path, Rect, Stop } from 'react-native-svg';
 
 import { aiChatConfigStatus, askAiWithRag, createSmallTalkAnswer, DEFAULT_USER_NICKNAME, type ChatMessage } from '@/lib/ai/gemini';
+import {
+  type ChatContextAssessment,
+  createProductBranch,
+  toChatProductCard,
+  type ChatBranchCard,
+  type ChatProductCard,
+  type ChatUiCard,
+} from '@/lib/ai/healthChatTypes';
 import { transcribeAudio } from '@/lib/ai/openaiTranscription';
 import { useAuthSession } from '@/lib/auth/useAuthSession';
+import { loadActiveHospitalProducts } from '@/lib/marketplace/hospitalProducts';
 import { localHealthKnowledge } from '@/lib/rag/healthKnowledge';
 import { retrieveRagContext } from '@/lib/rag/retriever';
-import { formatMoney, healthPackages, hospitalBranches, packageCategories } from '@/services/mockBackend';
+import { healthPackages } from '@/services/mockBackend';
 
-const logo = require('@/assets/images/mira-orbit-logo.png');
+const logo = require('@/assets/images/mira-care-logo.png');
+const logoMark = require('@/assets/images/mira-care-mark.png');
 const iconInk = '#536491';
 const prototypeUserNickname = DEFAULT_USER_NICKNAME;
 
-type CommercePayload = { type: 'category-picker' } | { categoryId: string; type: 'location-map' };
-
 type PrototypeChatMessage = ChatMessage & {
-  commerce?: CommercePayload;
+  uiCards?: ChatUiCard[];
 };
 
-function createMessage(role: ChatMessage['role'], content: string, sources?: ChatMessage['sources'], commerce?: CommercePayload): PrototypeChatMessage {
+type ProductRequestKind = 'broad' | 'direct' | 'none';
+
+function createMessage(role: ChatMessage['role'], content: string, sources?: ChatMessage['sources'], uiCards?: ChatUiCard[]): PrototypeChatMessage {
   return {
     id: `${role}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     role,
     content,
     createdAt: new Date().toISOString(),
-    commerce,
     sources,
+    uiCards,
   };
 }
 
@@ -54,6 +64,220 @@ function hasPackagePurchaseIntent(question: string) {
   const packageTerms = ['แพ็กเกจ', 'แพ็คเกจ', 'ตรวจสุขภาพ', 'checkup', 'package'];
 
   return buyTerms.some((term) => normalized.includes(term)) && packageTerms.some((term) => normalized.includes(term));
+}
+
+const productDiscoveryTerms = [
+  'แพ็กเกจ',
+  'แพ็คเกจ',
+  'ตรวจสุขภาพ',
+  'ตรวจเลือด',
+  'เจาะเลือด',
+  'แล็บ',
+  'โปรดักส์',
+  'โปรดัก',
+  'สินค้า',
+  'บริการ',
+  'รายการตรวจ',
+  'blood test',
+  'lab test',
+  'checkup',
+  'package',
+  'product',
+];
+
+const productBrowseTerms = [
+  'ต้องการ',
+  'อยาก',
+  'ควร',
+  'ควรตรวจ',
+  'ขอดู',
+  'แนะนำ',
+  'มีอะไรบ้าง',
+  'ทั้งหมด',
+  'ราคา',
+  'ซื้อ',
+  'จอง',
+  'เลือก',
+  'compare',
+  'buy',
+  'pay',
+];
+
+function includesAnyTerm(text: string, terms: string[]) {
+  return terms.some((term) => text.includes(term.toLowerCase()));
+}
+
+function classifyProductRequest(question: string): ProductRequestKind {
+  const normalized = question.toLowerCase();
+
+  if (hasPackagePurchaseIntent(question)) {
+    return includesAnyTerm(normalized, ['ตรวจเลือด', 'เจาะเลือด', 'วัคซีน', 'มะเร็ง', 'หัวใจ', 'น้ำตาล', 'ไขมัน', 'blood', 'lab', 'vaccine'])
+      ? 'direct'
+      : 'broad';
+  }
+
+  const mentionsProduct = includesAnyTerm(normalized, productDiscoveryTerms);
+  const browsingProducts = includesAnyTerm(normalized, productBrowseTerms);
+  const hasProductIntent = mentionsProduct || (browsingProducts && includesAnyTerm(normalized, ['ตรวจ', 'สุขภาพ', 'health', 'product']));
+
+  if (!hasProductIntent) {
+    return 'none';
+  }
+
+  const directTerms = [
+    'ตรวจเลือด',
+    'เจาะเลือด',
+    'แล็บ',
+    'แลป',
+    'วัคซีน',
+    'มะเร็ง',
+    'หัวใจ',
+    'เบาหวาน',
+    'น้ำตาล',
+    'ไขมัน',
+    'ตับ',
+    'ไต',
+    'x-ray',
+    'mri',
+    'ct',
+    'ultrasound',
+    'mammogram',
+    'hpv',
+    'blood',
+    'lab',
+    'vaccine',
+    'basic blood',
+  ];
+  const listTerms = ['ทั้งหมด', 'มีอะไรบ้าง', 'ราคา', 'ขอดูแพ็กเกจ', 'ขอดูแพคเกจ'];
+
+  if (includesAnyTerm(normalized, directTerms) || includesAnyTerm(normalized, listTerms)) {
+    return 'direct';
+  }
+
+  return 'broad';
+}
+
+function hasProductGridCard(cards?: ChatUiCard[]) {
+  return cards?.some((card) => card.type === 'product_grid') ?? false;
+}
+
+function withProductGridCard(cards: ChatUiCard[] | undefined, sourceProducts: ChatProductCard[]) {
+  if (hasProductGridCard(cards)) {
+    return cards ?? [];
+  }
+
+  const productSource = sourceProducts.length ? sourceProducts : mockProducts();
+  return [...(cards ?? []), productGridCard(productSource)];
+}
+
+function cleanProductAssistantText(text: string) {
+  const trimmed = text.trim();
+
+  if (!trimmed || trimmed.length > 120 || /^\s*\d+[.)]/m.test(trimmed)) {
+    return 'ได้ค่ะคุณบอส ดูแพ็กเกจนี้ก่อนได้ ถ้าอยากให้ช่วยเลือกให้เหมาะขึ้น บอกอายุหรือโรคประจำตัวเพิ่มได้ค่ะ';
+  }
+
+  return trimmed;
+}
+
+function hasAgeSlot(text: string) {
+  return /(?:อายุ|age)\s*[0-9]{1,3}/i.test(text) || /[0-9]{1,3}\s*(?:ปี|years?\s*old|yo)/i.test(text);
+}
+
+function createPrototypeContextAssessment(question: string, productRequestKind: ProductRequestKind, history: PrototypeChatMessage[] = []): ChatContextAssessment {
+  const userText = [...history.filter((message) => message.role === 'user').map((message) => message.content), question].join(' ').toLowerCase();
+  const slotSummary = {
+    accessPreference: includesAnyTerm(userText, ['งบ', 'บาท', 'ราคา', 'budget', 'ใกล้', 'แถว', 'อยู่', 'สะดวก']),
+    age: hasAgeSlot(userText),
+    clinicalHistory: includesAnyTerm(userText, ['โรคประจำตัว', 'ไม่มีโรค', 'ไม่เป็นโรค', 'ยา', 'แพ้ยา', 'เบาหวาน', 'ความดัน', 'ไขมัน', 'หัวใจ']),
+    goal: includesAnyTerm(userText, ['อยากเช็ค', 'อยากเช็ก', 'โฟกัส', 'กังวล', 'เป้าหมาย', 'ลดน้ำหนัก', 'น้ำตาล', 'ไขมัน', 'สุขภาพ', 'check']),
+    recentCheckup: includesAnyTerm(userText, ['ตรวจล่าสุด', 'ผลตรวจ', 'เคยตรวจ', 'ไม่เคยตรวจ', 'ปีที่แล้ว', 'เดือนที่แล้ว', 'ล่าสุด']),
+    riskLifestyle: includesAnyTerm(userText, ['น้ำหนัก', 'ส่วนสูง', 'bmi', 'สูบ', 'เหล้า', 'นอน', 'เครียด', 'ครอบครัว', 'เหนื่อย']),
+  };
+  const score =
+    (slotSummary.age ? 20 : 0) +
+    (slotSummary.goal ? 20 : 0) +
+    (slotSummary.clinicalHistory ? 20 : 0) +
+    (slotSummary.recentCheckup ? 15 : 0) +
+    (slotSummary.accessPreference ? 15 : 0) +
+    (slotSummary.riskLifestyle ? 10 : 0);
+  const level = score >= 65 ? 'ready' : score >= 35 ? 'partial' : 'insufficient';
+  const labels = {
+    accessPreference: 'พื้นที่สะดวกหรืองบประมาณ',
+    age: 'อายุหรือช่วงอายุ',
+    clinicalHistory: 'โรคประจำตัว ยา หรือประวัติแพ้',
+    goal: 'เป้าหมายหรือเรื่องที่อยากโฟกัส',
+    recentCheckup: 'ประวัติการตรวจหรือผลตรวจล่าสุด',
+    riskLifestyle: 'น้ำหนัก ไลฟ์สไตล์ หรือความเสี่ยงเพิ่มเติม',
+  };
+  const slotEntries = Object.entries(slotSummary) as [keyof typeof slotSummary, boolean][];
+  const mode =
+    productRequestKind === 'direct'
+      ? 'direct_product'
+      : productRequestKind === 'broad' && level === 'ready'
+        ? 'personalized_recommendation'
+        : 'ask_context';
+  const nextQuestion = !slotSummary.age || !slotSummary.goal
+    ? 'ได้ค่ะคุณบอส ก่อนคัดแพ็กเกจ ขอรู้ 2 เรื่องสั้นๆ: อายุประมาณเท่าไหร่ และอยากโฟกัสเรื่องไหนเป็นพิเศษคะ'
+    : !slotSummary.clinicalHistory
+      ? 'ขอเพิ่มอีกนิดค่ะคุณบอส มีโรคประจำตัว ยาที่กินประจำ หรือแพ้ยาอะไรไหมคะ'
+      : !slotSummary.recentCheckup
+        ? 'ตรวจสุขภาพหรือมีผลเลือดล่าสุดเมื่อไหร่คะ ถ้าจำไม่ได้ตอบคร่าวๆ ได้เลยค่ะ'
+        : 'สะดวกโซนไหนหรืองบประมาณประมาณเท่าไหร่คะ เดี๋ยวฉันคัดแพ็กเกจให้แคบลง';
+
+  return {
+    collectedSlots: slotEntries.filter(([, exists]) => exists).map(([key]) => labels[key]),
+    confidence: Math.min(0.95, 0.68 + slotEntries.filter(([, exists]) => exists).length * 0.03),
+    level,
+    missingSlots: slotEntries.filter(([, exists]) => !exists).map(([key]) => labels[key]),
+    mode,
+    nextQuestion: mode === 'ask_context' ? nextQuestion : null,
+    purpose: 'health_package_recommendation',
+    score,
+  };
+}
+
+function formatProductMoney(amount: number) {
+  return `${amount.toLocaleString('th-TH')} THB`;
+}
+
+function mockProducts(): ChatProductCard[] {
+  return healthPackages.map((item) => ({
+    bookingNote: 'Call center will confirm the best slot after payment.',
+    category: item.category,
+    description: item.bestFor,
+    duration: item.duration,
+    hospitalAddress: item.location,
+    hospitalMapQuery: item.hospital,
+    hospitalName: item.hospital,
+    id: item.id,
+    includes: item.includes,
+    priceAmount: item.price.amount,
+    productImagePreviewUri: null,
+    reason: item.aiReason,
+    ragChunkId: null,
+    tags: item.tags,
+    title: item.title,
+  }));
+}
+
+function productGridCard(products: ChatProductCard[]): ChatUiCard {
+  return {
+    id: `product-grid-${Date.now()}`,
+    products: products.slice(0, 4),
+    title: 'แพ็กเกจที่น่าดู',
+    type: 'product_grid',
+  };
+}
+
+function branchLocationCard(product: ChatProductCard): ChatUiCard {
+  return {
+    branches: [createProductBranch(product)],
+    id: `branch-location-${product.id}`,
+    product,
+    title: 'เลือกสาขา',
+    type: 'branch_location',
+  };
 }
 
 function createDemoAnswer(question: string) {
@@ -323,15 +547,8 @@ function HeroLogo() {
 
   return (
     <Animated.View style={[styles.orbWrap, { transform: motion.rootTransform }]}>
-      <Animated.View style={[styles.logoHaloOuter, { opacity: motion.haloOpacity, transform: [{ scale: motion.haloScale }] }]} />
-      <Animated.View style={[styles.logoOrbitRing, { transform: [{ rotate: motion.orbitRotate }] }]}>
-        <View style={styles.logoOrbitDot} />
-        <View style={styles.logoOrbitDotSoft} />
-      </Animated.View>
       <Animated.View style={[styles.logoCard, { transform: [{ scale: motion.logoScale }] }]}>
-        <LinearGradient colors={['rgba(255,255,255,0.72)', 'rgba(255,255,255,0.2)']} style={styles.logoCardGlass}>
-          <Image source={logo} resizeMode="contain" style={styles.heroLogoImage} />
-        </LinearGradient>
+        <Image source={logo} resizeMode="contain" style={styles.heroLogoImage} />
       </Animated.View>
       <Animated.View style={[styles.logoSparkOne, { opacity: motion.haloOpacity, transform: [{ rotate: motion.orbitRotate }] }]}>
         <SparkleIcon />
@@ -361,61 +578,55 @@ function FeatureTile({ icon, label, onPress }: { icon: ReactNode; label: string;
 function ChatAvatar() {
   return (
     <LinearGradient colors={['#E9F8FF', '#CFE2FF']} style={styles.chatAvatar}>
-      <Image source={logo} resizeMode="contain" style={styles.chatAvatarLogo} />
+      <Image source={logoMark} resizeMode="contain" style={styles.chatAvatarLogo} />
     </LinearGradient>
   );
 }
 
-function CategoryPickerCard({ onSelectCategory }: { onSelectCategory: (categoryId: string) => void }) {
+function ProductGridCard({ card, onSelectProduct }: { card: Extract<ChatUiCard, { type: 'product_grid' }>; onSelectProduct: (productId: string) => void }) {
   return (
     <View style={styles.commerceCard}>
       <View style={styles.commerceHeader}>
-        <Text style={styles.commerceEyebrow}>Popular checkups</Text>
-        <Text style={styles.commerceTitle}>เลือกหมวดตรวจสุขภาพ</Text>
+        <Text style={styles.commerceEyebrow}>Soft recommendation</Text>
+        <Text style={styles.commerceTitle}>{card.title}</Text>
       </View>
       <View style={styles.categoryGrid}>
-        {packageCategories.map((category) => {
-          const item = healthPackages.find((entry) => entry.id === category.packageId) ?? healthPackages[0];
-
-          return (
-            <Pressable key={category.id} onPress={() => onSelectCategory(category.id)} style={({ pressed }) => [styles.categoryTile, pressed ? styles.categoryTilePressed : null]}>
-              <LinearGradient colors={['rgba(255,255,255,0.68)', 'rgba(232,244,255,0.34)']} style={styles.categoryTileGlass}>
-                <View style={styles.categoryTopLine}>
-                  <Text style={styles.categoryCode}>{category.code}</Text>
-                  <Text style={styles.categoryPopularity}>{category.popularity}</Text>
-                </View>
-                <Text numberOfLines={2} style={styles.categoryTitle}>
-                  {category.title}
+        {card.products.map((product, index) => (
+          <Pressable key={product.id} onPress={() => onSelectProduct(product.id)} style={({ pressed }) => [styles.categoryTile, pressed ? styles.categoryTilePressed : null]}>
+            <LinearGradient colors={['rgba(255,255,255,0.68)', 'rgba(232,244,255,0.34)']} style={styles.categoryTileGlass}>
+              <View style={styles.categoryTopLine}>
+                <Text style={styles.categoryCode}>{index + 1}</Text>
+                <Text numberOfLines={1} style={styles.categoryPopularity}>
+                  {product.tags[0] ?? product.category}
                 </Text>
-                <Text numberOfLines={2} style={styles.categoryDescription}>
-                  {category.description}
-                </Text>
-                <Text style={styles.categoryPrice}>{formatMoney(item.price)}</Text>
-              </LinearGradient>
-            </Pressable>
-          );
-        })}
+              </View>
+              <Text numberOfLines={2} style={styles.categoryTitle}>
+                {product.title}
+              </Text>
+              <Text numberOfLines={2} style={styles.categoryDescription}>
+                {product.hospitalName}
+              </Text>
+              <Text style={styles.categoryPrice}>{formatProductMoney(product.priceAmount)}</Text>
+            </LinearGradient>
+          </Pressable>
+        ))}
       </View>
     </View>
   );
 }
 
-function LocationMapCard({ categoryId, onSelectBranch }: { categoryId: string; onSelectBranch: (categoryId: string, branchId: string) => void }) {
-  const category = packageCategories.find((entry) => entry.id === categoryId) ?? packageCategories[0];
-  const item = healthPackages.find((entry) => entry.id === category.packageId) ?? healthPackages[0];
-  const branches = hospitalBranches.filter((branch) => branch.supportedPackageIds.includes(item.id));
-
+function LocationMapCard({ card, onSelectBranch }: { card: Extract<ChatUiCard, { type: 'branch_location' }>; onSelectBranch: (productId: string, branchId: string) => void }) {
   return (
     <View style={styles.commerceCard}>
       <View style={styles.commerceHeader}>
         <Text style={styles.commerceEyebrow}>Available locations</Text>
-        <Text style={styles.commerceTitle}>{item.title}</Text>
+        <Text style={styles.commerceTitle}>{card.product.title}</Text>
       </View>
 
       <View style={styles.mapPreview}>
         <View style={styles.mapRouteOne} />
         <View style={styles.mapRouteTwo} />
-        {branches.slice(0, 4).map((branch, index) => (
+        {card.branches.slice(0, 4).map((branch, index) => (
           <View
             key={branch.id}
             style={[
@@ -425,12 +636,12 @@ function LocationMapCard({ categoryId, onSelectBranch }: { categoryId: string; o
             <Text style={styles.mapPinText}>{index + 1}</Text>
           </View>
         ))}
-        <Text style={styles.mapLabel}>{branches.length} branches near Bangkok</Text>
+        <Text style={styles.mapLabel}>{card.branches.length} branch available</Text>
       </View>
 
       <View style={styles.branchList}>
-        {branches.map((branch, index) => (
-          <Pressable key={branch.id} onPress={() => onSelectBranch(category.id, branch.id)} style={({ pressed }) => [styles.branchRow, pressed ? styles.branchRowPressed : null]}>
+        {card.branches.map((branch, index) => (
+          <Pressable key={branch.id} onPress={() => onSelectBranch(card.product.id, branch.id)} style={({ pressed }) => [styles.branchRow, pressed ? styles.branchRowPressed : null]}>
             <View style={styles.branchNumber}>
               <Text style={styles.branchNumberText}>{index + 1}</Text>
             </View>
@@ -439,7 +650,7 @@ function LocationMapCard({ categoryId, onSelectBranch }: { categoryId: string; o
                 {branch.name}
               </Text>
               <Text numberOfLines={1} style={styles.branchMeta}>
-                {branch.district} · {branch.distanceKm.toFixed(1)} km · {branch.nextSlot}
+                {branch.address ?? branch.distanceLabel} · {branch.nextSlot}
               </Text>
             </View>
             <Text style={styles.branchAction}>เลือก</Text>
@@ -450,16 +661,69 @@ function LocationMapCard({ categoryId, onSelectBranch }: { categoryId: string; o
   );
 }
 
+function CheckoutDraftCard({ card }: { card: Extract<ChatUiCard, { type: 'checkout_draft' }> }) {
+  return (
+    <View style={styles.commerceCard}>
+      <View style={styles.commerceHeader}>
+        <Text style={styles.commerceEyebrow}>Checkout draft</Text>
+        <Text style={styles.commerceTitle}>{card.product.title}</Text>
+      </View>
+      <View style={styles.branchRow}>
+        <View style={styles.branchCopy}>
+          <Text style={styles.branchName}>{card.branch?.name ?? card.product.hospitalName}</Text>
+          <Text style={styles.branchMeta}>{formatProductMoney(card.product.priceAmount)}</Text>
+        </View>
+        <Text style={styles.branchAction}>Ready</Text>
+      </View>
+    </View>
+  );
+}
+
+function MemorySavedCard({ card }: { card: Extract<ChatUiCard, { type: 'memory_saved' }> }) {
+  return (
+    <View style={styles.memorySavedCard}>
+      <Text style={styles.memorySavedTitle}>จำข้อมูลสำคัญไว้แล้ว</Text>
+      <Text numberOfLines={2} style={styles.memorySavedText}>
+        {card.summaries.slice(0, 2).join(' · ') || `${card.count} items`}
+      </Text>
+    </View>
+  );
+}
+
+function ChatUiCardRenderer({
+  card,
+  onSelectBranch,
+  onSelectProduct,
+}: {
+  card: ChatUiCard;
+  onSelectBranch: (productId: string, branchId: string) => void;
+  onSelectProduct: (productId: string) => void;
+}) {
+  if (card.type === 'product_grid') {
+    return <ProductGridCard card={card} onSelectProduct={onSelectProduct} />;
+  }
+
+  if (card.type === 'branch_location') {
+    return <LocationMapCard card={card} onSelectBranch={onSelectBranch} />;
+  }
+
+  if (card.type === 'checkout_draft') {
+    return <CheckoutDraftCard card={card} />;
+  }
+
+  return <MemorySavedCard card={card} />;
+}
+
 function ChatMessageBubble({
   index,
   message,
   onSelectBranch,
-  onSelectCategory,
+  onSelectProduct,
 }: {
   index: number;
   message: PrototypeChatMessage;
-  onSelectBranch: (categoryId: string, branchId: string) => void;
-  onSelectCategory: (categoryId: string) => void;
+  onSelectBranch: (productId: string, branchId: string) => void;
+  onSelectProduct: (productId: string) => void;
 }) {
   const opacity = useRef(new Animated.Value(0)).current;
   const translate = useRef(new Animated.Value(14)).current;
@@ -488,8 +752,9 @@ function ChatMessageBubble({
         <BlurView intensity={30} tint="light" style={styles.assistantChatBubble}>
           <Text style={styles.assistantChatText}>{message.content}</Text>
         </BlurView>
-        {message.commerce?.type === 'category-picker' ? <CategoryPickerCard onSelectCategory={onSelectCategory} /> : null}
-        {message.commerce?.type === 'location-map' ? <LocationMapCard categoryId={message.commerce.categoryId} onSelectBranch={onSelectBranch} /> : null}
+        {message.uiCards?.map((card) => (
+          <ChatUiCardRenderer key={card.id} card={card} onSelectBranch={onSelectBranch} onSelectProduct={onSelectProduct} />
+        ))}
       </View>
     </Animated.View>
   );
@@ -599,6 +864,7 @@ function BackgroundSheen() {
 export function PrototypeChatPanel() {
   const auth = useAuthSession();
   const router = useRouter();
+  const fallbackProducts = useMemo(() => mockProducts(), []);
   const { height, width } = useWindowDimensions();
   const audioChunksRef = useRef<Blob[]>([]);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -609,6 +875,7 @@ export function PrototypeChatPanel() {
   const [isSending, setIsSending] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [messages, setMessages] = useState<PrototypeChatMessage[]>([]);
+  const [products, setProducts] = useState<ChatProductCard[]>(fallbackProducts);
   const [viewMode, setViewMode] = useState<'chat' | 'home'>('home');
   const [voiceStatus, setVoiceStatus] = useState<string | null>(null);
 
@@ -638,6 +905,26 @@ export function PrototypeChatPanel() {
     }
     return undefined;
   }, [isSending, messages, viewMode]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    loadActiveHospitalProducts(8)
+      .then((activeProducts) => {
+        if (isMounted && activeProducts.length > 0) {
+          setProducts(activeProducts.map((product) => toChatProductCard(product, product.ragChunkId ? 'Published from hospital product portal' : undefined)));
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          setProducts(fallbackProducts);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [fallbackProducts]);
 
   function stopMediaStream() {
     mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
@@ -737,48 +1024,56 @@ export function PrototypeChatPanel() {
     void startVoiceRecording();
   }
 
-  function showPackageCategoryPicker() {
+  function showProductGrid(sourceProducts = products, mode: ChatContextAssessment['mode'] = 'direct_product') {
     setMessages((current) => [
       ...current,
       createMessage(
         'assistant',
-        'ได้ค่ะคุณบอส เลือกหมวดตรวจสุขภาพที่สนใจก่อนนะคะ',
+        mode === 'personalized_recommendation'
+          ? 'จากข้อมูลที่มี ฉันคัดแพ็กเกจที่น่าจะเหมาะให้ก่อนค่ะ'
+          : 'ได้ค่ะคุณบอส ดูแพ็กเกจนี้ก่อนได้ ถ้าอยากให้ช่วยเลือกให้เหมาะขึ้น บอกอายุหรือโรคประจำตัวเพิ่มได้ค่ะ',
         undefined,
-        { type: 'category-picker' },
+        [productGridCard((sourceProducts.length ? sourceProducts : fallbackProducts).slice(0, mode === 'personalized_recommendation' ? 1 : 4))],
       ),
     ]);
   }
 
-  function selectPackageCategory(categoryId: string) {
-    const category = packageCategories.find((entry) => entry.id === categoryId) ?? packageCategories[0];
-    const item = healthPackages.find((entry) => entry.id === category.packageId) ?? healthPackages[0];
+  function selectProduct(productId: string) {
+    const product = products.find((entry) => entry.id === productId) ?? fallbackProducts.find((entry) => entry.id === productId) ?? products[0] ?? fallbackProducts[0];
 
     setViewMode('chat');
     setMessages((current) => [
       ...current,
-      createMessage('user', `แพ็กเกจตรวจสุขภาพ ${category.code}: ${category.title}`),
+      createMessage('user', `สนใจ ${product.title}`),
       createMessage(
         'assistant',
-        `แพ็กเกจนี้คือ ${item.title} ราคา ${formatMoney(item.price)} เลือกสาขาที่สะดวกได้เลยค่ะ`,
+        `${product.title} ราคา ${formatProductMoney(product.priceAmount)} ค่ะ เลือกสาขาที่สะดวก แล้วฉันจะพาไปขั้นชำระเงิน`,
         undefined,
-        { categoryId: category.id, type: 'location-map' },
+        [branchLocationCard(product)],
       ),
     ]);
   }
 
-  function selectBranch(categoryId: string, branchId: string) {
-    const category = packageCategories.find((entry) => entry.id === categoryId) ?? packageCategories[0];
-    const item = healthPackages.find((entry) => entry.id === category.packageId) ?? healthPackages[0];
-    const branch = hospitalBranches.find((entry) => entry.id === branchId) ?? hospitalBranches[0];
+  function selectBranch(productId: string, branchId: string) {
+    const product = products.find((entry) => entry.id === productId) ?? fallbackProducts.find((entry) => entry.id === productId) ?? products[0] ?? fallbackProducts[0];
+    const branch = createProductBranch(product);
 
     setMessages((current) => [
       ...current,
       createMessage('user', `เลือกสาขา ${branch.name}`),
-      createMessage('assistant', `ได้ค่ะ จะพาไปชำระเงินสำหรับ ${item.title} ที่ ${branch.name}`),
+      createMessage('assistant', `ได้ค่ะ จะพาไปชำระเงินสำหรับ ${product.title} ที่ ${branch.name}`, undefined, [
+        {
+          branch,
+          id: `checkout-draft-${product.id}`,
+          product,
+          title: 'พร้อมชำระเงิน',
+          type: 'checkout_draft',
+        },
+      ]),
     ]);
 
     setTimeout(() => {
-      router.push(`/checkout?packageId=${encodeURIComponent(item.id)}&branchId=${encodeURIComponent(branch.id)}`);
+      router.push(`/checkout?productId=${encodeURIComponent(product.id)}&branchId=${encodeURIComponent(branchId)}`);
     }, 420);
   }
 
@@ -797,10 +1092,19 @@ export function PrototypeChatPanel() {
     setIsSending(true);
     setVoiceStatus(null);
 
+    const productRequestKind = classifyProductRequest(question);
+    const prototypeContext = createPrototypeContextAssessment(question, productRequestKind, nextMessages);
+
     try {
-      if (hasPackagePurchaseIntent(question)) {
+      if (productRequestKind !== 'none' && !canUseLiveAi) {
         await new Promise((resolve) => setTimeout(resolve, 260));
-        showPackageCategoryPicker();
+        const nextContextQuestion = prototypeContext.nextQuestion;
+
+        if (prototypeContext.mode === 'ask_context' && nextContextQuestion) {
+          setMessages((current) => [...current, createMessage('assistant', nextContextQuestion)]);
+        } else {
+          showProductGrid(products, prototypeContext.mode);
+        }
         return;
       }
 
@@ -814,7 +1118,20 @@ export function PrototypeChatPanel() {
 
       if (canUseLiveAi) {
         const result = await askAiWithRag({ messages: nextMessages, question });
-        const answer = createMessage('assistant', result.text, result.ragMatches);
+        const contextMode = result.contextAssessment?.mode ?? prototypeContext.mode;
+        const shouldShowProducts =
+          contextMode !== 'ask_context' &&
+          (result.intent === 'product_recommendation' || result.intent === 'product_compare' || productRequestKind === 'direct');
+        const productSource = products.length ? products : fallbackProducts;
+        const sourceForMode = contextMode === 'personalized_recommendation' ? productSource.slice(0, 1) : productSource;
+        const backendCards = contextMode === 'ask_context' ? result.uiCards.filter((card) => card.type !== 'product_grid') : result.uiCards;
+        const uiCards = shouldShowProducts ? withProductGridCard(backendCards, sourceForMode) : backendCards;
+        const answerText = hasProductGridCard(uiCards)
+          ? contextMode === 'personalized_recommendation'
+            ? 'จากข้อมูลที่มี ฉันคัดแพ็กเกจที่น่าจะเหมาะให้ก่อนค่ะ'
+            : cleanProductAssistantText(result.text)
+          : result.text;
+        const answer = createMessage('assistant', answerText, result.ragMatches, uiCards);
         setMessages((current) => [...current, answer]);
       } else {
         await new Promise((resolve) => setTimeout(resolve, 520));
@@ -904,7 +1221,7 @@ export function PrototypeChatPanel() {
                           index={index}
                           message={message}
                           onSelectBranch={selectBranch}
-                          onSelectCategory={selectPackageCategory}
+                          onSelectProduct={selectProduct}
                         />
                       ))
                     )}
@@ -1141,80 +1458,28 @@ const styles = StyleSheet.create({
   },
   orbWrap: {
     alignItems: 'center',
-    height: 150,
+    height: 132,
     justifyContent: 'center',
     marginTop: 0,
   },
-  logoHaloOuter: {
-    backgroundColor: 'rgba(107,153,255,0.22)',
-    borderColor: 'rgba(255,255,255,0.36)',
-    borderRadius: 999,
-    borderWidth: 1,
-    height: 122,
-    position: 'absolute',
-    width: 122,
-  },
-  logoOrbitRing: {
-    alignItems: 'center',
-    borderColor: 'rgba(255,255,255,0.4)',
-    borderRadius: 999,
-    borderWidth: 1,
-    height: 136,
-    justifyContent: 'center',
-    position: 'absolute',
-    width: 136,
-  },
-  logoOrbitDot: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 999,
-    height: 8,
-    position: 'absolute',
-    right: 13,
-    top: 30,
-    width: 8,
-  },
-  logoOrbitDotSoft: {
-    backgroundColor: '#9ECAFF',
-    borderRadius: 999,
-    bottom: 24,
-    height: 6,
-    left: 18,
-    position: 'absolute',
-    width: 6,
-  },
   logoCard: {
     alignItems: 'center',
-    borderRadius: 999,
-    height: 104,
+    height: 82,
     justifyContent: 'center',
-    shadowColor: '#5F8CFF',
-    shadowOffset: { height: 18, width: 0 },
-    shadowOpacity: 0.24,
-    shadowRadius: 22,
-    width: 104,
-  },
-  logoCardGlass: {
-    alignItems: 'center',
-    borderColor: 'rgba(255,255,255,0.62)',
-    borderRadius: 999,
-    borderWidth: 1,
-    height: 104,
-    justifyContent: 'center',
-    overflow: 'hidden',
-    width: 104,
+    width: 190,
   },
   heroLogoImage: {
-    height: 88,
-    width: 88,
+    height: 78,
+    width: 190,
   },
   logoSparkOne: {
     position: 'absolute',
-    right: 45,
-    top: 17,
+    right: 56,
+    top: 14,
   },
   logoSparkTwo: {
-    bottom: 20,
-    left: 47,
+    bottom: 18,
+    left: 58,
     opacity: 0.5,
     position: 'absolute',
     transform: [{ scale: 0.58 }],
@@ -1351,6 +1616,27 @@ const styles = StyleSheet.create({
     fontSize: 12.4,
     fontWeight: '900',
     lineHeight: 16,
+  },
+  memorySavedCard: {
+    backgroundColor: 'rgba(255,255,255,0.28)',
+    borderColor: 'rgba(255,255,255,0.6)',
+    borderRadius: 16,
+    borderWidth: 1,
+    gap: 3,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    width: 205,
+  },
+  memorySavedTitle: {
+    color: '#4F70EE',
+    fontSize: 9.5,
+    fontWeight: '900',
+  },
+  memorySavedText: {
+    color: '#4B5F8C',
+    fontSize: 8.8,
+    fontWeight: '700',
+    lineHeight: 12,
   },
   categoryGrid: {
     flexDirection: 'row',

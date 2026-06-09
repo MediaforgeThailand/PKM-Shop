@@ -47,6 +47,28 @@ const englishStopWords = new Set([
   'about',
 ]);
 
+const productDiscoveryTerms = [
+  'แพ็กเกจ',
+  'แพ็คเกจ',
+  'ตรวจสุขภาพ',
+  'ตรวจเลือด',
+  'เจาะเลือด',
+  'แล็บ',
+  'โปรดักส์',
+  'โปรดัก',
+  'สินค้า',
+  'บริการ',
+  'รายการตรวจ',
+  'มีอะไรบ้าง',
+  'ทั้งหมด',
+  'ราคา',
+  'blood test',
+  'lab test',
+  'checkup',
+  'package',
+  'product',
+];
+
 const intentRules: { categories: RagCategory[]; terms: string[] }[] = [
   {
     categories: ['safety.escalation'],
@@ -73,6 +95,10 @@ const intentRules: { categories: RagCategory[]; terms: string[] }[] = [
   {
     categories: ['ops.referral'],
     terms: ['referral', 'code', 'โค้ด', 'หมอแนะนำ', 'affiliate', 'commission', 'ค่าคอม'],
+  },
+  {
+    categories: ['marketplace.product'],
+    terms: productDiscoveryTerms,
   },
   {
     categories: ['care.checkup_preparation'],
