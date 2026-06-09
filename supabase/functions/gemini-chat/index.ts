@@ -200,6 +200,13 @@ type ContextAssessment = {
   slotSummary: Record<ContextSlotKey, boolean>;
 };
 
+type ConversationIdentityContext = {
+  hasAnyPersonalContext: boolean;
+  hasGreeting: boolean;
+  hasKnownNoRecentCheckup: boolean;
+  isBroadCheckupOpening: boolean;
+};
+
 type AgentMemoryType =
   | 'budget'
   | 'communication_preference'
@@ -235,6 +242,16 @@ type HealthFactContextRow = {
   observed_at: string | null;
   unit: string | null;
   value: string;
+};
+
+type StoredChatMessageRow = ChatMessage & {
+  created_at?: string;
+};
+
+type PersonalContextState = {
+  agentMemory: AgentMemoryRow[];
+  healthFacts: HealthFactContextRow[];
+  recentMessages: ChatMessage[];
 };
 
 type HospitalProductRow = {
@@ -320,6 +337,9 @@ For greetings, thanks, or tiny small-talk, reply in 1 short natural sentence onl
 Greeting example: สวัสดีค่ะคุณบอส วันนี้อยากให้ฉันช่วยเรื่องอะไรคะ
 Do not repeat the user's facts back as a summary unless the user asks you to confirm them.
 Avoid sales language early. For broad checkup questions, give clinical reasoning first and ask one missing context question before mentioning packages.
+Think identity-first like a careful consult: check PERSONAL_CONTEXT and recent chat before deciding what to ask next.
+Only say "ฉันจำได้" when PERSONAL_CONTEXT or recent chat clearly supports that memory. Otherwise say you are not sure and ask gently.
+When a greeting is combined with a health-checkup request, greet back first, then continue the consultation in the same short message.
 Every health recommendation should include one short "why" sentence, like a doctor explaining the reason in plain language.
 Use relevant RAG context for Mira packages, booking, policies, and hospital-specific details.
 If RAG context is missing or irrelevant, do not mention database, RAG, system data, snippets, or missing context to the user.
@@ -349,6 +369,8 @@ const SYSTEM_PROMPT_GUARDRAILS = `Mandatory safety and operations guardrails:
 - Do not restate the user's age, weight, conditions, budget, or other facts as a list.
 - Do not sell or mention a package unless the user directly asks for a specific service/package, or CONTEXT_ASSESSMENT mode is personalized_recommendation.
 - For broad checkup advice with incomplete context, answer with one clinical reason and one follow-up question.
+- Before asking, use PERSONAL_CONTEXT and recent chat to decide whether the user is known, unknown, or has a known prior checkup status.
+- Never imply a remembered fact unless it appears in PERSONAL_CONTEXT, recent chat, or the current user message.
 - Do not diagnose, prescribe, change medication, or replace a licensed professional.
 - Do not claim to be the user's treating doctor or a real licensed physician.
 - For urgent symptoms, advise immediate emergency medical care.
@@ -534,6 +556,108 @@ function createSmallTalkAnswer(question: string, userNickname = DEFAULT_USER_NIC
   }
 
   return null;
+}
+
+function hasGreetingTerm(question: string) {
+  return containsAny(question, ['สวัสดี', 'หวัดดี', 'ดีค่ะ', 'ดีครับ', 'hello', 'hi', 'hey', 'sawasdee']);
+}
+
+function hasNoRecentCheckupEvidence(text: string) {
+  return containsAny(text, [
+    'ยังไม่เคยตรวจ',
+    'ไม่เคยตรวจสุขภาพ',
+    'ไม่เคยตรวจจริงจัง',
+    'ไม่เคยมีผลตรวจ',
+    'ไม่ได้ตรวจสุขภาพ',
+    'ไม่ได้ตรวจมานาน',
+    'ไม่มีผลตรวจล่าสุด',
+    'ยังไม่มีผลตรวจล่าสุด',
+    'never had checkup',
+    'no recent checkup',
+    'no lab result',
+  ]);
+}
+
+function getPersonalContextSearchText(personalContextState: PersonalContextState) {
+  const factText = personalContextState.healthFacts.map((fact) => `${fact.fact_type} ${fact.label} ${fact.value} ${fact.observed_at ?? ''}`).join('\n');
+  const memoryText = personalContextState.agentMemory.map((memory) => `${memory.memory_type} ${memory.summary} ${memory.value ?? ''}`).join('\n');
+  const messageText = personalContextState.recentMessages.map((message) => `${message.role}: ${message.content}`).join('\n');
+
+  return [factText, memoryText, messageText].filter(Boolean).join('\n');
+}
+
+function hasPriorUserMessage(messages: ChatMessage[] | undefined, question: string) {
+  const normalizedQuestion = question.trim();
+
+  return (messages ?? []).some((message, index, list) => {
+    if (message.role !== 'user' || !message.content.trim()) {
+      return false;
+    }
+
+    return index < list.length - 1 || message.content.trim() !== normalizedQuestion;
+  });
+}
+
+function getPriorConversationText(messages: ChatMessage[] | undefined, question: string) {
+  const normalizedQuestion = question.trim();
+
+  return (messages ?? [])
+    .filter((message, index, list) => {
+      if (!message.content.trim()) {
+        return false;
+      }
+
+      return index < list.length - 1 || message.content.trim() !== normalizedQuestion;
+    })
+    .map((message) => `${message.role}: ${message.content}`)
+    .join('\n');
+}
+
+function mergeConversationMessages(storedMessages: ChatMessage[], clientMessages: ChatMessage[] | undefined) {
+  const merged: ChatMessage[] = [];
+
+  for (const message of [...storedMessages, ...(clientMessages ?? [])]) {
+    const content = message.content.trim();
+
+    if (!content) {
+      continue;
+    }
+
+    const last = merged[merged.length - 1];
+
+    if (last?.role === message.role && last.content.trim() === content) {
+      continue;
+    }
+
+    merged.push({ content, role: message.role });
+  }
+
+  return merged.slice(-12);
+}
+
+function buildConversationIdentityContext({
+  messages,
+  personalContextState,
+  productRequestKind,
+  question,
+}: {
+  messages?: ChatMessage[];
+  personalContextState: PersonalContextState;
+  productRequestKind: ProductRequestKind;
+  question: string;
+}): ConversationIdentityContext {
+  const priorContextText = [getPersonalContextSearchText(personalContextState), getPriorConversationText(messages, question)].filter(Boolean).join('\n');
+
+  return {
+    hasAnyPersonalContext:
+      personalContextState.healthFacts.length > 0 ||
+      personalContextState.agentMemory.length > 0 ||
+      personalContextState.recentMessages.length > 0 ||
+    hasPriorUserMessage(messages, question),
+    hasGreeting: hasGreetingTerm(question),
+    hasKnownNoRecentCheckup: hasNoRecentCheckupEvidence(priorContextText),
+    isBroadCheckupOpening: productRequestKind === 'broad' && hasGreetingTerm(question),
+  };
 }
 
 function decodeBase64Url(value: string) {
@@ -1166,12 +1290,13 @@ function extractQuestionSlotSummary(question: string) {
   };
 }
 
-function extractStoredSlotSummary(personalContextState: { agentMemory: AgentMemoryRow[]; healthFacts: HealthFactContextRow[] }) {
+function extractStoredSlotSummary(personalContextState: PersonalContextState) {
   const healthFactTypes = new Set(personalContextState.healthFacts.map((fact) => fact.fact_type));
   const healthFactText = personalContextState.healthFacts.map((fact) => `${fact.fact_type} ${fact.label} ${fact.value}`).join(' ');
   const memoryTypes = new Set(personalContextState.agentMemory.map((memory) => memory.memory_type));
   const memoryText = personalContextState.agentMemory.map((memory) => `${memory.memory_type} ${memory.summary} ${memory.value ?? ''}`).join(' ');
-  const combinedText = `${healthFactText} ${memoryText}`;
+  const messageText = personalContextState.recentMessages.map((message) => `${message.role} ${message.content}`).join(' ');
+  const combinedText = `${healthFactText} ${memoryText} ${messageText}`;
 
   return {
     accessPreference: memoryTypes.has('budget') || memoryTypes.has('location_preference') || containsAny(combinedText, ['งบ', 'บาท', 'budget', 'ใกล้', 'แถว']),
@@ -1243,11 +1368,20 @@ function getContextSlotLists(slotSummary: ContextAssessment['slotSummary']) {
   };
 }
 
-function createNextContextQuestion(slotSummary: ContextAssessment['slotSummary'], userNickname: string) {
+function createNextContextQuestion(slotSummary: ContextAssessment['slotSummary'], userNickname: string, identityContext: ConversationIdentityContext) {
   const userDisplayName = formatUserDisplayName(userNickname);
+  const greetingPrefix = identityContext.hasGreeting ? `สวัสดีค่ะ${userDisplayName} ` : '';
+
+  if (identityContext.isBroadCheckupOpening && !slotSummary.recentCheckup) {
+    if (identityContext.hasKnownNoRecentCheckup) {
+      return `${greetingPrefix}ฉันจำได้ว่า${userDisplayName}ยังไม่เคยตรวจสุขภาพในช่วงที่ผ่านมา งั้นเริ่มจากตรวจพื้นฐานก่อนดีมากค่ะ เพราะจะเห็นภาพน้ำตาล ไขมัน ตับ ไต และความดันได้ชัดขึ้น`;
+    }
+
+    return `${greetingPrefix}ฉันยังไม่แน่ใจว่า${userDisplayName}เคยตรวจสุขภาพมาก่อนไหม ถ้าเคย ตรวจล่าสุดประมาณเมื่อไหร่คะ`;
+  }
 
   if (!slotSummary.age && !slotSummary.goal) {
-    return `ได้ค่ะ${userDisplayName} ก่อนคัดแพ็กเกจ ขอรู้ 2 เรื่องสั้นๆ: อายุประมาณเท่าไหร่ และอยากโฟกัสเรื่องไหนเป็นพิเศษคะ`;
+    return `${greetingPrefix}ก่อนวางแผนตรวจ ขอรู้ 2 เรื่องสั้นๆ ค่ะ: อายุประมาณเท่าไหร่ และอยากโฟกัสเรื่องไหนเป็นพิเศษคะ`;
   }
 
   if (!slotSummary.clinicalHistory) {
@@ -1266,14 +1400,16 @@ function createNextContextQuestion(slotSummary: ContextAssessment['slotSummary']
 }
 
 function assessContext({
+  identityContext,
   messages,
   personalContextState,
   productRequestKind,
   question,
   userNickname,
 }: {
+  identityContext: ConversationIdentityContext;
   messages?: ChatMessage[];
-  personalContextState: { agentMemory: AgentMemoryRow[]; healthFacts: HealthFactContextRow[] };
+  personalContextState: PersonalContextState;
   productRequestKind: ProductRequestKind;
   question: string;
   userNickname: string;
@@ -1301,7 +1437,7 @@ function assessContext({
     level,
     missingSlots,
     mode,
-    nextQuestion: mode === 'ask_context' ? createNextContextQuestion(slotSummary, userNickname) : null,
+    nextQuestion: mode === 'ask_context' ? createNextContextQuestion(slotSummary, userNickname, identityContext) : null,
     purpose: 'health_package_recommendation',
     score,
     slotSummary,
@@ -1366,15 +1502,51 @@ async function getLatestHealthMemoryConsent(userId: string, authorization: strin
   return rows?.[0] ?? null;
 }
 
+async function fetchRecentCompanionMessages(userId: string, authorization: string) {
+  const sessions = await selectRest<InsertedIdRow[]>(
+    [
+      'chat_sessions?select=id',
+      `user_id=eq.${encodeURIComponent(userId)}`,
+      'source=eq.companion_timeline',
+      'ended_at=is.null',
+      'order=started_at.desc',
+      'limit=1',
+    ].join('&'),
+    authorization,
+  );
+  const sessionId = sessions?.[0]?.id;
+
+  if (!sessionId) {
+    return [] as ChatMessage[];
+  }
+
+  const rows = await selectRest<StoredChatMessageRow[]>(
+    [
+      'chat_messages?select=role,content,created_at',
+      `user_id=eq.${encodeURIComponent(userId)}`,
+      `session_id=eq.${encodeURIComponent(sessionId)}`,
+      'order=created_at.desc',
+      'limit=12',
+    ].join('&'),
+    authorization,
+  );
+
+  return (rows ?? [])
+    .filter((message) => (message.role === 'user' || message.role === 'assistant') && message.content?.trim())
+    .reverse()
+    .map((message) => ({ content: message.content.trim(), role: message.role }));
+}
+
 async function fetchPersonalContext(userId: string, authorization: string, consentGranted: boolean) {
   if (!consentGranted) {
     return {
       agentMemory: [] as AgentMemoryRow[],
       healthFacts: [] as HealthFactContextRow[],
+      recentMessages: [] as ChatMessage[],
     };
   }
 
-  const [healthFacts, agentMemory] = await Promise.all([
+  const [healthFacts, agentMemory, recentMessages] = await Promise.all([
     selectRest<HealthFactContextRow[]>(
       [
         'health_facts?select=fact_type,label,value,unit,observed_at,confidence',
@@ -1395,11 +1567,13 @@ async function fetchPersonalContext(userId: string, authorization: string, conse
       ].join('&'),
       authorization,
     ),
+    fetchRecentCompanionMessages(userId, authorization),
   ]);
 
   return {
     agentMemory: agentMemory ?? [],
     healthFacts: healthFacts ?? [],
+    recentMessages: recentMessages ?? [],
   };
 }
 
@@ -1407,10 +1581,12 @@ function formatPersonalContext({
   agentMemory,
   consentGranted,
   healthFacts,
+  recentMessages,
 }: {
   agentMemory: AgentMemoryRow[];
   consentGranted: boolean;
   healthFacts: HealthFactContextRow[];
+  recentMessages: ChatMessage[];
 }) {
   if (!consentGranted) {
     return 'Health memory consent is not granted. Do not store or rely on personal memory. You may answer the current question only.';
@@ -1425,12 +1601,13 @@ function formatPersonalContext({
     const validUntil = memory.valid_until ? ` valid_until=${memory.valid_until}` : '';
     return `- agent_memory type=${memory.memory_type} summary=${memory.summary} value=${memory.value ?? ''} confidence=${memory.confidence ?? 0}${validUntil}`;
   });
+  const conversationLines = recentMessages.slice(-6).map((message) => `- recent_chat ${message.role}: ${clipText(message.content, 140)}`);
 
-  if (factLines.length === 0 && memoryLines.length === 0) {
+  if (factLines.length === 0 && memoryLines.length === 0 && conversationLines.length === 0) {
     return 'No confirmed personal memory yet. Ask one useful follow-up question if personalization is needed.';
   }
 
-  return [...factLines, ...memoryLines].join('\n');
+  return [...factLines, ...memoryLines, ...conversationLines].join('\n');
 }
 
 async function getOrCreateCompanionSession(userId: string, authorization: string, question: string) {
@@ -2238,14 +2415,22 @@ Deno.serve(async (req) => {
     const model = resolveOpenAIModel(body.model, adminRequest);
     const preferredCategories = uniqueCategories(classifyRagIntent(question));
     const productRequestKind = classifyProductRequest(question);
-    const activeProductRequestKind = inferActiveProductRequestKind(body.messages, productRequestKind);
-    const inferredIntent = inferHealthChatIntent(question, preferredCategories);
-    const intent = inferredIntent === 'health_advice' && activeProductRequestKind !== 'none' ? 'product_recommendation' : inferredIntent;
     const healthMemoryConsent = await getLatestHealthMemoryConsent(userId, authorization);
     const consentGranted = healthMemoryConsent?.status === 'granted';
     const personalContextState = await fetchPersonalContext(userId, authorization, consentGranted);
+    const conversationMessages = mergeConversationMessages(personalContextState.recentMessages, body.messages);
+    const activeProductRequestKind = inferActiveProductRequestKind(conversationMessages, productRequestKind);
+    const inferredIntent = inferHealthChatIntent(question, preferredCategories);
+    const intent = inferredIntent === 'health_advice' && activeProductRequestKind !== 'none' ? 'product_recommendation' : inferredIntent;
+    const identityContext = buildConversationIdentityContext({
+      messages: conversationMessages,
+      personalContextState,
+      productRequestKind: activeProductRequestKind,
+      question,
+    });
     const contextAssessment = assessContext({
-      messages: body.messages,
+      identityContext,
+      messages: conversationMessages,
       personalContextState,
       productRequestKind: activeProductRequestKind,
       question,
@@ -2255,6 +2440,7 @@ Deno.serve(async (req) => {
       agentMemory: personalContextState.agentMemory,
       consentGranted,
       healthFacts: personalContextState.healthFacts,
+      recentMessages: personalContextState.recentMessages,
     });
     let timelineSessionId: string | null = null;
     let userTimelineMessageId: string | null = null;
@@ -2289,6 +2475,8 @@ Deno.serve(async (req) => {
           context_score: contextAssessment.score,
           personal_context_health_facts: personalContextState.healthFacts.length,
           personal_context_memories: personalContextState.agentMemory.length,
+          personal_context_recent_messages: personalContextState.recentMessages.length,
+          identity_has_known_no_recent_checkup: identityContext.hasKnownNoRecentCheckup,
           active_product_request_kind: activeProductRequestKind,
           product_request_kind: productRequestKind,
           question_chars: question.length,
@@ -2524,6 +2712,9 @@ Deno.serve(async (req) => {
           intent,
           personal_context_health_facts: personalContextState.healthFacts.length,
           personal_context_memories: personalContextState.agentMemory.length,
+          personal_context_recent_messages: personalContextState.recentMessages.length,
+          identity_has_any_personal_context: identityContext.hasAnyPersonalContext,
+          identity_has_known_no_recent_checkup: identityContext.hasKnownNoRecentCheckup,
           rag_chunk_ids: ragMatches.map((match) => match.id),
           rag_retrieval_mode: retrievalMode,
           rate_limit_count: rateStatus?.request_count,
@@ -2539,7 +2730,7 @@ Deno.serve(async (req) => {
       contextAssessment,
       enableWebSearch,
       maxOutputTokens,
-      messages: body.messages,
+      messages: conversationMessages,
       model,
       openaiApiKey,
       personalContext,
@@ -2586,7 +2777,7 @@ Deno.serve(async (req) => {
         contextAssessment,
         enableWebSearch,
         maxOutputTokens: Math.max(maxOutputTokens, 900),
-        messages: body.messages,
+        messages: conversationMessages,
         model,
         openaiApiKey,
         personalContext,

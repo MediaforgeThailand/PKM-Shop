@@ -203,8 +203,38 @@ function hasAgeSlot(text: string) {
     .some((line) => /^\s*(1[89]|[2-8][0-9]|9[0-9])\s+/.test(line) && includesAnyTerm(line.toLowerCase(), ['เรื่อง', 'โฟกัส', 'น้ำตาล', 'ไขมัน', 'สุขภาพ', 'concern', 'focus']));
 }
 
+function prototypeUserDisplayName() {
+  return prototypeUserNickname.startsWith('คุณ') ? prototypeUserNickname : `คุณ${prototypeUserNickname}`;
+}
+
+function hasGreetingTerm(text: string) {
+  return includesAnyTerm(text.toLowerCase(), ['สวัสดี', 'หวัดดี', 'ดีค่ะ', 'ดีครับ', 'hello', 'hi', 'hey', 'sawasdee']);
+}
+
+function hasNoRecentCheckupEvidence(text: string) {
+  return includesAnyTerm(text.toLowerCase(), [
+    'ยังไม่เคยตรวจ',
+    'ไม่เคยตรวจสุขภาพ',
+    'ไม่เคยตรวจจริงจัง',
+    'ไม่เคยมีผลตรวจ',
+    'ไม่ได้ตรวจสุขภาพ',
+    'ไม่ได้ตรวจมานาน',
+    'ไม่มีผลตรวจล่าสุด',
+    'ยังไม่มีผลตรวจล่าสุด',
+    'never had checkup',
+    'no recent checkup',
+  ]);
+}
+
 function createPrototypeContextAssessment(question: string, productRequestKind: ProductRequestKind, history: PrototypeChatMessage[] = []): ChatContextAssessment {
-  const userText = [...history.filter((message) => message.role === 'user').map((message) => message.content), question].join(' ').toLowerCase();
+  const historyUserMessages = history.filter((message) => message.role === 'user').map((message) => message.content.trim()).filter(Boolean);
+  const userMessages = historyUserMessages[historyUserMessages.length - 1] === question.trim() ? historyUserMessages : [...historyUserMessages, question.trim()];
+  const priorUserText = userMessages.slice(0, -1).join(' ').toLowerCase();
+  const userText = userMessages.join(' ').toLowerCase();
+  const hasGreeting = hasGreetingTerm(question);
+  const greetingPrefix = hasGreeting ? `สวัสดีค่ะ${prototypeUserDisplayName()} ` : '';
+  const isBroadCheckupOpening = productRequestKind === 'broad' && hasGreeting;
+  const hasKnownNoRecentCheckup = hasNoRecentCheckupEvidence(priorUserText);
   const slotSummary = {
     accessPreference: includesAnyTerm(userText, ['งบ', 'บาท', 'ราคา', 'budget', 'ใกล้', 'แถว', 'อยู่', 'สะดวก']),
     age: hasAgeSlot(userText),
@@ -243,8 +273,12 @@ function createPrototypeContextAssessment(question: string, productRequestKind: 
       : productRequestKind === 'broad' && productReady
         ? 'personalized_recommendation'
         : 'ask_context';
-  const nextQuestion = !slotSummary.age || !slotSummary.goal
-    ? 'ได้ค่ะคุณบอส ก่อนคัดแพ็กเกจ ขอรู้ 2 เรื่องสั้นๆ: อายุประมาณเท่าไหร่ และอยากโฟกัสเรื่องไหนเป็นพิเศษคะ'
+  const nextQuestion = isBroadCheckupOpening && !slotSummary.recentCheckup
+    ? hasKnownNoRecentCheckup
+      ? `${greetingPrefix}ฉันจำได้ว่า${prototypeUserDisplayName()}ยังไม่เคยตรวจสุขภาพในช่วงที่ผ่านมา งั้นเริ่มจากตรวจพื้นฐานก่อนดีมากค่ะ เพราะจะเห็นภาพน้ำตาล ไขมัน ตับ ไต และความดันได้ชัดขึ้น`
+      : `${greetingPrefix}ฉันยังไม่แน่ใจว่า${prototypeUserDisplayName()}เคยตรวจสุขภาพมาก่อนไหม ถ้าเคย ตรวจล่าสุดประมาณเมื่อไหร่คะ`
+    : !slotSummary.age || !slotSummary.goal
+      ? `${greetingPrefix}ก่อนวางแผนตรวจ ขอรู้ 2 เรื่องสั้นๆ ค่ะ: อายุประมาณเท่าไหร่ และอยากโฟกัสเรื่องไหนเป็นพิเศษคะ`
     : !slotSummary.clinicalHistory
       ? 'ขอเพิ่มอีกนิดค่ะคุณบอส มีโรคประจำตัว ยาที่กินประจำ หรือแพ้ยาอะไรไหมคะ'
       : !slotSummary.recentCheckup
