@@ -33,10 +33,11 @@ Expected flow:
 1. User asks broadly for a checkup.
 2. Mira first checks confirmed memory and the recent companion timeline so the reply feels like it knows whether the user is new or returning.
 3. If the user greets and broadly asks for a checkup, Mira greets back, then asks about the latest checkup unless prior history already shows the user has not checked recently.
-4. If context score is below 85, or key slots like latest checkup and location/budget are missing, chat asks one short follow-up question and returns no product card.
-5. If the user asks for a specific service, or context score is truly ready, chat returns product cards from `hospital_products`.
-6. Personalized recommendations show one product card; direct browsing can show up to four.
-7. User taps a product, sees one `branch_location` card, then lands on checkout with `productId` and `branchId`.
+4. If the user answers "I don't remember" after a latest-checkup question, Mira treats the latest-checkup slot as answered unknown and moves to the next missing context instead of repeating the same question.
+5. If context score is below 85, or key slots like latest checkup and location/budget are missing, chat asks one short follow-up question and returns no product card.
+6. If the user asks for a specific service, or context score is truly ready, chat returns product cards from `hospital_products`.
+7. Personalized recommendations show one product card; direct browsing can show up to four.
+8. User taps a product, sees one `branch_location` card, then lands on checkout with `productId` and `branchId`.
 
 ## Memory Rules
 

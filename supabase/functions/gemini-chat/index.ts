@@ -1237,6 +1237,32 @@ function getRecentUserHistoryText(messages: ChatMessage[] | undefined, question:
   return recentUserMessages.join('\n');
 }
 
+function getLastAssistantMessageBeforeQuestion(messages: ChatMessage[] | undefined, question: string) {
+  const normalizedQuestion = question.trim();
+
+  for (const message of [...(messages ?? [])].reverse()) {
+    if (message.role === 'user' && message.content.trim() === normalizedQuestion) {
+      continue;
+    }
+
+    if (message.role === 'assistant' && message.content.trim()) {
+      return message.content;
+    }
+  }
+
+  return '';
+}
+
+function isUnknownRecentCheckupReply(messages: ChatMessage[] | undefined, question: string) {
+  if (!containsAny(question, ['จำไม่ได้', 'ไม่แน่ใจ', 'ไม่รู้', 'นานแล้ว', 'น่าจะนาน', 'หลายปี', 'จำไม่ได้แล้ว', 'not sure', "don't remember", 'cannot remember'])) {
+    return false;
+  }
+
+  const lastAssistantMessage = getLastAssistantMessageBeforeQuestion(messages, question);
+
+  return containsAny(lastAssistantMessage, ['ตรวจล่าสุด', 'ผลตรวจล่าสุด', 'เคยตรวจครั้งล่าสุด', 'ตรวจสุขภาพมาก่อน', 'last checkup', 'latest checkup', 'lab result']);
+}
+
 function inferActiveProductRequestKind(messages: ChatMessage[] | undefined, currentRequestKind: ProductRequestKind): ProductRequestKind {
   if (currentRequestKind !== 'none') {
     return currentRequestKind;
@@ -1415,13 +1441,14 @@ function assessContext({
   userNickname: string;
 }): ContextAssessment {
   const questionSlots = extractQuestionSlotSummary(getRecentUserHistoryText(messages, question));
+  const answeredUnknownRecentCheckup = isUnknownRecentCheckupReply(messages, question);
   const storedSlots = extractStoredSlotSummary(personalContextState);
   const slotSummary = {
     accessPreference: questionSlots.accessPreference || storedSlots.accessPreference,
     age: questionSlots.age || storedSlots.age,
     clinicalHistory: questionSlots.clinicalHistory || storedSlots.clinicalHistory,
     goal: questionSlots.goal || storedSlots.goal,
-    recentCheckup: questionSlots.recentCheckup || storedSlots.recentCheckup,
+    recentCheckup: questionSlots.recentCheckup || storedSlots.recentCheckup || answeredUnknownRecentCheckup,
     riskLifestyle: questionSlots.riskLifestyle || storedSlots.riskLifestyle,
   };
   const score = getContextScore(slotSummary);

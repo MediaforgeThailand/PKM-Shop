@@ -226,6 +226,32 @@ function hasNoRecentCheckupEvidence(text: string) {
   ]);
 }
 
+function getLastAssistantMessageBeforeQuestion(history: PrototypeChatMessage[], question: string) {
+  const normalizedQuestion = question.trim();
+
+  for (const message of [...history].reverse()) {
+    if (message.role === 'user' && message.content.trim() === normalizedQuestion) {
+      continue;
+    }
+
+    if (message.role === 'assistant' && message.content.trim()) {
+      return message.content;
+    }
+  }
+
+  return '';
+}
+
+function isUnknownRecentCheckupReply(history: PrototypeChatMessage[], question: string) {
+  if (!includesAnyTerm(question.toLowerCase(), ['จำไม่ได้', 'ไม่แน่ใจ', 'ไม่รู้', 'นานแล้ว', 'น่าจะนาน', 'หลายปี', 'จำไม่ได้แล้ว', 'not sure', "don't remember", 'cannot remember'])) {
+    return false;
+  }
+
+  const lastAssistantMessage = getLastAssistantMessageBeforeQuestion(history, question);
+
+  return includesAnyTerm(lastAssistantMessage.toLowerCase(), ['ตรวจล่าสุด', 'ผลตรวจล่าสุด', 'เคยตรวจครั้งล่าสุด', 'ตรวจสุขภาพมาก่อน', 'last checkup', 'latest checkup', 'lab result']);
+}
+
 function createPrototypeContextAssessment(question: string, productRequestKind: ProductRequestKind, history: PrototypeChatMessage[] = []): ChatContextAssessment {
   const historyUserMessages = history.filter((message) => message.role === 'user').map((message) => message.content.trim()).filter(Boolean);
   const userMessages = historyUserMessages[historyUserMessages.length - 1] === question.trim() ? historyUserMessages : [...historyUserMessages, question.trim()];
@@ -235,12 +261,13 @@ function createPrototypeContextAssessment(question: string, productRequestKind: 
   const greetingPrefix = hasGreeting ? `สวัสดีค่ะ${prototypeUserDisplayName()} ` : '';
   const isBroadCheckupOpening = productRequestKind === 'broad' && hasGreeting;
   const hasKnownNoRecentCheckup = hasNoRecentCheckupEvidence(priorUserText);
+  const answeredUnknownRecentCheckup = isUnknownRecentCheckupReply(history, question);
   const slotSummary = {
     accessPreference: includesAnyTerm(userText, ['งบ', 'บาท', 'ราคา', 'budget', 'ใกล้', 'แถว', 'อยู่', 'สะดวก']),
     age: hasAgeSlot(userText),
     clinicalHistory: includesAnyTerm(userText, ['โรคประจำตัว', 'ไม่มีโรค', 'ไม่เป็นโรค', 'ไม่เคยมีประวัติโรค', 'ไม่มีประวัติโรค', 'ประวัติโรค', 'ยา', 'แพ้ยา', 'เบาหวาน', 'ความดัน', 'ไขมัน', 'หัวใจ']),
     goal: includesAnyTerm(userText, ['อยากเช็ค', 'อยากเช็ก', 'โฟกัส', 'กังวล', 'เป้าหมาย', 'ลดน้ำหนัก', 'น้ำตาล', 'ไขมัน', 'สุขภาพ', 'check']),
-    recentCheckup: includesAnyTerm(userText, ['ตรวจล่าสุด', 'ผลตรวจ', 'เคยตรวจ', 'ไม่เคยตรวจ', 'ปีที่แล้ว', 'เดือนที่แล้ว', 'ล่าสุด']),
+    recentCheckup: includesAnyTerm(userText, ['ตรวจล่าสุด', 'ผลตรวจ', 'เคยตรวจ', 'ไม่เคยตรวจ', 'ปีที่แล้ว', 'เดือนที่แล้ว', 'ล่าสุด']) || answeredUnknownRecentCheckup,
     riskLifestyle: includesAnyTerm(userText, ['น้ำหนัก', 'ส่วนสูง', 'bmi', 'สูบ', 'เหล้า', 'นอน', 'เครียด', 'ครอบครัว', 'เหนื่อย']),
   };
   const score =
