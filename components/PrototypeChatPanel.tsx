@@ -157,6 +157,19 @@ function classifyProductRequest(question: string): ProductRequestKind {
   return 'broad';
 }
 
+function inferActiveProductRequestKind(messages: PrototypeChatMessage[], currentRequestKind: ProductRequestKind): ProductRequestKind {
+  if (currentRequestKind !== 'none') {
+    return currentRequestKind;
+  }
+
+  const latestPriorProductKind = [...messages.filter((message) => message.role === 'user').slice(-8)]
+    .reverse()
+    .map((message) => classifyProductRequest(message.content))
+    .find((kind) => kind !== 'none');
+
+  return latestPriorProductKind ?? 'none';
+}
+
 function hasProductGridCard(cards?: ChatUiCard[]) {
   return cards?.some((card) => card.type === 'product_grid') ?? false;
 }
@@ -181,7 +194,13 @@ function cleanProductAssistantText(text: string) {
 }
 
 function hasAgeSlot(text: string) {
-  return /(?:อายุ|age)\s*[0-9]{1,3}/i.test(text) || /[0-9]{1,3}\s*(?:ปี|years?\s*old|yo)/i.test(text);
+  if (/(?:อายุ|age)\s*[0-9]{1,3}/i.test(text) || /[0-9]{1,3}\s*(?:ปี|years?\s*old|yo)/i.test(text)) {
+    return true;
+  }
+
+  return text
+    .split(/\r?\n/)
+    .some((line) => /^\s*(1[89]|[2-8][0-9]|9[0-9])\s+/.test(line) && includesAnyTerm(line.toLowerCase(), ['เรื่อง', 'โฟกัส', 'น้ำตาล', 'ไขมัน', 'สุขภาพ', 'concern', 'focus']));
 }
 
 function createPrototypeContextAssessment(question: string, productRequestKind: ProductRequestKind, history: PrototypeChatMessage[] = []): ChatContextAssessment {
@@ -1100,10 +1119,11 @@ export function PrototypeChatPanel() {
     setVoiceStatus(null);
 
     const productRequestKind = classifyProductRequest(question);
-    const prototypeContext = createPrototypeContextAssessment(question, productRequestKind, nextMessages);
+    const activeProductRequestKind = inferActiveProductRequestKind(nextMessages, productRequestKind);
+    const prototypeContext = createPrototypeContextAssessment(question, activeProductRequestKind, nextMessages);
 
     try {
-      if (productRequestKind !== 'none' && !canUseLiveAi) {
+      if (activeProductRequestKind !== 'none' && !canUseLiveAi) {
         await new Promise((resolve) => setTimeout(resolve, 260));
         const nextContextQuestion = prototypeContext.nextQuestion;
 
@@ -1128,7 +1148,7 @@ export function PrototypeChatPanel() {
         const contextMode = result.contextAssessment?.mode ?? prototypeContext.mode;
         const shouldShowProducts =
           contextMode !== 'ask_context' &&
-          (result.intent === 'product_recommendation' || result.intent === 'product_compare' || productRequestKind === 'direct');
+          (result.intent === 'product_recommendation' || result.intent === 'product_compare' || activeProductRequestKind === 'direct');
         const productSource = products.length ? products : fallbackProducts;
         const sourceForMode = contextMode === 'personalized_recommendation' ? productSource.slice(0, 1) : productSource;
         const backendCards = contextMode === 'ask_context' ? result.uiCards.filter((card) => card.type !== 'product_grid') : result.uiCards;

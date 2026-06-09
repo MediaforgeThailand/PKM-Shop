@@ -1098,8 +1098,42 @@ function classifyProductRequest(question: string): ProductRequestKind {
   return broadTerms.some((term) => normalizedQuestion.includes(term.toLowerCase())) ? 'broad' : 'direct';
 }
 
+function getRecentUserHistoryText(messages: ChatMessage[] | undefined, question: string) {
+  const recentUserMessages = (messages ?? [])
+    .filter((message) => message.role === 'user' && message.content.trim())
+    .slice(-8)
+    .map((message) => message.content.trim());
+  const normalizedQuestion = question.trim();
+  const lastUserMessage = recentUserMessages[recentUserMessages.length - 1];
+
+  if (!lastUserMessage || lastUserMessage !== normalizedQuestion) {
+    recentUserMessages.push(normalizedQuestion);
+  }
+
+  return recentUserMessages.join('\n');
+}
+
+function inferActiveProductRequestKind(messages: ChatMessage[] | undefined, currentRequestKind: ProductRequestKind): ProductRequestKind {
+  if (currentRequestKind !== 'none') {
+    return currentRequestKind;
+  }
+
+  const latestPriorProductKind = [...((messages ?? []).filter((message) => message.role === 'user').slice(-8))]
+    .reverse()
+    .map((message) => classifyProductRequest(message.content))
+    .find((kind) => kind !== 'none');
+
+  return latestPriorProductKind ?? 'none';
+}
+
 function hasAgeSlot(question: string) {
-  return /(?:อายุ|age)\s*[0-9]{1,3}/i.test(question) || /[0-9]{1,3}\s*(?:ปี|years?\s*old|yo)/i.test(question);
+  if (/(?:อายุ|age)\s*[0-9]{1,3}/i.test(question) || /[0-9]{1,3}\s*(?:ปี|years?\s*old|yo)/i.test(question)) {
+    return true;
+  }
+
+  return question
+    .split(/\r?\n/)
+    .some((line) => /^\s*(1[89]|[2-8][0-9]|9[0-9])\s+/.test(line) && containsAny(line, ['เรื่อง', 'โฟกัส', 'น้ำตาล', 'ไขมัน', 'สุขภาพ', 'concern', 'focus']));
 }
 
 function extractQuestionSlotSummary(question: string) {
@@ -1232,17 +1266,19 @@ function createNextContextQuestion(slotSummary: ContextAssessment['slotSummary']
 }
 
 function assessContext({
+  messages,
   personalContextState,
   productRequestKind,
   question,
   userNickname,
 }: {
+  messages?: ChatMessage[];
   personalContextState: { agentMemory: AgentMemoryRow[]; healthFacts: HealthFactContextRow[] };
   productRequestKind: ProductRequestKind;
   question: string;
   userNickname: string;
 }): ContextAssessment {
-  const questionSlots = extractQuestionSlotSummary(question);
+  const questionSlots = extractQuestionSlotSummary(getRecentUserHistoryText(messages, question));
   const storedSlots = extractStoredSlotSummary(personalContextState);
   const slotSummary = {
     accessPreference: questionSlots.accessPreference || storedSlots.accessPreference,
@@ -2202,13 +2238,16 @@ Deno.serve(async (req) => {
     const model = resolveOpenAIModel(body.model, adminRequest);
     const preferredCategories = uniqueCategories(classifyRagIntent(question));
     const productRequestKind = classifyProductRequest(question);
-    const intent = inferHealthChatIntent(question, preferredCategories);
+    const activeProductRequestKind = inferActiveProductRequestKind(body.messages, productRequestKind);
+    const inferredIntent = inferHealthChatIntent(question, preferredCategories);
+    const intent = inferredIntent === 'health_advice' && activeProductRequestKind !== 'none' ? 'product_recommendation' : inferredIntent;
     const healthMemoryConsent = await getLatestHealthMemoryConsent(userId, authorization);
     const consentGranted = healthMemoryConsent?.status === 'granted';
     const personalContextState = await fetchPersonalContext(userId, authorization, consentGranted);
     const contextAssessment = assessContext({
+      messages: body.messages,
       personalContextState,
-      productRequestKind,
+      productRequestKind: activeProductRequestKind,
       question,
       userNickname,
     });
@@ -2250,6 +2289,7 @@ Deno.serve(async (req) => {
           context_score: contextAssessment.score,
           personal_context_health_facts: personalContextState.healthFacts.length,
           personal_context_memories: personalContextState.agentMemory.length,
+          active_product_request_kind: activeProductRequestKind,
           product_request_kind: productRequestKind,
           question_chars: question.length,
         },
@@ -2451,6 +2491,7 @@ Deno.serve(async (req) => {
           context_mode: contextAssessment.mode,
           context_score: contextAssessment.score,
           product_card_count: products.length,
+          active_product_request_kind: activeProductRequestKind,
           product_request_kind: productRequestKind,
           retrieval_mode: retrievalMode,
           scores: ragMatches.map((match) => ({ id: match.id, score: match.score })),
@@ -2475,6 +2516,7 @@ Deno.serve(async (req) => {
         question_chars: question.length,
         metadata: {
           admin_prompt_override: adminRequest && Boolean(body.systemPromptOverride?.trim()),
+          active_product_request_kind: activeProductRequestKind,
           context_level: contextAssessment.level,
           context_mode: contextAssessment.mode,
           context_score: contextAssessment.score,
@@ -2582,7 +2624,7 @@ Deno.serve(async (req) => {
       authorization,
       consentGranted,
       consentId: healthMemoryConsent?.id,
-      productRequestKind,
+      productRequestKind: activeProductRequestKind,
       sourceMessageId: userTimelineMessageId,
       userId,
     });
