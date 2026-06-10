@@ -1,26 +1,26 @@
 # Chatbot Production Hardening
 
-This note documents the production-oriented chatbot controls added around OpenAI, RAG, prompt governance, logs, and health memory.
+This note documents the production-oriented chatbot controls added around OpenAI, the published MiraCare prompt, product-card rendering, logs, and health memory.
 
 ## Runtime Flow
 
 ```text
 Expo app
 -> Supabase Auth session
--> gemini-chat Edge Function
--> approved active rag_chunks
--> active prompt_versions row
+-> mira-chat Edge Function
+-> MiraCare prompt variables
+-> published OpenAI Platform prompt
 -> OpenAI Responses API
 -> persistent ai/rag/api logs
 -> app chat UI
 ```
 
-The app must not send full RAG context from mobile code. In Supabase mode it sends only the user question, short chat history, model hint, user nickname, and an optional admin-only prompt override. The Edge Function owns retrieval and prompt assembly.
+The app must not send full RAG context or prompt overrides from mobile code. In Supabase mode it sends only the user question, short chat history, and user nickname. The Edge Function supplies `brand_name`, `user_nickname`, `personal_context`, `recent_chat`, and `product_catalog`, then calls the published OpenAI Platform prompt with `store: false`.
 
 ## Production Tables
 
 - `app_user_roles`: app-level role gate for `admin`, `hospital_staff`, and `user`.
-- `prompt_versions`: versioned system prompts. The Edge Function uses the newest active prompt.
+- `prompt_versions`: legacy/local prompt governance table. The production MiraCare chat path uses the published OpenAI Platform prompt instead.
 - `ai_request_logs`: persistent model request lifecycle logs.
 - `rag_retrieval_logs`: persistent retrieval logs with matched chunk ids and categories.
 - `api_process_logs`: persistent Edge Function process logs.
@@ -28,9 +28,9 @@ The app must not send full RAG context from mobile code. In Supabase mode it sen
 - `chat_eval_cases`: seeded evaluation cases for prompt/RAG regression tests.
 - `ai_rate_limits`: per-user minute buckets used by `increment_ai_rate_limit`.
 
-## Admin Prompt Editing
+## Prompt Governance
 
-Only users with admin role in JWT metadata or `app_user_roles` should see the prompt editor. Saving from the app archives existing active prompt rows and inserts a new active `prompt_versions` row.
+The published MiraCare prompt is the source of truth. Prompt changes must be made and versioned in OpenAI Platform, then regression-tested before deployment. Runtime admin prompt overrides should not be layered onto the production chat path.
 
 ## Health Memory
 
@@ -39,7 +39,7 @@ Chat-derived personal health facts are stored in the patient health data vault, 
 ## Verification Checklist
 
 - Run database migrations including `20260605000000_chatbot_production_hardening.sql` and `20260605100000_user_nickname_chat_prompt.sql`.
-- Deploy `gemini-chat` with JWT verification enabled.
+- Deploy `mira-chat` with JWT verification enabled.
 - Confirm publishable-key-only calls return `401`.
 - Confirm an authenticated call returns `text`, `requestId`, and `ragMatches`.
 - Confirm log rows are written to `ai_request_logs`, `rag_retrieval_logs`, and `api_process_logs`.

@@ -36,6 +36,7 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
+    "chat:quality": "node scripts/mira-chat-quality-check.mjs",
     "typecheck": "tsc --noEmit"
   },
   "private": true

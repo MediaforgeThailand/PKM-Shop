@@ -27,7 +27,7 @@ User message
 
 If the user is not authenticated, the app does not save health facts. It only writes an in-session UI log that auto-save was skipped.
 
-The index screen includes an email/password Supabase Auth MVP. `gemini-chat` is deployed with JWT verification enabled, so unauthenticated users can use only local RAG preview.
+The index screen includes an email/password Supabase Auth MVP. `mira-chat` is deployed with JWT verification enabled, so unauthenticated users can use only local RAG preview.
 
 Current auto-save is a prototype shortcut requested for internal testing. Before store launch, replace this with explicit PDPA-ready consent, purpose text, retention settings, and user controls. Do not silently collect personal health data in production without a disclosed purpose and lawful consent basis.
 
@@ -97,7 +97,7 @@ This is intentionally conservative and should be replaced or expanded with a rev
 - Add retention rules and deletion jobs.
 - Add encryption strategy for high-risk fields, for example with Supabase Vault or application-level encryption.
 - Add model/provider policy review before sending personal health facts into an AI prompt.
-- Keep public abuse protection and rate limiting enabled for `gemini-chat`.
+- Keep public abuse protection and rate limiting enabled for `mira-chat`.
 
 ## Files
 

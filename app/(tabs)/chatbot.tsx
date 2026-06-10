@@ -2,8 +2,8 @@ import { Link } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Image,
   KeyboardAvoidingView,
-  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -20,14 +20,11 @@ import {
   createSmallTalkAnswer,
   createOfflineRagAnswer,
   DEFAULT_USER_NICKNAME,
-  DEFAULT_SYSTEM_PROMPT,
   formatUserDisplayName,
   type ChatMessage,
-} from '@/lib/ai/gemini';
+} from '@/lib/ai/miraChat';
 import {
-  loadActivePromptVersion,
   resolveAppRole,
-  saveActivePromptVersion,
   type AppRole,
 } from '@/lib/ai/promptGovernance';
 import { useAuthSession } from '@/lib/auth/useAuthSession';
@@ -41,6 +38,7 @@ import { extractHealthFactsFromText, type ExtractedHealthFact } from '@/lib/heal
 import { localHealthKnowledge, type RagChunk } from '@/lib/rag/healthKnowledge';
 import { retrieveRagContext } from '@/lib/rag/retriever';
 import { loadRagChunks } from '@/lib/rag/supabaseRag';
+import type { ChatUiCard } from '@/lib/ai/healthChatTypes';
 
 const starterPrompts = [
   'อยากตรวจสุขภาพต้องเตรียมตัวยังไง',
@@ -53,7 +51,7 @@ const defaultUserDisplayName = formatUserDisplayName(DEFAULT_USER_NICKNAME);
 
 const logTabs = [
   { key: 'ai', label: 'AI' },
-  { key: 'rag', label: 'RAG' },
+  { key: 'rag', label: 'Context' },
   { key: 'health', label: 'Health save' },
   { key: 'api', label: 'API' },
 ] as const;
@@ -83,14 +81,74 @@ type OpsLog = {
   title: string;
 };
 
-function createMessage(role: ChatMessage['role'], content: string, sources?: ChatMessage['sources']): ChatMessage {
+function createMessage(role: ChatMessage['role'], content: string, sources?: ChatMessage['sources'], uiCards?: ChatMessage['uiCards']): ChatMessage {
   return {
     id: `${role}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     role,
     content,
     createdAt: new Date().toISOString(),
     sources,
+    uiCards,
   };
+}
+
+function formatProductMoney(amount: number) {
+  return `${amount.toLocaleString('th-TH')} THB`;
+}
+
+function ProductGridCard({ card }: { card: Extract<ChatUiCard, { type: 'product_grid' }> }) {
+  return (
+    <View style={styles.productCardGroup}>
+      {card.products.map((product) => (
+        <View key={product.id} style={styles.productCard}>
+          {product.productImagePreviewUri ? (
+            <Image source={{ uri: product.productImagePreviewUri }} resizeMode="cover" style={styles.productImage} />
+          ) : (
+            <View style={styles.productImageFallback}>
+              <Text style={styles.productImageFallbackText}>M</Text>
+            </View>
+          )}
+          <View style={styles.productCardBody}>
+            <Text numberOfLines={2} style={styles.productTitle}>
+              {product.title}
+            </Text>
+            <Text numberOfLines={1} style={styles.productHospital}>
+              {product.hospitalName}
+            </Text>
+            <Text style={styles.productPrice}>{formatProductMoney(product.priceAmount)}</Text>
+            <Link href={`/checkout?productId=${encodeURIComponent(product.id)}`} asChild>
+              <Pressable style={styles.productCta}>
+                <Text style={styles.productCtaText}>{'\u0e08\u0e2d\u0e07'}</Text>
+              </Pressable>
+            </Link>
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function MemorySavedCard({ card }: { card: Extract<ChatUiCard, { type: 'memory_saved' }> }) {
+  return (
+    <View style={styles.memoryCard}>
+      <Text style={styles.memoryCardTitle}>{'\u0e08\u0e33\u0e02\u0e49\u0e2d\u0e21\u0e39\u0e25\u0e2a\u0e33\u0e04\u0e31\u0e0d\u0e44\u0e27\u0e49\u0e41\u0e25\u0e49\u0e27'}</Text>
+      <Text numberOfLines={2} style={styles.memoryCardText}>
+        {card.summaries.slice(0, 2).join(' · ') || `${card.count} items`}
+      </Text>
+    </View>
+  );
+}
+
+function ChatUiCardRenderer({ card }: { card: ChatUiCard }) {
+  if (card.type === 'product_grid') {
+    return <ProductGridCard card={card} />;
+  }
+
+  if (card.type === 'memory_saved') {
+    return <MemorySavedCard card={card} />;
+  }
+
+  return null;
 }
 
 function createOpsLog({
@@ -137,7 +195,6 @@ export default function ChatbotScreen() {
   const [appRole, setAppRole] = useState<AppRole>('user');
   const [activePromptVersionKey, setActivePromptVersionKey] = useState<string | null>(null);
   const [healthMemoryStatus, setHealthMemoryStatus] = useState<HealthMemoryStatus | null>(null);
-  const [isPromptEditorOpen, setIsPromptEditorOpen] = useState(false);
   const [opsLogs, setOpsLogs] = useState<OpsLog[]>(() => [
     createOpsLog({
       category: 'api',
@@ -146,19 +203,15 @@ export default function ChatbotScreen() {
       title: 'Console ready',
     }),
   ]);
-  const [systemPrompt, setSystemPrompt] = useState(DEFAULT_SYSTEM_PROMPT);
-  const [systemPromptDraft, setSystemPromptDraft] = useState(DEFAULT_SYSTEM_PROMPT);
   const [isLoadingKnowledge, setIsLoadingKnowledge] = useState(true);
-  const [isSavingPrompt, setIsSavingPrompt] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const isWideLayout = width >= 1100;
   const authUserId = auth.user?.id ?? null;
-  const isAdminUser = appRole === 'admin';
   const canUseAi = aiChatConfigStatus.hasProxy && Boolean(auth.session);
   const modeLabel = !aiChatConfigStatus.hasProxy
-    ? 'Local RAG only'
+    ? 'Local fallback only'
     : auth.session
     ? aiChatConfigStatus.hasSupabaseProxy
       ? 'Supabase Edge Function'
@@ -188,57 +241,36 @@ export default function ChatbotScreen() {
     async function loadPromptGovernance() {
       if (!auth.user) {
         setAppRole('user');
-        setActivePromptVersionKey(null);
-        setSystemPrompt(DEFAULT_SYSTEM_PROMPT);
-        setSystemPromptDraft(DEFAULT_SYSTEM_PROMPT);
+        setActivePromptVersionKey('platform-v2');
         return;
       }
 
       try {
-        const [role, activePrompt] = await Promise.all([resolveAppRole(auth.user), loadActivePromptVersion()]);
+        const role = await resolveAppRole(auth.user);
 
         if (!isMounted) {
           return;
         }
 
         setAppRole(role);
-
-        if (activePrompt) {
-          setActivePromptVersionKey(activePrompt.versionKey);
-          setSystemPrompt(activePrompt.promptText);
-          setSystemPromptDraft(activePrompt.promptText);
-          appendLog({
-            category: 'api',
-            detail: 'Loaded active system prompt version from Supabase prompt governance.',
-            meta: [
-              { label: 'role', value: role },
-              { label: 'version', value: activePrompt.versionKey },
-              { label: 'chars', value: String(activePrompt.promptText.length) },
-            ],
-            status: 'success',
-            title: 'Prompt governance loaded',
-          });
-        } else {
-          setActivePromptVersionKey(null);
-          setSystemPrompt(DEFAULT_SYSTEM_PROMPT);
-          setSystemPromptDraft(DEFAULT_SYSTEM_PROMPT);
-          appendLog({
-            category: 'api',
-            detail: 'No active prompt version was readable yet, so the app is showing the built-in default prompt.',
-            meta: [{ label: 'role', value: role }],
-            status: 'warning',
-            title: 'Prompt governance fallback',
-          });
-        }
+        setActivePromptVersionKey('platform-v2');
+        appendLog({
+          category: 'api',
+          detail: 'Using the published OpenAI Platform prompt for production chat.',
+          meta: [
+            { label: 'role', value: role },
+            { label: 'version', value: 'platform-v2' },
+          ],
+          status: 'success',
+          title: 'Platform prompt ready',
+        });
       } catch (promptError) {
         if (!isMounted) {
           return;
         }
 
         setAppRole('user');
-        setActivePromptVersionKey(null);
-        setSystemPrompt(DEFAULT_SYSTEM_PROMPT);
-        setSystemPromptDraft(DEFAULT_SYSTEM_PROMPT);
+        setActivePromptVersionKey('platform-v2');
         appendLog({
           category: 'api',
           detail: promptError instanceof Error ? promptError.message : 'Unable to load prompt governance state.',
@@ -314,9 +346,9 @@ export default function ChatbotScreen() {
 
     appendLog({
       category: 'rag',
-      detail: 'Loading approved RAG corpus from Supabase, with local knowledge as fallback.',
+      detail: 'Loading local fallback health knowledge for offline preview.',
       status: 'info',
-      title: 'RAG corpus load started',
+      title: 'Fallback knowledge load started',
     });
 
     loadRagChunks()
@@ -325,13 +357,13 @@ export default function ChatbotScreen() {
           setRagChunks(chunks);
           appendLog({
             category: 'rag',
-            detail: 'Approved active RAG chunks loaded and ready for retrieval.',
+            detail: 'Fallback health knowledge loaded and ready for local preview.',
             meta: [
               { label: 'chunks', value: String(chunks.length) },
               { label: 'source', value: 'Supabase or fallback loader' },
             ],
             status: 'success',
-            title: 'RAG corpus loaded',
+            title: 'Fallback knowledge loaded',
           });
         }
       })
@@ -340,10 +372,10 @@ export default function ChatbotScreen() {
           setRagChunks(localHealthKnowledge);
           appendLog({
             category: 'rag',
-            detail: 'Supabase RAG load failed, so local embedded knowledge is being used.',
+            detail: 'Supabase fallback knowledge load failed, so local embedded knowledge is being used.',
             meta: [{ label: 'chunks', value: String(localHealthKnowledge.length) }],
             status: 'warning',
-            title: 'RAG fallback active',
+            title: 'Local fallback active',
           });
         }
       })
@@ -376,7 +408,7 @@ export default function ChatbotScreen() {
       category: 'api',
       detail: 'User submitted a chatbot message and the app started the request pipeline.',
       meta: [
-        { label: 'mode', value: canUseAi ? modeLabel : 'Local RAG preview' },
+        { label: 'mode', value: canUseAi ? modeLabel : 'Local fallback preview' },
         { label: 'chars', value: String(question.length) },
       ],
       status: 'info',
@@ -390,7 +422,7 @@ export default function ChatbotScreen() {
     setMessages(nextMessages);
     const smallTalkAnswer = createSmallTalkAnswer(question);
 
-    if (smallTalkAnswer) {
+    if (smallTalkAnswer && !canUseAi) {
       const assistantMessage = createMessage('assistant', smallTalkAnswer);
       setMessages((current) => [...current, assistantMessage]);
       appendLog({
@@ -406,10 +438,10 @@ export default function ChatbotScreen() {
     if (canUseAi) {
       appendLog({
         category: 'rag',
-        detail: 'RAG retrieval is delegated to the Supabase Edge Function so the mobile app does not send client-built context.',
+        detail: 'Backend context is handled by the Supabase Edge Function so the mobile app does not send client-built prompt context.',
         meta: [{ label: 'fallback preview', value: `${fallbackRagMatches.length} local matches` }],
         status: 'info',
-        title: 'Backend RAG delegated',
+        title: 'Backend context delegated',
       });
     } else {
       appendLog({
@@ -422,7 +454,7 @@ export default function ChatbotScreen() {
           value: match.title,
         })),
         status: fallbackRagMatches.length ? 'success' : 'warning',
-        title: 'Local RAG retrieval completed',
+        title: 'Local fallback retrieval completed',
       });
     }
     if (extractedFacts.length > 0) {
@@ -441,14 +473,15 @@ export default function ChatbotScreen() {
     try {
       let answer: string;
       let answerSources: ChatMessage['sources'] = [];
+      let answerUiCards: ChatMessage['uiCards'] = [];
 
       if (canUseAi) {
         appendLog({
           category: 'api',
-          detail: 'Calling the OpenAI chat backend with the user question. RAG retrieval, prompt selection, rate limiting, and AI logs run on the backend.',
+          detail: 'Calling the OpenAI chat backend with the user question. The published OpenAI Platform prompt, rate limiting, and AI logs run on the backend.',
           meta: [
             { label: 'model', value: aiChatConfigStatus.model },
-            { label: 'prompt override', value: isAdminUser ? 'admin available' : 'disabled' },
+            { label: 'prompt', value: 'OpenAI Platform' },
           ],
           status: 'info',
           title: 'OpenAI API call started',
@@ -456,21 +489,24 @@ export default function ChatbotScreen() {
         const result = await askAiWithRag({
           messages,
           question,
-          systemPrompt: isAdminUser ? systemPrompt : undefined,
         });
+        if (result.promptVersion) {
+          setActivePromptVersionKey(result.promptVersion.versionKey);
+        }
         answer = result.text;
         answerSources = result.ragMatches;
+        answerUiCards = result.uiCards;
         appendLog({
           category: 'rag',
           detail: result.ragMatches.length
-            ? `Backend returned ${result.ragMatches.length} approved RAG chunks for this answer.`
-            : 'Backend used general clinical-advisor mode for this answer.',
+            ? `Backend returned ${result.ragMatches.length} source references for this answer.`
+            : 'Backend used the Platform prompt without extra source references for this answer.',
           meta: result.ragMatches.map((match) => ({
             label: match.category,
             value: match.title,
           })),
           status: result.ragMatches.length ? 'success' : 'warning',
-          title: 'Backend RAG retrieval completed',
+          title: 'Backend context completed',
         });
         appendLog({
           category: 'ai',
@@ -501,14 +537,14 @@ export default function ChatbotScreen() {
         answerSources = fallbackRagMatches;
         appendLog({
           category: 'ai',
-          detail: 'OpenAI was unavailable, so the app rendered a local RAG preview answer.',
+          detail: 'OpenAI was unavailable, so the app rendered a local fallback preview answer.',
           meta: [{ label: 'reason', value: auth.session ? 'proxy_not_configured' : 'login_required' }],
           status: 'warning',
           title: 'AI fallback used',
         });
       }
 
-      setMessages((current) => [...current, createMessage('assistant', answer, answerSources)]);
+      setMessages((current) => [...current, createMessage('assistant', answer, answerSources, answerUiCards)]);
       void handleHealthFactsAfterAnswer(question, answer, answerSources.map((match) => match.id), extractedFacts);
     } catch (sendError) {
       const message = sendError instanceof Error ? sendError.message : 'Unable to reach OpenAI.';
@@ -522,7 +558,7 @@ export default function ChatbotScreen() {
       });
       appendLog({
         category: 'ai',
-        detail: 'The app displayed the local RAG fallback answer after the AI request failed.',
+        detail: 'The app displayed the local fallback answer after the AI request failed.',
         status: 'warning',
         title: 'Fallback answer rendered',
       });
@@ -620,72 +656,16 @@ export default function ChatbotScreen() {
     }
   }
 
-  function openSystemPromptEditor() {
-    if (!isAdminUser) {
-      appendLog({
-        category: 'api',
-        detail: 'System prompt editor is restricted to admin users.',
-        meta: [{ label: 'role', value: appRole }],
-        status: 'warning',
-        title: 'Prompt editor blocked',
-      });
-      return;
-    }
-
-    setSystemPromptDraft(systemPrompt);
-    setIsPromptEditorOpen(true);
-  }
-
-  async function saveSystemPrompt() {
-    if (!isAdminUser || isSavingPrompt) {
-      return;
-    }
-
-    const nextPrompt = systemPromptDraft.trim() || DEFAULT_SYSTEM_PROMPT;
-
-    try {
-      setIsSavingPrompt(true);
-      const savedPrompt = await saveActivePromptVersion(nextPrompt);
-      setActivePromptVersionKey(savedPrompt.versionKey);
-      setSystemPrompt(savedPrompt.promptText);
-      setSystemPromptDraft(savedPrompt.promptText);
-      appendLog({
-        category: 'api',
-        detail: 'Saved a new active system prompt version in Supabase.',
-        meta: [
-          { label: 'version', value: savedPrompt.versionKey },
-          { label: 'chars', value: String(savedPrompt.promptText.length) },
-        ],
-        status: 'success',
-        title: 'System prompt saved',
-      });
-      setIsPromptEditorOpen(false);
-    } catch (promptError) {
-      appendLog({
-        category: 'api',
-        detail: promptError instanceof Error ? promptError.message : 'Unable to save prompt version.',
-        status: 'error',
-        title: 'System prompt save failed',
-      });
-    } finally {
-      setIsSavingPrompt(false);
-    }
-  }
-
-  function resetSystemPrompt() {
-    setSystemPromptDraft(DEFAULT_SYSTEM_PROMPT);
-  }
-
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.screen}>
       <View style={[styles.workspace, !isWideLayout ? styles.workspaceStack : null]}>
         <View style={[styles.chatPane, !isWideLayout ? styles.chatPaneStack : null]}>
           <ScrollView ref={scrollRef} contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
             <View style={styles.header}>
-          <Text style={styles.eyebrow}>OpenAI + RAG</Text>
+          <Text style={styles.eyebrow}>OpenAI Platform</Text>
           <Text style={styles.title}>Chatbot</Text>
           <Text style={styles.subtitle}>
-            A healthcare assistant wired for GPT-5.5, backend RAG, and local fallback knowledge.
+            A healthcare assistant wired for the MiraCare Platform prompt, backend product cards, and local fallback knowledge.
           </Text>
         </View>
 
@@ -699,7 +679,7 @@ export default function ChatbotScreen() {
             <Text style={styles.statusValue}>{modeLabel}</Text>
           </View>
           <View style={styles.statusCard}>
-            <Text style={styles.statusLabel}>Fallback RAG</Text>
+            <Text style={styles.statusLabel}>Fallback knowledge</Text>
             <Text style={styles.statusValue}>{isLoadingKnowledge ? 'Loading' : ragChunks.length}</Text>
           </View>
         </View>
@@ -750,11 +730,18 @@ export default function ChatbotScreen() {
               </Text>
               {message.sources?.length ? (
                 <View style={styles.sources}>
-                  <Text style={styles.sourcesTitle}>RAG sources</Text>
+                  <Text style={styles.sourcesTitle}>Sources</Text>
                   {message.sources.map((source) => (
                     <Text key={source.id} style={styles.sourceText}>
                       {source.title} · {source.category} · {source.source}
                     </Text>
+                  ))}
+                </View>
+              ) : null}
+              {message.role === 'assistant' && message.uiCards?.length ? (
+                <View style={styles.uiCardStack}>
+                  {message.uiCards.map((card) => (
+                    <ChatUiCardRenderer key={card.id} card={card} />
                   ))}
                 </View>
               ) : null}
@@ -764,7 +751,7 @@ export default function ChatbotScreen() {
           {isSending ? (
             <View style={[styles.bubble, styles.assistantBubble, styles.loadingBubble]}>
               <ActivityIndicator color="#3C7864" />
-                <Text style={styles.loadingText}>Retrieving backend context and asking OpenAI...</Text>
+                <Text style={styles.loadingText}>Preparing backend context and asking OpenAI...</Text>
             </View>
           ) : null}
         </View>
@@ -791,13 +778,8 @@ export default function ChatbotScreen() {
             <View style={styles.opsTitleBlock}>
               <Text style={styles.opsEyebrow}>Live observability</Text>
               <Text style={styles.opsTitle}>Ops logs</Text>
-              <Text style={styles.opsSubtitle}>AI, RAG, health save, and API process logs from this chat session.</Text>
+              <Text style={styles.opsSubtitle}>AI, context, health save, and API process logs from this chat session.</Text>
             </View>
-            {isAdminUser ? (
-              <Pressable onPress={openSystemPromptEditor} style={styles.promptButton}>
-                <Text style={styles.promptButtonText}>System prompt</Text>
-              </Pressable>
-            ) : null}
           </View>
 
           <View style={styles.opsMetrics}>
@@ -811,7 +793,7 @@ export default function ChatbotScreen() {
             </View>
             <View style={styles.opsMetric}>
               <Text style={styles.opsMetricLabel}>Prompt</Text>
-              <Text style={styles.opsMetricValue}>{activePromptVersionKey ? activePromptVersionKey.slice(-8) : systemPrompt.length}</Text>
+              <Text style={styles.opsMetricValue}>{activePromptVersionKey ? activePromptVersionKey.slice(-8) : 'platform'}</Text>
             </View>
             <View style={styles.opsMetric}>
               <Text style={styles.opsMetricLabel}>Tab</Text>
@@ -897,43 +879,6 @@ export default function ChatbotScreen() {
         </View>
       </View>
 
-      <Modal animationType="fade" transparent visible={isPromptEditorOpen} onRequestClose={() => setIsPromptEditorOpen(false)}>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.promptModal}>
-            <View style={styles.promptModalHeader}>
-              <View>
-                <Text style={styles.promptModalEyebrow}>OpenAI system prompt</Text>
-                <Text style={styles.promptModalTitle}>Prompt editor</Text>
-              </View>
-              <Pressable onPress={() => setIsPromptEditorOpen(false)} style={styles.modalIconButton}>
-                <Text style={styles.modalIconText}>X</Text>
-              </Pressable>
-            </View>
-
-            <TextInput
-              multiline
-              onChangeText={setSystemPromptDraft}
-              style={styles.promptEditorInput}
-              textAlignVertical="top"
-              value={systemPromptDraft}
-            />
-
-            <View style={styles.promptModalFooter}>
-              <Pressable onPress={resetSystemPrompt} style={styles.secondaryPromptButton}>
-                <Text style={styles.secondaryPromptButtonText}>Reset</Text>
-              </Pressable>
-              <View style={styles.promptModalActions}>
-                <Pressable onPress={() => setIsPromptEditorOpen(false)} style={styles.secondaryPromptButton}>
-                  <Text style={styles.secondaryPromptButtonText}>Cancel</Text>
-                </Pressable>
-                <Pressable disabled={isSavingPrompt} onPress={saveSystemPrompt} style={styles.primaryPromptButton}>
-                  <Text style={styles.primaryPromptButtonText}>{isSavingPrompt ? 'Saving' : 'Save'}</Text>
-                </Pressable>
-              </View>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -1249,6 +1194,95 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 17,
   },
+  uiCardStack: {
+    gap: 10,
+    marginTop: 12,
+  },
+  productCardGroup: {
+    gap: 10,
+  },
+  productCard: {
+    backgroundColor: '#F7FAF8',
+    borderColor: '#DCE8E2',
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 10,
+    overflow: 'hidden',
+    padding: 10,
+  },
+  productImage: {
+    backgroundColor: '#E4EEE9',
+    borderRadius: 8,
+    height: 78,
+    width: 78,
+  },
+  productImageFallback: {
+    alignItems: 'center',
+    backgroundColor: '#DCE8E2',
+    borderRadius: 8,
+    height: 78,
+    justifyContent: 'center',
+    width: 78,
+  },
+  productImageFallbackText: {
+    color: '#3C7864',
+    fontSize: 24,
+    fontWeight: '900',
+  },
+  productCardBody: {
+    flex: 1,
+    gap: 5,
+    minWidth: 0,
+  },
+  productTitle: {
+    color: '#14231E',
+    fontSize: 14,
+    fontWeight: '900',
+    lineHeight: 19,
+  },
+  productHospital: {
+    color: '#587069',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  productPrice: {
+    color: '#163F34',
+    fontSize: 14,
+    fontWeight: '900',
+  },
+  productCta: {
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: '#163F34',
+    borderRadius: 8,
+    justifyContent: 'center',
+    minHeight: 34,
+    paddingHorizontal: 14,
+  },
+  productCtaText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  memoryCard: {
+    backgroundColor: '#F0F5F3',
+    borderColor: '#DCE8E2',
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 4,
+    padding: 10,
+  },
+  memoryCardTitle: {
+    color: '#3C7864',
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  memoryCardText: {
+    color: '#587069',
+    fontSize: 12,
+    lineHeight: 17,
+  },
   loadingBubble: {
     alignItems: 'center',
     flexDirection: 'row',
@@ -1493,102 +1527,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '800',
     marginTop: 2,
-  },
-  modalBackdrop: {
-    alignItems: 'center',
-    backgroundColor: 'rgba(13, 27, 23, 0.42)',
-    flex: 1,
-    justifyContent: 'center',
-    padding: 18,
-  },
-  promptModal: {
-    backgroundColor: '#FFFFFF',
-    borderColor: '#DCE8E2',
-    borderRadius: 8,
-    borderWidth: 1,
-    gap: 14,
-    maxWidth: 820,
-    padding: 18,
-    width: '100%',
-  },
-  promptModalHeader: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  promptModalEyebrow: {
-    color: '#2E6B8D',
-    fontSize: 12,
-    fontWeight: '900',
-    textTransform: 'uppercase',
-  },
-  promptModalTitle: {
-    color: '#14231E',
-    fontSize: 24,
-    fontWeight: '900',
-    marginTop: 3,
-  },
-  modalIconButton: {
-    alignItems: 'center',
-    backgroundColor: '#F0F5F3',
-    borderRadius: 8,
-    height: 38,
-    justifyContent: 'center',
-    width: 38,
-  },
-  modalIconText: {
-    color: '#14231E',
-    fontSize: 14,
-    fontWeight: '900',
-  },
-  promptEditorInput: {
-    backgroundColor: '#F7FAF8',
-    borderColor: '#DCE8E2',
-    borderRadius: 8,
-    borderWidth: 1,
-    color: '#14231E',
-    fontSize: 14,
-    lineHeight: 20,
-    minHeight: 300,
-    padding: 14,
-  },
-  promptModalFooter: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 10,
-    justifyContent: 'space-between',
-  },
-  promptModalActions: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  secondaryPromptButton: {
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderColor: '#DCE8E2',
-    borderRadius: 8,
-    borderWidth: 1,
-    justifyContent: 'center',
-    minHeight: 42,
-    paddingHorizontal: 14,
-  },
-  secondaryPromptButtonText: {
-    color: '#587069',
-    fontSize: 13,
-    fontWeight: '900',
-  },
-  primaryPromptButton: {
-    alignItems: 'center',
-    backgroundColor: '#163F34',
-    borderRadius: 8,
-    justifyContent: 'center',
-    minHeight: 42,
-    paddingHorizontal: 16,
-  },
-  primaryPromptButtonText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '900',
   },
   composer: {
     alignItems: 'flex-end',

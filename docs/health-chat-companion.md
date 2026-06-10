@@ -4,7 +4,7 @@ Mira chat is designed as one continuous health companion timeline, not a generic
 
 ## Runtime Contract
 
-`gemini-chat` remains the main Edge Function and now returns a structured payload:
+`mira-chat` remains the main Edge Function and now returns a structured payload:
 
 - `text`: short user-facing Thai answer.
 - `intent`: `small_talk`, `health_advice`, `product_recommendation`, `product_compare`, `booking`, `checkout`, `safety_escalation`, or `off_topic`.

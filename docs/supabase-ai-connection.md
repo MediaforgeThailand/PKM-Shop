@@ -7,17 +7,17 @@ This document is for AI agents and developers working on Mira Health. It explain
 ```text
 Expo mobile app
 -> Supabase client
--> Supabase Edge Function: gemini-chat
--> approved Supabase RAG corpus + active prompt version + persistent logs
+-> Supabase Edge Function: mira-chat
+-> MiraCare OpenAI Platform prompt variables + persistent logs
 -> OpenAI Responses API
 ```
 
-The mobile app does not call OpenAI directly and no longer sends client-built RAG context to the model. OpenAI credentials, RAG retrieval, active system prompt selection, rate limiting, and AI/RAG/API process logs stay inside Supabase Edge Function and database infrastructure.
+The mobile app does not call OpenAI directly and no longer sends client-built RAG context to the model. OpenAI credentials, MiraCare prompt variables, rate limiting, product-marker parsing, and AI/API process logs stay inside Supabase Edge Function and database infrastructure.
 
 ## Important Files
 
 - Mobile Supabase client: `lib/supabase.ts`
-- OpenAI proxy client: `lib/ai/gemini.ts`
+- OpenAI proxy client: `lib/ai/miraChat.ts`
 - Chatbot screen: `app/(tabs)/chatbot.tsx`
 - Local RAG corpus: `lib/rag/healthKnowledge.ts`
 - Optional Supabase RAG loader: `lib/rag/supabaseRag.ts`
@@ -30,9 +30,9 @@ The mobile app does not call OpenAI directly and no longer sends client-built RA
   - `supabase/migrations/20260605011000_hospital_product_location_fields.sql`
   - `supabase/migrations/20260605012000_hospital_product_management_policies.sql`
 - RAG vector embedding migration: `supabase/migrations/20260605013000_rag_vector_embeddings.sql`
-- Edge Function: `supabase/functions/gemini-chat/index.ts`
+- Edge Function: `supabase/functions/mira-chat/index.ts`
 - RAG embedding Edge Function: `supabase/functions/rag-embed/index.ts`
-- Deploy helper: `scripts/deploy-gemini-chat.ps1`
+- Deploy helper: `scripts/deploy-mira-chat.ps1`
 
 ## Required `.env.local`
 
@@ -42,7 +42,7 @@ Create `.env.local` in the project root. Do not commit it.
 EXPO_PUBLIC_SUPABASE_URL=https://xwixdxmemwcuoamcloty.supabase.co
 EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_BSadkmHjFnN1iJJbZKTRMA_39uRg_gn
 EXPO_PUBLIC_OPENAI_MODEL=gpt-5.5
-EXPO_PUBLIC_USER_NICKNAME=บอส
+EXPO_PUBLIC_USER_NICKNAME=ลูกค้า
 EXPO_PUBLIC_AI_PROXY_URL=
 SUPABASE_ACCESS_TOKEN=your_supabase_cli_access_token
 ```
@@ -60,37 +60,38 @@ Set OpenAI secrets in Supabase, not in the mobile app:
 
 ```bash
 npx supabase secrets set OPENAI_API_KEY=your_openai_api_key_here --project-ref your-project-ref
-npx supabase secrets set OPENAI_CHAT_MODEL=gpt-5.5 --project-ref your-project-ref
-npx supabase secrets set OPENAI_MAX_OUTPUT_TOKENS=450 --project-ref your-project-ref
+npx supabase secrets set OPENAI_CHAT_PROMPT_ID=pmpt_6a29c7e353b88196a6e648b24c54849e0f6204e24d65c021 --project-ref your-project-ref
+npx supabase secrets set OPENAI_CHAT_PROMPT_VERSION=2 --project-ref your-project-ref
+npx supabase secrets set MIRACARE_BRAND_NAME=MiraCare --project-ref your-project-ref
 npx supabase secrets set OPENAI_RATE_LIMIT_PER_MINUTE=30 --project-ref your-project-ref
-npx supabase secrets set DEFAULT_USER_NICKNAME=บอส --project-ref your-project-ref
+npx supabase secrets set DEFAULT_USER_NICKNAME=ลูกค้า --project-ref your-project-ref
 ```
 
 Optional:
 
 ```bash
 npx supabase secrets set OPENAI_API_BASE_URL=https://api.openai.com/v1 --project-ref your-project-ref
-npx supabase secrets set OPENAI_ALLOWED_MODELS=gpt-5.5 --project-ref your-project-ref
+npx supabase secrets set OPENAI_CHAT_MODEL=gpt-5.5 --project-ref your-project-ref
 ```
 
 ## Deploy Edge Function
 
-The helper script reads `SUPABASE_ACCESS_TOKEN` and `EXPO_PUBLIC_SUPABASE_URL` from `.env.local`, derives the project ref, and deploys `gemini-chat`.
+The helper script reads `SUPABASE_ACCESS_TOKEN` and `EXPO_PUBLIC_SUPABASE_URL` from `.env.local`, derives the project ref, and deploys `mira-chat`.
 
 ```powershell
 cd D:\Work\mira-health-app
-.\scripts\deploy-gemini-chat.ps1
+.\scripts\deploy-mira-chat.ps1
 ```
 
 Current behavior:
 
 - The function is deployed with JWT verification enabled.
-- The app must have a Supabase Auth session before calling `gemini-chat`.
-- Backend RAG retrieves only approved active `rag_chunks`.
-- Active prompt text comes from `prompt_versions`; only admins can manage prompt versions.
-- The app sends `userNickname` so the active prompt can address the user as `คุณบอส` by default.
+- The app must have a Supabase Auth session before calling `mira-chat`.
+- The published MiraCare prompt in OpenAI Platform is the source of truth.
+- The Edge Function supplies `brand_name`, `user_nickname`, `personal_context`, `recent_chat`, and `product_catalog` on every OpenAI request.
+- Product cards are rendered by stripping the final `[[products: ...]]` marker and resolving IDs against active hospital products.
 - Per-user rate limiting is handled by `increment_ai_rate_limit`.
-- AI, RAG, and API process events are written to persistent log tables.
+- AI and API process events are written to persistent log tables.
 
 ## Apply Database Migrations
 
@@ -129,7 +130,7 @@ The hospital product portal migrations create `hospital_products`, add hospital 
 
 The vector embedding migration enables `pgvector`, adds `rag_chunks.embedding`, and creates:
 
-- `match_rag_chunks`: vector search RPC used by `gemini-chat`.
+- `match_rag_chunks`: vector search RPC used by `mira-chat`.
 - `update_rag_chunk_embedding`: authenticated RPC used by `rag-embed` after product RAG publish.
 
 `rag-embed` and vector retrieval use the Supabase Edge Function secret `GEMINI_API_KEY` plus optional `GEMINI_EMBEDDING_MODEL` defaulting to `gemini-embedding-001`. Chat answers still use OpenAI Responses API. Embeddings store 768-dimension vectors, so any model/dimension change requires a coordinated DB migration and re-embedding.
@@ -146,7 +147,7 @@ Get-Content .env.local | ForEach-Object {
   }
 }
 
-$uri = $vars['EXPO_PUBLIC_SUPABASE_URL'].TrimEnd('/') + '/functions/v1/gemini-chat'
+$uri = $vars['EXPO_PUBLIC_SUPABASE_URL'].TrimEnd('/') + '/functions/v1/mira-chat'
 $anon = $vars['EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY']
 $userJwt = 'paste_authenticated_user_access_token_here'
 $body = @{
@@ -181,13 +182,13 @@ Common errors:
 
 ## How The App Chooses AI Backend
 
-`lib/ai/gemini.ts` follows this order:
+`lib/ai/miraChat.ts` follows this order:
 
 1. If `EXPO_PUBLIC_AI_PROXY_URL` is set, call that external proxy.
-2. Otherwise, if Supabase public config exists, call `supabase.functions.invoke('gemini-chat')`.
+2. Otherwise, if Supabase public config exists, call `supabase.functions.invoke('mira-chat')`.
 3. If neither exists, show local RAG preview only.
 
-For the Supabase path, the mobile app sends the authenticated question and short chat history only. The Edge Function retrieves RAG context, loads the active prompt, calls OpenAI, and returns public source metadata.
+For the Supabase path, the mobile app sends the authenticated question and short chat history only. The Edge Function prepares MiraCare prompt variables, calls the published OpenAI Platform prompt with `store: false`, strips product markers, and returns text plus UI cards.
 
 ## Security Rules For AI Agents
 
@@ -195,13 +196,13 @@ For the Supabase path, the mobile app sends the authenticated question and short
 - Never add `EXPO_PUBLIC_OPENAI_API_KEY`.
 - Never place `OPENAI_API_KEY`, Supabase service-role key, or `SUPABASE_ACCESS_TOKEN` in committed files.
 - Do not use service-role keys in Expo or React Native code.
-- Keep Supabase Auth JWT required on `gemini-chat`.
+- Keep Supabase Auth JWT required on `mira-chat`.
 - Keep rate limiting enabled before public launch.
 - Log which RAG chunks were used, but do not log full personal health data.
 
 ## RAG Notes
 
-The app still keeps local fallback RAG chunks for offline preview. In normal Supabase mode, the Edge Function loads approved active `rag_chunks`, routes by taxonomy, then sends compact `summary` context to OpenAI.
+The app still keeps local fallback RAG chunks for offline preview. In normal Supabase mode, product knowledge comes from active `hospital_products` serialized into the `product_catalog` prompt variable.
 
 Before using real medical content:
 

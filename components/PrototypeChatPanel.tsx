@@ -20,7 +20,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Circle, Defs, LinearGradient as SvgGradient, Path, Rect, Stop } from 'react-native-svg';
 
-import { aiChatConfigStatus, askAiWithRag, createSmallTalkAnswer, DEFAULT_USER_NICKNAME, type ChatMessage } from '@/lib/ai/gemini';
+import { aiChatConfigStatus, askAiWithRag, createSmallTalkAnswer, DEFAULT_USER_NICKNAME, type ChatMessage } from '@/lib/ai/miraChat';
 import {
   type ChatContextAssessment,
   createProductBranch,
@@ -30,6 +30,16 @@ import {
   type ChatUiCard,
 } from '@/lib/ai/healthChatTypes';
 import { transcribeAudio } from '@/lib/ai/openaiTranscription';
+import {
+  classifyProductRequest as classifyPrototypeProductRequest,
+  createNaturalHealthFallbackAnswer,
+  createPrototypeContextAssessment as createPrototypePolicyContextAssessment,
+  enforceConversationStyle as enforcePrototypePolicyConversationStyle,
+  hasBlockedConversationStyle as hasPrototypeBlockedConversationStyle,
+  hasProductGridCard as hasPrototypeProductGridCard,
+  inferActiveProductRequestKind as inferPrototypeActiveProductRequestKind,
+  sanitizeAssistantDisplayText,
+} from '@/lib/ai/prototypeConversationPolicy';
 import { useAuthSession } from '@/lib/auth/useAuthSession';
 import { loadActiveHospitalProducts } from '@/lib/marketplace/hospitalProducts';
 import { localHealthKnowledge } from '@/lib/rag/healthKnowledge';
@@ -45,8 +55,6 @@ type PrototypeChatMessage = ChatMessage & {
   uiCards?: ChatUiCard[];
 };
 
-type ProductRequestKind = 'broad' | 'direct' | 'none';
-
 function createMessage(role: ChatMessage['role'], content: string, sources?: ChatMessage['sources'], uiCards?: ChatUiCard[]): PrototypeChatMessage {
   return {
     id: `${role}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -58,124 +66,8 @@ function createMessage(role: ChatMessage['role'], content: string, sources?: Cha
   };
 }
 
-function hasPackagePurchaseIntent(question: string) {
-  const normalized = question.toLowerCase();
-  const buyTerms = ['ซื้อ', 'จ่าย', 'ชำระ', 'checkout', 'buy', 'pay'];
-  const packageTerms = ['แพ็กเกจ', 'แพ็คเกจ', 'ตรวจสุขภาพ', 'checkup', 'package'];
-
-  return buyTerms.some((term) => normalized.includes(term)) && packageTerms.some((term) => normalized.includes(term));
-}
-
-const productDiscoveryTerms = [
-  'แพ็กเกจ',
-  'แพ็คเกจ',
-  'ตรวจสุขภาพ',
-  'ตรวจเลือด',
-  'เจาะเลือด',
-  'แล็บ',
-  'โปรดักส์',
-  'โปรดัก',
-  'สินค้า',
-  'บริการ',
-  'รายการตรวจ',
-  'blood test',
-  'lab test',
-  'checkup',
-  'package',
-  'product',
-];
-
-const productBrowseTerms = [
-  'ต้องการ',
-  'อยาก',
-  'ควร',
-  'ควรตรวจ',
-  'ขอดู',
-  'แนะนำ',
-  'มีอะไรบ้าง',
-  'ทั้งหมด',
-  'ราคา',
-  'ซื้อ',
-  'จอง',
-  'เลือก',
-  'compare',
-  'buy',
-  'pay',
-];
-
-function includesAnyTerm(text: string, terms: string[]) {
-  return terms.some((term) => text.includes(term.toLowerCase()));
-}
-
-function classifyProductRequest(question: string): ProductRequestKind {
-  const normalized = question.toLowerCase();
-
-  if (hasPackagePurchaseIntent(question)) {
-    return includesAnyTerm(normalized, ['ตรวจเลือด', 'เจาะเลือด', 'วัคซีน', 'มะเร็ง', 'หัวใจ', 'น้ำตาล', 'ไขมัน', 'blood', 'lab', 'vaccine'])
-      ? 'direct'
-      : 'broad';
-  }
-
-  const mentionsProduct = includesAnyTerm(normalized, productDiscoveryTerms);
-  const browsingProducts = includesAnyTerm(normalized, productBrowseTerms);
-  const hasProductIntent = mentionsProduct || (browsingProducts && includesAnyTerm(normalized, ['ตรวจ', 'สุขภาพ', 'health', 'product']));
-
-  if (!hasProductIntent) {
-    return 'none';
-  }
-
-  const directTerms = [
-    'ตรวจเลือด',
-    'เจาะเลือด',
-    'แล็บ',
-    'แลป',
-    'วัคซีน',
-    'มะเร็ง',
-    'หัวใจ',
-    'เบาหวาน',
-    'น้ำตาล',
-    'ไขมัน',
-    'ตับ',
-    'ไต',
-    'x-ray',
-    'mri',
-    'ct',
-    'ultrasound',
-    'mammogram',
-    'hpv',
-    'blood',
-    'lab',
-    'vaccine',
-    'basic blood',
-  ];
-  const listTerms = ['ทั้งหมด', 'มีอะไรบ้าง', 'ราคา', 'ขอดูแพ็กเกจ', 'ขอดูแพคเกจ'];
-
-  if (includesAnyTerm(normalized, directTerms) || includesAnyTerm(normalized, listTerms)) {
-    return 'direct';
-  }
-
-  return 'broad';
-}
-
-function inferActiveProductRequestKind(messages: PrototypeChatMessage[], currentRequestKind: ProductRequestKind): ProductRequestKind {
-  if (currentRequestKind !== 'none') {
-    return currentRequestKind;
-  }
-
-  const latestPriorProductKind = [...messages.filter((message) => message.role === 'user').slice(-8)]
-    .reverse()
-    .map((message) => classifyProductRequest(message.content))
-    .find((kind) => kind !== 'none');
-
-  return latestPriorProductKind ?? 'none';
-}
-
-function hasProductGridCard(cards?: ChatUiCard[]) {
-  return cards?.some((card) => card.type === 'product_grid') ?? false;
-}
-
 function withProductGridCard(cards: ChatUiCard[] | undefined, sourceProducts: ChatProductCard[]) {
-  if (hasProductGridCard(cards)) {
+  if (hasPrototypeProductGridCard(cards)) {
     return cards ?? [];
   }
 
@@ -186,142 +78,11 @@ function withProductGridCard(cards: ChatUiCard[] | undefined, sourceProducts: Ch
 function cleanProductAssistantText(text: string) {
   const trimmed = text.trim();
 
-  if (!trimmed || trimmed.length > 120 || /^\s*\d+[.)]/m.test(trimmed)) {
-    return 'ได้ค่ะคุณบอส ดูแพ็กเกจนี้ก่อนได้ ถ้าอยากให้ช่วยเลือกให้เหมาะขึ้น บอกอายุหรือโรคประจำตัวเพิ่มได้ค่ะ';
+  if (!trimmed || trimmed.length > 120 || /^\s*\d+[.)]/m.test(trimmed) || hasPrototypeBlockedConversationStyle(trimmed)) {
+    return 'ได้ค่ะคุณบอส ดูแพ็กเกจนี้ก่อนได้เลย ถ้าอยากให้ช่วยเลือกให้เข้ากับตัวคุณมากขึ้น ค่อยบอกอายุเพิ่มได้ค่ะ';
   }
 
   return trimmed;
-}
-
-function hasAgeSlot(text: string) {
-  if (/(?:อายุ|age)\s*[0-9]{1,3}/i.test(text) || /[0-9]{1,3}\s*(?:ปี|years?\s*old|yo)/i.test(text)) {
-    return true;
-  }
-
-  return text
-    .split(/\r?\n/)
-    .some((line) => /^\s*(1[89]|[2-8][0-9]|9[0-9])\s+/.test(line) && includesAnyTerm(line.toLowerCase(), ['เรื่อง', 'โฟกัส', 'น้ำตาล', 'ไขมัน', 'สุขภาพ', 'concern', 'focus']));
-}
-
-function prototypeUserDisplayName() {
-  return prototypeUserNickname.startsWith('คุณ') ? prototypeUserNickname : `คุณ${prototypeUserNickname}`;
-}
-
-function hasGreetingTerm(text: string) {
-  return includesAnyTerm(text.toLowerCase(), ['สวัสดี', 'หวัดดี', 'ดีค่ะ', 'ดีครับ', 'hello', 'hi', 'hey', 'sawasdee']);
-}
-
-function hasNoRecentCheckupEvidence(text: string) {
-  return includesAnyTerm(text.toLowerCase(), [
-    'ยังไม่เคยตรวจ',
-    'ไม่เคยตรวจสุขภาพ',
-    'ไม่เคยตรวจจริงจัง',
-    'ไม่เคยมีผลตรวจ',
-    'ไม่ได้ตรวจสุขภาพ',
-    'ไม่ได้ตรวจมานาน',
-    'ไม่มีผลตรวจล่าสุด',
-    'ยังไม่มีผลตรวจล่าสุด',
-    'never had checkup',
-    'no recent checkup',
-  ]);
-}
-
-function getLastAssistantMessageBeforeQuestion(history: PrototypeChatMessage[], question: string) {
-  const normalizedQuestion = question.trim();
-
-  for (const message of [...history].reverse()) {
-    if (message.role === 'user' && message.content.trim() === normalizedQuestion) {
-      continue;
-    }
-
-    if (message.role === 'assistant' && message.content.trim()) {
-      return message.content;
-    }
-  }
-
-  return '';
-}
-
-function isUnknownRecentCheckupReply(history: PrototypeChatMessage[], question: string) {
-  if (!includesAnyTerm(question.toLowerCase(), ['จำไม่ได้', 'ไม่แน่ใจ', 'ไม่รู้', 'นานแล้ว', 'น่าจะนาน', 'หลายปี', 'จำไม่ได้แล้ว', 'not sure', "don't remember", 'cannot remember'])) {
-    return false;
-  }
-
-  const lastAssistantMessage = getLastAssistantMessageBeforeQuestion(history, question);
-
-  return includesAnyTerm(lastAssistantMessage.toLowerCase(), ['ตรวจล่าสุด', 'ผลตรวจล่าสุด', 'เคยตรวจครั้งล่าสุด', 'ตรวจสุขภาพมาก่อน', 'last checkup', 'latest checkup', 'lab result']);
-}
-
-function createPrototypeContextAssessment(question: string, productRequestKind: ProductRequestKind, history: PrototypeChatMessage[] = []): ChatContextAssessment {
-  const historyUserMessages = history.filter((message) => message.role === 'user').map((message) => message.content.trim()).filter(Boolean);
-  const userMessages = historyUserMessages[historyUserMessages.length - 1] === question.trim() ? historyUserMessages : [...historyUserMessages, question.trim()];
-  const priorUserText = userMessages.slice(0, -1).join(' ').toLowerCase();
-  const userText = userMessages.join(' ').toLowerCase();
-  const hasGreeting = hasGreetingTerm(question);
-  const greetingPrefix = hasGreeting ? `สวัสดีค่ะ${prototypeUserDisplayName()} ` : '';
-  const isBroadCheckupOpening = productRequestKind === 'broad' && hasGreeting;
-  const hasKnownNoRecentCheckup = hasNoRecentCheckupEvidence(priorUserText);
-  const answeredUnknownRecentCheckup = isUnknownRecentCheckupReply(history, question);
-  const slotSummary = {
-    accessPreference: includesAnyTerm(userText, ['งบ', 'บาท', 'ราคา', 'budget', 'ใกล้', 'แถว', 'อยู่', 'สะดวก']),
-    age: hasAgeSlot(userText),
-    clinicalHistory: includesAnyTerm(userText, ['โรคประจำตัว', 'ไม่มีโรค', 'ไม่เป็นโรค', 'ไม่เคยมีประวัติโรค', 'ไม่มีประวัติโรค', 'ประวัติโรค', 'ยา', 'แพ้ยา', 'เบาหวาน', 'ความดัน', 'ไขมัน', 'หัวใจ']),
-    goal: includesAnyTerm(userText, ['อยากเช็ค', 'อยากเช็ก', 'โฟกัส', 'กังวล', 'เป้าหมาย', 'ลดน้ำหนัก', 'น้ำตาล', 'ไขมัน', 'สุขภาพ', 'check']),
-    recentCheckup: includesAnyTerm(userText, ['ตรวจล่าสุด', 'ผลตรวจ', 'เคยตรวจ', 'ไม่เคยตรวจ', 'ปีที่แล้ว', 'เดือนที่แล้ว', 'ล่าสุด']) || answeredUnknownRecentCheckup,
-    riskLifestyle: includesAnyTerm(userText, ['น้ำหนัก', 'ส่วนสูง', 'bmi', 'สูบ', 'เหล้า', 'นอน', 'เครียด', 'ครอบครัว', 'เหนื่อย']),
-  };
-  const score =
-    (slotSummary.age ? 20 : 0) +
-    (slotSummary.goal ? 20 : 0) +
-    (slotSummary.clinicalHistory ? 20 : 0) +
-    (slotSummary.recentCheckup ? 15 : 0) +
-    (slotSummary.accessPreference ? 15 : 0) +
-    (slotSummary.riskLifestyle ? 10 : 0);
-  const productReady =
-    score >= 85 &&
-    slotSummary.age &&
-    slotSummary.goal &&
-    slotSummary.clinicalHistory &&
-    slotSummary.recentCheckup &&
-    slotSummary.accessPreference;
-  const level = score >= 85 ? 'ready' : score >= 35 ? 'partial' : 'insufficient';
-  const labels = {
-    accessPreference: 'พื้นที่สะดวกหรืองบประมาณ',
-    age: 'อายุหรือช่วงอายุ',
-    clinicalHistory: 'โรคประจำตัว ยา หรือประวัติแพ้',
-    goal: 'เป้าหมายหรือเรื่องที่อยากโฟกัส',
-    recentCheckup: 'ประวัติการตรวจหรือผลตรวจล่าสุด',
-    riskLifestyle: 'น้ำหนัก ไลฟ์สไตล์ หรือความเสี่ยงเพิ่มเติม',
-  };
-  const slotEntries = Object.entries(slotSummary) as [keyof typeof slotSummary, boolean][];
-  const mode =
-    productRequestKind === 'direct'
-      ? 'direct_product'
-      : productRequestKind === 'broad' && productReady
-        ? 'personalized_recommendation'
-        : 'ask_context';
-  const nextQuestion = isBroadCheckupOpening && !slotSummary.recentCheckup
-    ? hasKnownNoRecentCheckup
-      ? `${greetingPrefix}ฉันจำได้ว่า${prototypeUserDisplayName()}ยังไม่เคยตรวจสุขภาพในช่วงที่ผ่านมา งั้นเริ่มจากตรวจพื้นฐานก่อนดีมากค่ะ เพราะจะเห็นภาพน้ำตาล ไขมัน ตับ ไต และความดันได้ชัดขึ้น`
-      : `${greetingPrefix}ฉันยังไม่แน่ใจว่า${prototypeUserDisplayName()}เคยตรวจสุขภาพมาก่อนไหม ถ้าเคย ตรวจล่าสุดประมาณเมื่อไหร่คะ`
-    : !slotSummary.age || !slotSummary.goal
-      ? `${greetingPrefix}ก่อนวางแผนตรวจ ขอรู้ 2 เรื่องสั้นๆ ค่ะ: อายุประมาณเท่าไหร่ และอยากโฟกัสเรื่องไหนเป็นพิเศษคะ`
-    : !slotSummary.clinicalHistory
-      ? 'ขอเพิ่มอีกนิดค่ะคุณบอส มีโรคประจำตัว ยาที่กินประจำ หรือแพ้ยาอะไรไหมคะ'
-      : !slotSummary.recentCheckup
-        ? 'ถ้ายังไม่มีผลตรวจล่าสุด ฉันแนะนำเริ่มจากตรวจพื้นฐานก่อนค่ะ เพราะจะเห็นภาพน้ำตาล ไขมัน ตับ ไต และความดันได้ชัดขึ้น เคยตรวจครั้งล่าสุดเมื่อไหร่คะ'
-        : 'ถ้าจะวางแผนให้ใช้ได้จริง ขอรู้โซนที่สะดวกหรืองบคร่าวๆ ค่ะ เพราะคำแนะนำควรเหมาะทั้งสุขภาพ เวลาเดินทาง และค่าใช้จ่าย';
-
-  return {
-    collectedSlots: slotEntries.filter(([, exists]) => exists).map(([key]) => labels[key]),
-    confidence: Math.min(0.95, 0.68 + slotEntries.filter(([, exists]) => exists).length * 0.03),
-    level,
-    missingSlots: slotEntries.filter(([, exists]) => !exists).map(([key]) => labels[key]),
-    mode,
-    nextQuestion: mode === 'ask_context' ? nextQuestion : null,
-    purpose: 'health_package_recommendation',
-    score,
-  };
 }
 
 function formatProductMoney(amount: number) {
@@ -381,33 +142,13 @@ function createDemoAnswer(question: string) {
 
   if (matches.length === 0) {
     return {
-      content: [
-        'เรื่องนี้ฉันช่วยมองเป็นคำแนะนำทั่วไปให้ได้ค่ะ',
-        'ถ้าจะเริ่มจริงจัง ให้ดูตรวจพื้นฐานก่อน เพราะช่วยเห็นภาพน้ำตาล ไขมัน ตับ ไต และความดันได้ไวค่ะ',
-      ].join('\n'),
+      content: createNaturalHealthFallbackAnswer(question, { hasMatches: false, userNickname: prototypeUserNickname }),
       sources: [],
     };
   }
 
-  const compactTips = matches.slice(0, 2).map((match, index) => {
-    if (match.category === 'ops.booking') {
-      return `${index + 1}. หลังซื้อ ใช้เลข order โทรจองคิวกับโรงพยาบาล`;
-    }
-    if (match.category === 'care.checkup_preparation') {
-      return `${index + 1}. ตรวจพื้นฐานควรดูเลือด ไขมัน น้ำตาล ตับ ไต`;
-    }
-    if (match.category === 'safety.escalation') {
-      return `${index + 1}. ถ้ามีอาการรุนแรง ให้พบแพทย์ทันที`;
-    }
-    return `${index + 1}. เริ่มจากหมวดตรวจที่ตรงกับความเสี่ยงหลักก่อน`;
-  });
-
   return {
-    content: [
-      'แนะนำให้เริ่มจากการตรวจพื้นฐานก่อนค่ะ เพราะเป็นฐานข้อมูลสุขภาพที่ใช้ต่อยอดได้ดีที่สุด',
-      ...compactTips,
-      'ตรวจล่าสุดเมื่อไหร่คะ ถ้าจำไม่ได้ตอบคร่าวๆ ได้เลย',
-    ].join('\n'),
+    content: createNaturalHealthFallbackAnswer(question, { hasMatches: true, userNickname: prototypeUserNickname }),
     sources: matches.map((match) => ({
       category: match.category,
       id: match.id,
@@ -832,12 +573,14 @@ function ChatMessageBubble({
     );
   }
 
+  const assistantContent = sanitizeAssistantDisplayText(message.content, prototypeUserNickname);
+
   return (
     <Animated.View style={[styles.assistantChatRow, { opacity, transform: [{ translateY: translate }] }]}>
       <ChatAvatar />
       <View style={styles.assistantStack}>
         <BlurView intensity={30} tint="light" style={styles.assistantChatBubble}>
-          <Text style={styles.assistantChatText}>{message.content}</Text>
+          <Text style={styles.assistantChatText}>{assistantContent}</Text>
         </BlurView>
         {message.uiCards?.map((card) => (
           <ChatUiCardRenderer key={card.id} card={card} onSelectBranch={onSelectBranch} onSelectProduct={onSelectProduct} />
@@ -1029,7 +772,7 @@ export function PrototypeChatPanel() {
     }
 
     setIsTranscribing(true);
-    setVoiceStatus('กำลังถอดเสียงด้วย OpenAI...');
+    setVoiceStatus('กำลังถอดเสียง...');
 
     try {
       const audioBase64 = await blobToBase64(audioBlob);
@@ -1117,8 +860,8 @@ export function PrototypeChatPanel() {
       createMessage(
         'assistant',
         mode === 'personalized_recommendation'
-          ? 'จากข้อมูลที่มี ฉันเลือกตัวเลือกที่เหมาะให้ 1 รายการ เพราะตรงกับความเสี่ยงหลักที่สุดค่ะ'
-          : 'ได้ค่ะคุณบอส ดูแพ็กเกจนี้ก่อนได้ ถ้าอยากให้ช่วยเลือกให้เหมาะขึ้น บอกอายุหรือโรคประจำตัวเพิ่มได้ค่ะ',
+          ? 'จากข้อมูลที่มี ฉันเลือกตัวเลือกที่เหมาะให้ 1 รายการค่ะ'
+          : 'ได้ค่ะคุณบอส ดูแพ็กเกจนี้ก่อนได้เลย ถ้าอยากให้ช่วยเลือกให้เข้ากับตัวคุณมากขึ้น ค่อยบอกอายุเพิ่มได้ค่ะ',
         undefined,
         [productGridCard((sourceProducts.length ? sourceProducts : fallbackProducts).slice(0, mode === 'personalized_recommendation' ? 1 : 4))],
       ),
@@ -1179,9 +922,9 @@ export function PrototypeChatPanel() {
     setIsSending(true);
     setVoiceStatus(null);
 
-    const productRequestKind = classifyProductRequest(question);
-    const activeProductRequestKind = inferActiveProductRequestKind(nextMessages, productRequestKind);
-    const prototypeContext = createPrototypeContextAssessment(question, activeProductRequestKind, nextMessages);
+    const productRequestKind = classifyPrototypeProductRequest(question);
+    const activeProductRequestKind = inferPrototypeActiveProductRequestKind(nextMessages, productRequestKind);
+    const prototypeContext = createPrototypePolicyContextAssessment(question, activeProductRequestKind, nextMessages, prototypeUserNickname);
 
     try {
       if (activeProductRequestKind !== 'none' && !canUseLiveAi) {
@@ -1214,11 +957,12 @@ export function PrototypeChatPanel() {
         const sourceForMode = contextMode === 'personalized_recommendation' ? productSource.slice(0, 1) : productSource;
         const backendCards = contextMode === 'ask_context' ? result.uiCards.filter((card) => card.type !== 'product_grid') : result.uiCards;
         const uiCards = shouldShowProducts ? withProductGridCard(backendCards, sourceForMode) : backendCards;
-        const answerText = hasProductGridCard(uiCards)
+        const rawAnswerText = hasPrototypeProductGridCard(uiCards)
           ? contextMode === 'personalized_recommendation'
-            ? 'จากข้อมูลที่มี ฉันเลือกตัวเลือกที่เหมาะให้ 1 รายการ เพราะตรงกับความเสี่ยงหลักที่สุดค่ะ'
+            ? 'จากข้อมูลที่มี ฉันเลือกตัวเลือกที่เหมาะให้ 1 รายการค่ะ'
             : cleanProductAssistantText(result.text)
           : result.text;
+        const answerText = enforcePrototypePolicyConversationStyle(rawAnswerText, result.contextAssessment ?? prototypeContext);
         const answer = createMessage('assistant', answerText, result.ragMatches, uiCards);
         setMessages((current) => [...current, answer]);
       } else {
@@ -1228,10 +972,8 @@ export function PrototypeChatPanel() {
         setMessages((current) => [...current, answer]);
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'AI request failed.';
       const demo = createDemoAnswer(question);
-      const fallback = `${demo.content}\n\nLive AI ยังตอบไม่ได้ตอนนี้ (${message})`;
-      setMessages((current) => [...current, createMessage('assistant', fallback, demo.sources)]);
+      setMessages((current) => [...current, createMessage('assistant', demo.content, demo.sources)]);
     } finally {
       setIsSending(false);
     }
@@ -1267,8 +1009,8 @@ export function PrototypeChatPanel() {
                   <HeroLogo />
 
                   <View style={styles.tileGrid}>
-                    <FeatureTile icon={<MicIcon />} label={'Voice\nChat AI'} onPress={toggleVoiceRecording} />
-                    <FeatureTile icon={<ChatIcon />} label={'Chat\nwith AI'} onPress={() => setViewMode('chat')} />
+                    <FeatureTile icon={<MicIcon />} label={'Voice\nChat'} onPress={toggleVoiceRecording} />
+                    <FeatureTile icon={<ChatIcon />} label={'Health\nChat'} onPress={() => setViewMode('chat')} />
                     <FeatureTile icon={<ImageIcon />} label={'Generate\nImages'} />
                     <FeatureTile icon={<ScanIcon />} label={'Scan and\nSearch'} />
                   </View>
