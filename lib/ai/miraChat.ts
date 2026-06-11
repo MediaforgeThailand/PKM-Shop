@@ -10,6 +10,8 @@ import type {
   ChatSlipUploadResponse,
   OrderPanelState,
   ProductSummary,
+  StripeCheckoutRequest,
+  StripeCheckoutResponse,
 } from '@/lib/types/api';
 import { readStoredReferralCode } from '@/lib/referrals/attribution';
 import type {
@@ -359,6 +361,20 @@ export async function uploadPaymentSlipFile(uploadUrl: string, file: SlipUploadF
   if (!response.ok) {
     throw new Error(`Slip upload failed with ${response.status}.`);
   }
+}
+
+export async function createStripeCheckoutSession({
+  orderId,
+  sessionId,
+}: {
+  orderId: string;
+  sessionId?: string | null;
+}) {
+  return invokeFunction<StripeCheckoutRequest, StripeCheckoutResponse>('stripe-checkout', {
+    order_id: orderId,
+    session_id: sessionId ?? orchestratorSessionId,
+    tenant_slug: defaultTenantSlug,
+  });
 }
 
 async function callProxy({

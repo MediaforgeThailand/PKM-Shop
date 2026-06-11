@@ -1,10 +1,17 @@
-import { Link } from 'expo-router';
+import { Link, useLocalSearchParams } from 'expo-router';
 import { StyleSheet, Text } from 'react-native';
 
 import { ActionButton, BrandHeader, Card, Screen } from '@/components/MiraUI';
 import { MiraDesign } from '@/constants/Design';
 
 export default function OrderStatusScreen() {
+  const params = useLocalSearchParams();
+  const payment = Array.isArray(params.payment) ? params.payment[0] : params.payment;
+  const orderId = Array.isArray(params.orderId) ? params.orderId[0] : params.orderId;
+  const stripeSessionId = Array.isArray(params.stripeSessionId) ? params.stripeSessionId[0] : params.stripeSessionId;
+  const isStripeSuccess = payment === 'stripe_success';
+  const isStripeCancelled = payment === 'stripe_cancelled';
+
   return (
     <Screen>
       <BrandHeader
@@ -13,6 +20,22 @@ export default function OrderStatusScreen() {
         subtitle="The v2 order state machine stores updates in chat messages and the admin orders queue instead of a standalone mock order page."
         compact
       />
+
+      {isStripeSuccess || isStripeCancelled ? (
+        <Card>
+          <Text style={styles.cardTitle}>{isStripeSuccess ? 'Stripe checkout returned' : 'Stripe checkout cancelled'}</Text>
+          <Text style={styles.body}>
+            {isStripeSuccess
+              ? 'If payment completed, the Stripe webhook will move the order into the admin review queue.'
+              : 'No Stripe payment was submitted. You can return to chat and choose another payment method.'}
+          </Text>
+          {orderId ? <Text style={styles.metaText}>Order: {orderId}</Text> : null}
+          {stripeSessionId ? <Text style={styles.metaText}>Stripe session: {stripeSessionId}</Text> : null}
+          <Link href="/chatbot" asChild>
+            <ActionButton label="Back to chat" />
+          </Link>
+        </Card>
+      ) : null}
 
       <Card>
         <Text style={styles.cardTitle}>Customer flow</Text>
@@ -43,5 +66,10 @@ const styles = StyleSheet.create({
     color: MiraDesign.color.inkSoft,
     fontSize: 14,
     lineHeight: 21,
+  },
+  metaText: {
+    color: MiraDesign.color.inkSoft,
+    fontSize: 12,
+    fontWeight: '800',
   },
 });

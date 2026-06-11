@@ -350,27 +350,30 @@ async function handleAction({
       sessionId,
     });
 
-    if (action.slip_path) {
-      await updateRows<OrderRow>(
-        'orders',
-        {
-          slip_url: assertPaymentSlipPathForOrder({
-            orderId: action.order_id,
-            slipPath: action.slip_path,
-            tenantId: tenant.id,
-          }),
-          updated_at: nowIso(),
-        },
-        {
-          customer_id: `eq.${customer.id}`,
-          id: `eq.${action.order_id}`,
-          select:
-            'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,channel,referrer_id,commission_scheme_snapshot,status,slip_url,booking_at,admin_note,created_at,updated_at',
-          session_id: `eq.${sessionId}`,
-          tenant_id: `eq.${tenant.id}`,
-        },
-      );
-    }
+    await updateRows<OrderRow>(
+      'orders',
+      {
+        payment_provider: 'promptpay',
+        ...(action.slip_path
+          ? {
+            slip_url: assertPaymentSlipPathForOrder({
+              orderId: action.order_id,
+              slipPath: action.slip_path,
+              tenantId: tenant.id,
+            }),
+          }
+          : {}),
+        updated_at: nowIso(),
+      },
+      {
+        customer_id: `eq.${customer.id}`,
+        id: `eq.${action.order_id}`,
+        select:
+          'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,channel,referrer_id,commission_scheme_snapshot,status,slip_url,booking_at,admin_note,created_at,updated_at,payment_provider,stripe_checkout_session_id,stripe_payment_intent_id,stripe_payment_status,paid_at',
+        session_id: `eq.${sessionId}`,
+        tenant_id: `eq.${tenant.id}`,
+      },
+    );
 
     const order = await transition(action.order_id, 'submitted', 'customer', { channel });
     const loaded = await loadOrderForPanel(order.id, tenant.id);

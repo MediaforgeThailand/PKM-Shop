@@ -36,12 +36,14 @@ export function OrderPanel({
   disabled,
   onPaymentDone,
   onSlipSelected,
+  onStripeCheckout,
   onSubmitForm,
   order,
 }: {
   disabled?: boolean;
   onPaymentDone?: (orderId: string) => void;
   onSlipSelected?: (payload: { file: SlipUploadFile; order_id: string }) => void;
+  onStripeCheckout?: (orderId: string) => void;
   onSubmitForm?: (payload: { buyer_name: string; buyer_phone: string; order_id: string; preferred_date?: string }) => void;
   order: Order;
 }) {
@@ -171,6 +173,15 @@ export function OrderPanel({
                 style={[styles.secondaryButton, disabled ? styles.disabled : null]}
               >
                 <Text style={styles.secondaryButtonText}>อัปโหลดสลิป</Text>
+              </Pressable>
+            ) : null}
+            {onStripeCheckout ? (
+              <Pressable
+                disabled={disabled}
+                onPress={() => onStripeCheckout(order.id)}
+                style={[styles.stripeButton, disabled ? styles.disabled : null]}
+              >
+                <Text style={styles.stripeButtonText}>Pay with Stripe</Text>
               </Pressable>
             ) : null}
           </View>
@@ -305,6 +316,20 @@ const styles = StyleSheet.create({
   },
   secondaryButtonText: {
     color: MiraDesign.color.primaryDeep,
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  stripeButton: {
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: '#635BFF',
+    borderRadius: 8,
+    justifyContent: 'center',
+    minHeight: 40,
+    paddingHorizontal: 16,
+  },
+  stripeButtonText: {
+    color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '900',
   },

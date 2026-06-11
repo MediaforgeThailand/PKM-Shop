@@ -104,6 +104,18 @@ export type ChatSlipUploadResponse = {
   upload_url: string;
 };
 
+export type StripeCheckoutRequest = {
+  order_id: string;
+  session_id?: string | null;
+  tenant_slug: string;
+};
+
+export type StripeCheckoutResponse = {
+  checkout_url: string;
+  order: OrderPanelState;
+  stripe_checkout_session_id: string;
+};
+
 export type FactExtractorRequest = {
   message_id: string;
 };
@@ -259,6 +271,8 @@ export type OrderRow = {
   created_at: string;
   customer_id: string | null;
   id: string;
+  paid_at: string | null;
+  payment_provider: 'promptpay' | 'stripe' | null;
   preferred_branch: string | null;
   preferred_date: string | null;
   product_id: string;
@@ -267,6 +281,9 @@ export type OrderRow = {
   session_id: string | null;
   slip_url: string | null;
   status: OrderStatus;
+  stripe_checkout_session_id: string | null;
+  stripe_payment_intent_id: string | null;
+  stripe_payment_status: string | null;
   tenant_id: string;
   updated_at: string;
 };

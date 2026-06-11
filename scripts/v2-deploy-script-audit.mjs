@@ -10,6 +10,8 @@ const expectedFunctions = [
   'admin-order-action',
   'referrer-order',
   'line-webhook',
+  'stripe-checkout',
+  'stripe-webhook',
   'lab-ingest',
   'lab-confirm',
   'wearable-ingest',
@@ -56,6 +58,10 @@ if (!(await exists(deployScriptPath))) {
 
   if (!source.includes('line-webhook --project-ref $projectRef --no-verify-jwt')) {
     violations.push(`${deployScriptPath}: line-webhook must deploy with --no-verify-jwt for LINE callbacks`);
+  }
+
+  if (!source.includes('stripe-webhook --project-ref $projectRef --no-verify-jwt')) {
+    violations.push(`${deployScriptPath}: stripe-webhook must deploy with --no-verify-jwt for Stripe callbacks`);
   }
 }
 

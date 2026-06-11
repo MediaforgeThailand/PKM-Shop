@@ -68,6 +68,9 @@ supabase secrets set OPENAI_API_KEY=your_openai_api_key_here
 supabase secrets set MIRACARE_PROMPT_ID=pmpt_6a29c7e353b88196a6e648b24c54849e0f6204e24d65c021
 supabase secrets set FACT_MODEL=gpt-5-mini
 supabase secrets set APP_BASE_URL=https://your-app.example
+supabase secrets set STRIPE_SECRET_KEY=sk_test_your_key_here
+supabase secrets set STRIPE_WEBHOOK_SECRET=whsec_your_webhook_secret_here
+supabase secrets set MIRA_PUBLIC_APP_URL=https://your-app.example
 supabase secrets set DEFAULT_USER_NICKNAME=ลูกค้า
 ```
 
@@ -79,7 +82,10 @@ supabase functions deploy fact-extractor
 supabase functions deploy admin-order-action
 supabase functions deploy referrer-order
 supabase functions deploy line-webhook --no-verify-jwt
+supabase functions deploy stripe-checkout
+supabase functions deploy stripe-webhook --no-verify-jwt
 supabase functions deploy lab-ingest
+supabase functions deploy lab-confirm
 supabase functions deploy wearable-ingest
 ```
 
@@ -92,6 +98,8 @@ On Windows, you can also run the helper script. It reads `SUPABASE_ACCESS_TOKEN`
 `SUPABASE_ACCESS_TOKEN` is the Supabase account access token used by the CLI to deploy functions. It is different from `OPENAI_API_KEY`, which is the Edge Function secret used at runtime.
 
 The helper deploys the MiraCare v2 Edge Functions, including `chat-orchestrator`, with JWT verification enabled where required. Users must sign in through Supabase Auth before the mobile app can call OpenAI or save chat-derived health facts.
+
+Stripe payments use the authenticated `stripe-checkout` Edge Function and the public `stripe-webhook` callback. Configure the Stripe webhook endpoint as `https://<project-ref>.supabase.co/functions/v1/stripe-webhook` and subscribe to `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed`, and `checkout.session.expired`.
 
 For local function testing:
 

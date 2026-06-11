@@ -1,5 +1,6 @@
 import { Link } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import * as WebBrowser from 'expo-web-browser';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -20,6 +21,7 @@ import {
   chatHistoryQueryKeys,
   createSmallTalkAnswer,
   createOfflineRagAnswer,
+  createStripeCheckoutSession,
   DEFAULT_USER_NICKNAME,
   formatUserDisplayName,
   loadChatHistoryPage,
@@ -227,6 +229,7 @@ export default function ChatbotScreen() {
   const [isLoadingKnowledge, setIsLoadingKnowledge] = useState(true);
   const [isLoadingMoreHistory, setIsLoadingMoreHistory] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [isStartingStripeCheckout, setIsStartingStripeCheckout] = useState(false);
   const [isUploadingSlip, setIsUploadingSlip] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -725,6 +728,53 @@ export default function ChatbotScreen() {
     });
   }
 
+  async function handleStripeCheckout(orderId: string) {
+    if (isSending || isStartingStripeCheckout || !canUseOrderActions) {
+      return;
+    }
+
+    try {
+      setError(null);
+      setIsStartingStripeCheckout(true);
+      appendLog({
+        category: 'api',
+        detail: 'Creating a Stripe Checkout Session for the active order.',
+        status: 'info',
+        title: 'Stripe checkout started',
+      });
+      const checkout = await createStripeCheckoutSession({
+        orderId,
+        sessionId: activeSessionId,
+      });
+      appendLog({
+        category: 'api',
+        detail: 'Stripe returned a hosted checkout URL. Opening it in the browser.',
+        meta: [{ label: 'session', value: checkout.stripe_checkout_session_id.slice(-12) }],
+        status: 'success',
+        title: 'Stripe checkout ready',
+      });
+      await WebBrowser.openBrowserAsync(checkout.checkout_url);
+
+      if (activeSessionId) {
+        const refreshed = await refreshActiveOrderPanel(activeSessionId);
+
+        setRestoredOrder(refreshed.order ?? checkout.order ?? null);
+      }
+    } catch (stripeError) {
+      const message = stripeError instanceof Error ? stripeError.message : 'Unable to start Stripe Checkout.';
+
+      setError(message);
+      appendLog({
+        category: 'api',
+        detail: message,
+        status: 'error',
+        title: 'Stripe checkout failed',
+      });
+    } finally {
+      setIsStartingStripeCheckout(false);
+    }
+  }
+
   async function handleSlipSelected({ file, order_id }: { file: SlipUploadFile; order_id: string }) {
     if (isSending || isUploadingSlip || !canUseOrderActions) {
       return;
@@ -979,9 +1029,10 @@ export default function ChatbotScreen() {
               {message.role === 'assistant' && message.order ? (
                 <View style={styles.uiCardStack}>
                   <OrderPanel
-                    disabled={isSending || isUploadingSlip || !canUseOrderActions}
+                    disabled={isSending || isUploadingSlip || isStartingStripeCheckout || !canUseOrderActions}
                     onPaymentDone={handlePaymentDone}
                     onSlipSelected={(payload) => void handleSlipSelected(payload)}
+                    onStripeCheckout={(orderId) => void handleStripeCheckout(orderId)}
                     onSubmitForm={handleOrderFormSubmit}
                     order={message.order}
                   />
@@ -993,9 +1044,10 @@ export default function ChatbotScreen() {
           {shouldRenderRestoredOrder && restoredOrder ? (
             <View style={styles.restoredOrderPanel}>
               <OrderPanel
-                disabled={isSending || isUploadingSlip || !canUseOrderActions}
+                disabled={isSending || isUploadingSlip || isStartingStripeCheckout || !canUseOrderActions}
                 onPaymentDone={handlePaymentDone}
                 onSlipSelected={(payload) => void handleSlipSelected(payload)}
+                onStripeCheckout={(orderId) => void handleStripeCheckout(orderId)}
                 onSubmitForm={handleOrderFormSubmit}
                 order={restoredOrder}
               />

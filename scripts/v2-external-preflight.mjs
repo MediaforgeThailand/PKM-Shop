@@ -58,6 +58,15 @@ const checks = [
       ],
     ],
   },
+  {
+    detail: 'Needed before testing Stripe Checkout and webhook payment confirmation.',
+    name: 'Stripe checkout setup',
+    required: [
+      ['STRIPE_SECRET_KEY'],
+      ['STRIPE_WEBHOOK_SECRET'],
+      ['MIRA_PUBLIC_APP_URL', 'APP_BASE_URL', 'SITE_URL'],
+    ],
+  },
 ];
 
 let missingCount = 0;

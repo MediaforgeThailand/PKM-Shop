@@ -162,6 +162,20 @@ Deno.serve(async (req) => {
       throw new HttpError('VALIDATION', 'Order not found for this referrer.', 404);
     }
 
+    await updateRows<OrderRow>(
+      'orders',
+      {
+        payment_provider: 'promptpay',
+        updated_at: new Date().toISOString(),
+      },
+      {
+        id: `eq.${order.id}`,
+        select:
+          'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,channel,referrer_id,commission_scheme_snapshot,status,slip_url,booking_at,admin_note,created_at,updated_at,payment_provider,stripe_checkout_session_id,stripe_payment_intent_id,stripe_payment_status,paid_at',
+        tenant_id: `eq.${tenant.id}`,
+      },
+    );
+
     const updated = await transition(order.id, 'submitted', `referrer:${referrer.id}`, { channel: 'referrer' });
 
     return json({

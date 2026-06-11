@@ -17,6 +17,9 @@ const files = {
   orchestrate: 'supabase/functions/_shared/orchestrate.ts',
   orders: 'supabase/functions/_shared/orders.ts',
   referrerOrder: 'supabase/functions/referrer-order/index.ts',
+  stripe: 'supabase/functions/_shared/stripe.ts',
+  stripeCheckout: 'supabase/functions/stripe-checkout/index.ts',
+  stripeWebhook: 'supabase/functions/stripe-webhook/index.ts',
   storage: 'supabase/functions/_shared/storage.ts',
   systemNoticeMigration: 'supabase/migrations/20260611061000_a2_system_notice_single_source.sql',
   templates: 'supabase/functions/_shared/templates.ts',
@@ -31,6 +34,8 @@ const v2EdgeFunctions = {
   lineWebhook: files.lineWebhook,
   labConfirm: files.labConfirm,
   referrerOrder: files.referrerOrder,
+  stripeCheckout: files.stripeCheckout,
+  stripeWebhook: files.stripeWebhook,
   wearableIngest: files.wearableIngest,
 };
 
@@ -259,6 +264,32 @@ expect(
     sources.line.includes('originalContentUrl: qrUrl') &&
     sources.line.includes('previewImageUrl: qrUrl'),
   'LINE QR replies must render/upload PNG and send a LINE image message while keeping a payment postback action',
+);
+
+expect(
+  'Stripe checkout authenticated order scope',
+  sources.stripeCheckout.includes('resolveAuthUserId(req.headers.get') &&
+    sources.stripeCheckout.includes('resolveOrCreateCustomer(tenant.id, authUserId)') &&
+    sources.stripeCheckout.includes('customer_id: `eq.${customerId}`') &&
+    sources.stripeCheckout.includes('session_id: `eq.${sessionId}`') &&
+    sources.stripeCheckout.includes("order.status !== 'awaiting_payment'") &&
+    sources.stripeCheckout.includes('createStripeCheckoutSession') &&
+    sources.stripe.includes("requiredEnv('STRIPE_SECRET_KEY')") &&
+    sources.stripe.includes("'Stripe-Version'"),
+  'stripe-checkout must require a Supabase user, scope the order by tenant/customer/session, and create Checkout through the server-side Stripe secret',
+);
+
+expect(
+  'Stripe webhook signed state transition',
+  sources.stripeWebhook.includes('verifyStripeWebhookEvent(rawBody, req.headers.get') &&
+    sources.stripeWebhook.includes('stripe-signature') &&
+    sources.stripe.includes("requiredEnv('STRIPE_WEBHOOK_SECRET')") &&
+    sources.stripe.includes('crypto.subtle.importKey') &&
+    sources.stripeWebhook.includes("session.payment_status !== 'paid'") &&
+    sources.stripeWebhook.includes('stripeMinorUnitsForBaht(order.amount_baht)') &&
+    sources.stripeWebhook.includes("transition(order.id, 'submitted', 'system'") &&
+    sources.stripeWebhook.includes('ORDER_PAYMENT_SUBMITTED_NOTICE_TH'),
+  'stripe-webhook must verify the Stripe signature, validate paid THB amount, and move awaiting_payment orders through the shared transition path',
 );
 
 for (const [name] of Object.entries(v2EdgeFunctions)) {
