@@ -1,0 +1,177 @@
+import { assertTenant, insertRow, resolveAuthUserId, selectOne, updateRows } from '../_shared/db.ts';
+import { HttpError, handleOptions, json, toErrorResponse, validateJson, z } from '../_shared/http.ts';
+import { loadOrderForPanel, toOrderPanel, transition } from '../_shared/orders.ts';
+import type {
+  CustomerRow,
+  OrderRow,
+  ProductSummary,
+  ReferrerOrderRequest,
+  ReferrerRow,
+} from '../_shared/types.ts';
+
+declare const Deno: {
+  serve: (handler: (req: Request) => Response | Promise<Response>) => void;
+};
+
+const requestSchema = z.discriminatedUnion('action', [
+  z.object({
+    action: z.literal('create_order'),
+    buyer_name: z.string().trim().min(2),
+    buyer_phone: z.string().regex(/^0[689]\d{8}$/),
+    catalog_key: z.string().min(1),
+    preferred_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    tenant_slug: z.string().regex(/^[a-z0-9-]{2,32}$/),
+  }),
+  z.object({
+    action: z.literal('payment_done'),
+    order_id: z.string().uuid(),
+    tenant_slug: z.string().regex(/^[a-z0-9-]{2,32}$/),
+  }),
+]);
+
+async function loadReferrer(tenantId: string, authUserId: string) {
+  const referrer = await selectOne<ReferrerRow>('referrers', {
+    active: 'eq.true',
+    auth_user_id: `eq.${authUserId}`,
+    select: 'id,tenant_id,ref_code,name,type,phone,auth_user_id,commission_scheme,active,created_at',
+    tenant_id: `eq.${tenantId}`,
+  });
+
+  if (!referrer) {
+    throw new HttpError('VALIDATION', 'No active referrer profile is linked to this account.', 403);
+  }
+
+  return referrer;
+}
+
+async function productByCatalogKey(tenantId: string, catalogKey: string) {
+  return selectOne<ProductSummary>('products', {
+    active: 'eq.true',
+    catalog_key: `eq.${catalogKey}`,
+    select: 'id,tenant_id,catalog_key,name,description,price_baht,category,image_url,branch_info,requires_appointment,active',
+    tenant_id: `eq.${tenantId}`,
+  });
+}
+
+async function resolveOrCreateBuyer(tenantId: string, buyerName: string, buyerPhone: string) {
+  const existing = await selectOne<CustomerRow>('customers', {
+    order: 'created_at.asc',
+    phone: `eq.${buyerPhone}`,
+    select: 'id,tenant_id,auth_user_id,line_user_id,nickname,phone,referred_by,referred_at,created_at',
+    tenant_id: `eq.${tenantId}`,
+  });
+
+  if (existing) {
+    if (!existing.nickname) {
+      const rows = await updateRows<CustomerRow>(
+        'customers',
+        {
+          nickname: buyerName,
+        },
+        {
+          id: `eq.${existing.id}`,
+          select: 'id,tenant_id,auth_user_id,line_user_id,nickname,phone,referred_by,referred_at,created_at',
+          tenant_id: `eq.${tenantId}`,
+        },
+      );
+
+      return rows[0] ?? existing;
+    }
+
+    return existing;
+  }
+
+  return insertRow<CustomerRow>('customers', {
+    nickname: buyerName,
+    phone: buyerPhone,
+    tenant_id: tenantId,
+  }, {
+    select: 'id,tenant_id,auth_user_id,line_user_id,nickname,phone,referred_by,referred_at,created_at',
+  });
+}
+
+async function createReferrerOrder(body: Extract<ReferrerOrderRequest, { action: 'create_order' }>, referrer: ReferrerRow) {
+  const product = await productByCatalogKey(referrer.tenant_id, body.catalog_key);
+
+  if (!product) {
+    throw new HttpError('VALIDATION', 'Product not found.', 404);
+  }
+
+  const customer = await resolveOrCreateBuyer(referrer.tenant_id, body.buyer_name, body.buyer_phone);
+  const order = await insertRow<OrderRow>('orders', {
+    amount_baht: product.price_baht,
+    buyer_name: body.buyer_name,
+    buyer_phone: body.buyer_phone,
+    channel: 'referrer',
+    customer_id: customer.id,
+    preferred_date: body.preferred_date ?? null,
+    product_id: product.id,
+    qty: 1,
+    referrer_id: referrer.id,
+    tenant_id: referrer.tenant_id,
+  }, {
+    select:
+      'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,channel,referrer_id,status,slip_url,booking_at,admin_note,created_at,updated_at',
+  });
+
+  await transition(order.id, 'awaiting_payment', `referrer:${referrer.id}`, { channel: 'referrer' });
+
+  return loadOrderForPanel(order.id, referrer.tenant_id);
+}
+
+Deno.serve(async (req) => {
+  const optionsResponse = handleOptions(req);
+
+  if (optionsResponse) {
+    return optionsResponse;
+  }
+
+  if (req.method !== 'POST') {
+    return toErrorResponse(new HttpError('VALIDATION', 'Method not allowed.', 405));
+  }
+
+  try {
+    const body = await validateJson(req, requestSchema);
+    const tenant = await assertTenant(body.tenant_slug);
+    const authUserId = await resolveAuthUserId(req.headers.get('authorization'));
+    const referrer = await loadReferrer(tenant.id, authUserId);
+
+    if (body.action === 'create_order') {
+      const order = await createReferrerOrder(body, referrer);
+
+      return json({
+        order: toOrderPanel(order, tenant),
+        referrer: {
+          id: referrer.id,
+          name: referrer.name,
+          ref_code: referrer.ref_code,
+        },
+      });
+    }
+
+    const order = await selectOne<OrderRow>('orders', {
+      id: `eq.${body.order_id}`,
+      referrer_id: `eq.${referrer.id}`,
+      select:
+        'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,channel,referrer_id,status,slip_url,booking_at,admin_note,created_at,updated_at',
+      tenant_id: `eq.${tenant.id}`,
+    });
+
+    if (!order) {
+      throw new HttpError('VALIDATION', 'Order not found for this referrer.', 404);
+    }
+
+    const updated = await transition(order.id, 'submitted', `referrer:${referrer.id}`, { channel: 'referrer' });
+
+    return json({
+      order: toOrderPanel(await loadOrderForPanel(updated.id, tenant.id), tenant),
+      referrer: {
+        id: referrer.id,
+        name: referrer.name,
+        ref_code: referrer.ref_code,
+      },
+    });
+  } catch (error) {
+    return toErrorResponse(error);
+  }
+});

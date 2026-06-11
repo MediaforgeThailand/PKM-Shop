@@ -1,0 +1,105 @@
+import { canTransition } from '../orders.ts';
+import type { OrderRow, OrderStatus } from '../types.ts';
+
+declare const Deno: {
+  test: (name: string, fn: () => void) => void;
+};
+
+function assert(condition: boolean, message: string) {
+  if (!condition) {
+    throw new Error(message);
+  }
+}
+
+function order(status: OrderStatus, overrides: Partial<OrderRow> = {}): Pick<OrderRow, 'booking_at' | 'buyer_name' | 'buyer_phone' | 'status'> {
+  return {
+    booking_at: null,
+    buyer_name: 'Test Buyer',
+    buyer_phone: '0812345678',
+    status,
+    ...overrides,
+  };
+}
+
+Deno.test('canTransition allows collecting info to awaiting payment with buyer info', () => {
+  assert(canTransition(order('collecting_info'), 'awaiting_payment', 'ai'), 'expected collecting -> awaiting');
+});
+
+Deno.test('canTransition blocks collecting info without buyer name', () => {
+  assert(!canTransition(order('collecting_info', { buyer_name: null }), 'awaiting_payment', 'ai'), 'expected missing buyer name to block');
+});
+
+Deno.test('canTransition allows awaiting payment to submitted', () => {
+  assert(canTransition(order('awaiting_payment'), 'submitted', 'customer'), 'expected awaiting -> submitted');
+});
+
+Deno.test('canTransition blocks submitted to confirmed for non-admin', () => {
+  assert(!canTransition(order('submitted'), 'confirmed', 'customer'), 'expected non-admin confirm to block');
+});
+
+Deno.test('canTransition allows submitted to confirmed for admin', () => {
+  assert(canTransition(order('submitted'), 'confirmed', 'admin:user'), 'expected admin confirm');
+});
+
+Deno.test('canTransition requires booking_at for booked', () => {
+  assert(!canTransition(order('confirmed'), 'booked', 'admin:user'), 'expected missing booking_at to block');
+  assert(canTransition(order('confirmed', { booking_at: '2026-06-11T10:00:00Z' }), 'booked', 'admin:user'), 'expected booking_at to allow');
+});
+
+Deno.test('canTransition blocks terminal statuses', () => {
+  assert(!canTransition(order('done'), 'cancelled', 'admin:user'), 'expected done terminal');
+  assert(!canTransition(order('cancelled'), 'submitted', 'admin:user'), 'expected cancelled terminal');
+});
+
+Deno.test('canTransition allows every legal transition in the state machine', () => {
+  const legalCases: Array<{
+    actor: string;
+    from: OrderStatus;
+    overrides?: Partial<OrderRow>;
+    to: OrderStatus;
+  }> = [
+    { actor: 'ai', from: 'collecting_info', to: 'awaiting_payment' },
+    { actor: 'customer', from: 'collecting_info', to: 'cancelled' },
+    { actor: 'customer', from: 'awaiting_payment', to: 'submitted' },
+    { actor: 'customer', from: 'awaiting_payment', to: 'cancelled' },
+    { actor: 'admin:user', from: 'submitted', to: 'confirmed' },
+    { actor: 'admin:user', from: 'submitted', to: 'cancelled' },
+    { actor: 'admin:user', from: 'confirmed', overrides: { booking_at: '2026-06-11T10:00:00Z' }, to: 'booked' },
+    { actor: 'admin:user', from: 'confirmed', to: 'cancelled' },
+    { actor: 'admin:user', from: 'booked', to: 'done' },
+    { actor: 'admin:user', from: 'booked', to: 'cancelled' },
+  ];
+
+  for (const testCase of legalCases) {
+    assert(
+      canTransition(order(testCase.from, testCase.overrides), testCase.to, testCase.actor),
+      `expected ${testCase.from} -> ${testCase.to} to be legal`,
+    );
+  }
+});
+
+Deno.test('canTransition blocks representative illegal transitions', () => {
+  const illegalCases: Array<{
+    actor: string;
+    from: OrderStatus;
+    overrides?: Partial<OrderRow>;
+    to: OrderStatus;
+  }> = [
+    { actor: 'ai', from: 'collecting_info', overrides: { buyer_phone: null }, to: 'awaiting_payment' },
+    { actor: 'customer', from: 'awaiting_payment', to: 'confirmed' },
+    { actor: 'customer', from: 'submitted', to: 'confirmed' },
+    { actor: 'customer', from: 'submitted', to: 'cancelled' },
+    { actor: 'admin:user', from: 'confirmed', to: 'booked' },
+    { actor: 'customer', from: 'confirmed', overrides: { booking_at: '2026-06-11T10:00:00Z' }, to: 'booked' },
+    { actor: 'customer', from: 'booked', to: 'done' },
+    { actor: 'admin:user', from: 'done', to: 'cancelled' },
+    { actor: 'admin:user', from: 'cancelled', to: 'submitted' },
+  ];
+
+  for (const testCase of illegalCases) {
+    assert(
+      !canTransition(order(testCase.from, testCase.overrides), testCase.to, testCase.actor),
+      `expected ${testCase.from} -> ${testCase.to} to be illegal`,
+    );
+  }
+});
