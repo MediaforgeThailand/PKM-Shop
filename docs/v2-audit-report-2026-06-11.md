@@ -10,7 +10,7 @@ Scope: current worktree against `docs/miracare-codex-handoff.md`, `docs/miracare
 - PASS: `npm run v2:type-safety-audit` (109 TypeScript files scanned)
 - PASS: `npm run chat:quality`
 - PASS: `npm run orders:status-audit`
-- PASS: `npm run v2:schema-audit` (16 tables, 32 policies, 31 indexes, 32 migrations checked)
+- PASS: `npm run v2:schema-audit` (16 tables, 32 policies, 31 indexes, 33 migrations checked)
 - PASS: `npm run v2:open-questions-audit` (2 unresolved-contract topics, 1 blocked row checked)
 - PASS: `npm run v2:local-readiness-audit` (0 Missing rows, 1 decision blocker, 5 external gates checked)
 - PASS: `npm run v2:docs-audit` (12 docs checked)

@@ -20,7 +20,7 @@ Status legend:
 - `npm run v2:type-safety-audit`: passing, 109 TypeScript files scanned.
 - `npm run chat:quality`: passing.
 - `npm run orders:status-audit`: passing.
-- `npm run v2:schema-audit`: passing, 16 tables, 32 policies, 31 indexes, 32 migrations checked.
+- `npm run v2:schema-audit`: passing, 16 tables, 32 policies, 31 indexes, 33 migrations checked.
 - `npm run v2:open-questions-audit`: passing, 2 unresolved-contract topics and 1 blocked row checked.
 - `npm run v2:local-readiness-audit`: passing, 0 Missing rows, 1 decision blocker, and 5 external gates checked.
 - `npm run v2:docs-audit`: passing, 12 docs checked for stale verification evidence.
@@ -117,7 +117,7 @@ Status legend:
 |---|---|---|---|
 | TypeScript strict mode and no explicit `any` | Exists | `tsconfig.json`, `scripts/v2-type-safety-audit.mjs`, `npm run v2:type-safety-audit` | CI now verifies `strict: true`, rejects disabled strict sub-flags, and AST-scans app, component, library, service, and edge-function TypeScript source for explicit `any`. |
 | Type mirrors and header comments | Exists | `lib/types/api.ts`, `supabase/functions/_shared/types.ts`, `scripts/type-mirror-audit.mjs`, `npm run types:mirror-audit` | Exported type definitions are compared by name in CI, and the audit now enforces the mirror header comments in both files. |
-| Schema contract audit in CI | Exists | `scripts/v2-schema-audit.mjs`, `package.json`, `.github/workflows/miracare-v2.yml` | `npm run v2:schema-audit` checks 16 v2 tables, 32 policies, 31 indexes, 32 numbered migrations, chat message idempotency, catalog-key immutability, legacy catalog consolidation, storage bucket contract, referrer type enum, B8 ref-code/default-commission constraints, and referral FK constraints. |
+| Schema contract audit in CI | Exists | `scripts/v2-schema-audit.mjs`, `package.json`, `.github/workflows/miracare-v2.yml` | `npm run v2:schema-audit` checks 16 v2 tables, 32 policies, 31 indexes, 33 numbered migrations, chat message idempotency, catalog-key immutability, legacy catalog consolidation, storage bucket contract, referrer type enum, B8 ref-code/default-commission constraints, and referral FK constraints. |
 | Open-question contract audit in CI | Exists | `scripts/v2-open-questions-audit.mjs`, `docs/v2-open-questions.md`, `.github/workflows/miracare-v2.yml` | The audit keeps the 2 allowed unresolved-contract topics present in the open-question doc and checks that `Blocked` gap-analysis rows cite the authoritative list. |
 | Local readiness audit in CI | Exists | `scripts/v2-local-readiness-audit.mjs`, `docs/v2-local-readiness.md`, `.github/workflows/miracare-v2.yml` | The audit checks that no unblocked `Missing` rows remain, owner-decision blockers stay visible, and external setup gates are not confused with local deterministic proof. |
 | Documentation evidence audit in CI | Exists | `scripts/v2-docs-audit.mjs`, `docs/changes/*`, `docs/v2-gap-analysis.md`, `.github/workflows/miracare-v2.yml` | The audit checks v2 docs for stale verification counts and requires the current verification command evidence to stay visible. |
