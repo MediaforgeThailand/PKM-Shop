@@ -78,7 +78,7 @@ for (const topic of decisionTopics) {
 const externalGateNames = [
   'seed-demo service role setup',
   'seeded chat regression setup',
-  'shadow RLS database setup',
+  'live RLS project setup',
   'LINE sandbox setup',
 ];
 

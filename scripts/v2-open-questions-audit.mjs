@@ -20,7 +20,6 @@ const requiredTopics = [
   ['canonical catalog', ['canonical seven-product catalog']],
   ['legacy consent mapping', ['legacy_consents']],
   ['PDPA export/delete contract', ['pdpa export/delete']],
-  ['shadow RLS secret policy', ['supabase_shadow_db_url']],
   ['prototype release policy', ['prototype/mockup']],
   ['action idempotency sequencing', ['client_msg_id']],
   ['fact extractor tenant context', ['fact-extractor']],

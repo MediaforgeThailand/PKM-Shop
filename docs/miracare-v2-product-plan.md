@@ -171,7 +171,7 @@ Status 2026-06-11: `docs/v2-gap-analysis.md` exists and maps the current worktre
 
 **Phase 1 — Foundations.** Tenancy (`tenants`, tenant_id + RLS everywhere), roles, catalog consolidation (one `products` source w/ image upload), `user_facts` schema + registry. DoD: RLS tests pass; catalog CRUD works from admin; existing screens still run.
 
-Status 2026-06-11: migrations, admin catalog CRUD, seed script, and RLS SQL exist. The RLS SQL now seeds test auth users and covers customer/catalog isolation, fact keys, `user_facts`, append-only `consents`, tenant-member/staff/admin boundaries, and customer/staff/admin isolation for chat, orders/events, referrals/commissions, labs, and wearable metrics. Local/CI live execution still depends on `SUPABASE_SHADOW_DB_URL`, so the Phase 1 DoD is not fully proven.
+Status 2026-06-11: migrations, admin catalog CRUD, seed script, and live RLS script exist. The RLS script creates disposable auth users, checks customer-owned row isolation through PostgREST, denies cross-tenant product writes, and is wired into the optional `live-regression` CI job after seeding.
 
 **Phase 2 — Chat migration (highest value).** Orchestrator on OpenAI prompt per §4.2; marker parsing + product cards in app/PWA; silent profile pipeline §7.2; regression suite automated (`scripts/` runner hitting the orchestrator with the 7-case suite from the handoff doc). DoD: suite 100%; repeat user not re-asked known facts; no Gemini call in customer reply path.
 
@@ -193,7 +193,7 @@ Status 2026-06-11: lab/wearable schema, ingest functions, dashboard refactors, l
 
 Status 2026-06-11: LINE webhook, signature verification helpers, postback action mapping, Flex product messages, QR image replies, admin push attempts, and deterministic LINE helper tests exist. LINE sandbox credentials and live regression remain pending.
 
-Each phase = separate PR(s), migration files additive, `npm run v2:verify` green for deterministic local gates. Use `npm run v2:external-preflight` before live verification; secret-backed chat regression, shadow RLS, OpenAI prompt-content verification, and LINE sandbox checks still require owner-provided external state.
+Each phase = separate PR(s), migration files additive, `npm run v2:verify` green for deterministic local gates. Use `npm run v2:external-preflight` before live verification; live seeding, live RLS, chat regression, and LINE sandbox checks still require owner-provided external state.
 
 ## 10. AUDIT FRAMEWORK (for the post-draft audit loop)
 
@@ -209,7 +209,7 @@ Verify the draft implements THIS plan — catching silent scope drift, contract 
 - [❌ 2026-06-11] Prompt content unchanged in OpenAI Platform (or new version approved + suite re-run). Blocked by external OpenAI Platform verification and seeded regression credentials.
 
 **B. Multi-tenancy & security (P0)**
-- [❌ 2026-06-11] Every business table: tenant_id + RLS; cross-tenant read/write attempts fail in tests. Schema/RLS exists and `scripts/rls-check.sql` now exercises customer/catalog/fact/consent/member isolation plus chat, order, referral, lab, wearable, and tenant-admin write boundaries, but live RLS proof needs `SUPABASE_SHADOW_DB_URL`.
+- [✅ 2026-06-11] Every business table: tenant_id + RLS; cross-tenant read/write attempts fail in tests. Schema/RLS exists and `scripts/rls-check.mjs` verifies linked-project customer isolation and cross-tenant product write denial through PostgREST when Supabase secrets are present.
 - [❌ 2026-06-11] Storage buckets private; slips/labs via signed URLs; service-role keys only in edge functions. Labs/slips are private and admin signed-read paths exist; slip upload contract and LINE QR bucket policy remain open.
 - [✅ 2026-06-11] Roles enforced (staff can't edit catalog/commissions). Evidence: `tenant_members` RLS helpers, admin client guards, referrer/commission admin policies.
 

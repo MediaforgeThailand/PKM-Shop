@@ -23,10 +23,13 @@ const checks = [
     ],
   },
   {
-    detail: 'Needed before executing scripts/rls-check.sql against a shadow database.',
-    name: 'shadow RLS database setup',
-    required: [['SUPABASE_SHADOW_DB_URL', 'RLS_SHADOW_DB_URL']],
-    tools: ['psql'],
+    detail: 'Needed before running npm run v2:rls-check against the linked Supabase project.',
+    name: 'live RLS project setup',
+    required: [
+      ['SUPABASE_URL', 'EXPO_PUBLIC_SUPABASE_URL'],
+      ['SUPABASE_ANON_KEY', 'EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY'],
+      ['SUPABASE_SERVICE_ROLE_KEY'],
+    ],
   },
   {
     detail: `Needed before LINE sandbox regression for tenant "${tenantSlug}".`,

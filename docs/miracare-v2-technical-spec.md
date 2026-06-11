@@ -476,7 +476,7 @@ Refactor `health-check-results.tsx` / `body-overview.tsx` / `wearable-health.tsx
 
 - Unit (deno test): marker (8 cases §2.1), promptpay fixtures (3), state machine (every legal + 6 illegal transitions), context builders (empty/full/overflow), fact normalizer (Thai numerals, Buddhist year, kg parsing).
 - Integration: `scripts/chat-regression.mjs` — runs the 7-case suite from the handoff doc against a seeded test tenant; assertions per case are mechanical: q2/q3 reply contains exactly one `?`-equivalent question (regex `คะ$|ไหมคะ$` count), q4/q5/q6 `marker_product_ids.length >= 1` and ids ∈ seeded catalog, q7 contains `1669` and `marker_product_ids.length == 0`, all replies ≤ 3 sentences (split on Thai sentence boundaries approximated by `ค่ะ|คะ|นะคะ` + newline). Suite must run in CI (GitHub Action) on every PR touching chat code.
-- RLS tests: `scripts/rls-check.sql` — as customer A try to read customer B rows / tenant B catalog → expect 0 rows; run in CI against a shadow db.
+- RLS tests: `scripts/rls-check.mjs` — as customer A try to read customer B rows and write cross-tenant catalog rows through PostgREST → expect 0 rows / denied write; run in optional live CI against the linked project.
 - Seed script `scripts/seed-demo.mjs`: demo tenant + 7-product catalog (the one in the handoff §4) + test customer + referrer — required for all the above.
 
 ## 11. Phase → file map (build order for the implementing agent)

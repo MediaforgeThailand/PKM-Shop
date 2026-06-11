@@ -11,7 +11,7 @@ Scope: current worktree against `docs/miracare-codex-handoff.md`, `docs/miracare
 - PASS: `npm run chat:quality`
 - PASS: `npm run orders:status-audit`
 - PASS: `npm run v2:schema-audit` (16 tables, 32 policies, 30 indexes, 29 migrations checked)
-- PASS: `npm run v2:open-questions-audit` (26 unresolved-contract topics, 4 blocked rows checked)
+- PASS: `npm run v2:open-questions-audit` (25 unresolved-contract topics, 4 blocked rows checked)
 - PASS: `npm run v2:local-readiness-audit` (0 Missing rows, 21 decision blockers, 4 external gates checked)
 - PASS: `npm run v2:docs-audit` (11 docs checked)
 - PASS: `npm run v2:client-audit` (28 production files, 3 removed routes, 64 client files secret-scanned)
@@ -30,12 +30,12 @@ Scope: current worktree against `docs/miracare-codex-handoff.md`, `docs/miracare
 | Published OpenAI prompt content | PASS | P0 | Owner-side verification: the published prompt v2 default was authored and behavior-tested in OpenAI Platform on 2026-06-10/11, and the owner reports the live 7-case regression passes. Codex must not fetch prompt content from code. | Keep prompt changes owner-published as new Platform versions and regression-tested. |
 | Type safety and shared API mirrors | PASS | P0 | `typecheck`, `v2:type-safety-audit`, `types:mirror-audit` | Keep audits required in CI. |
 | Deterministic local verification bundle | PASS | P0 | `v2:verify` runs typecheck, static audits, Deno edge check, and shared Deno tests | Keep external-secret checks separate and documented. |
-| External gate readiness preflight | PASS | P0 | `v2:external-preflight` reports missing prerequisites for live Supabase seeding, chat regression, shadow RLS, and LINE sandbox without printing secrets | Use before attempting external verification runs; it does not prove those runs passed. |
+| External gate readiness preflight | PASS | P0 | `v2:external-preflight` reports missing prerequisites for live Supabase seeding, chat regression, live RLS, and LINE sandbox without printing secrets | Use before attempting external verification runs; it does not prove those runs passed. |
 | Open-question contract hygiene | PASS | P0 | `v2:open-questions-audit` checks required unresolved-contract topics and blocked gap rows | Keep this gate in CI so implementation does not silently drift from the "log questions, do not guess" rule. |
 | Local readiness hygiene | PASS | P0 | `v2:local-readiness-audit` checks there are no unblocked `Missing` rows and keeps owner/external blockers visible | Keep this gate in CI so local-doable work stays separate from contract/credential blockers. |
 | Documentation evidence hygiene | PASS | P2 | `v2:docs-audit` checks v2 docs for stale verification counts and required command evidence | Keep this gate in CI so audit output stays tied to current verification. |
 | Schema contract and migration numbering | PASS | P0 | `v2:schema-audit` | Keep schema audit required in CI. |
-| Live RLS tenant isolation | FAIL | P0 | `scripts/rls-check.sql` exists, but no `SUPABASE_SHADOW_DB_URL` was available for live execution | Run live shadow DB RLS test; owner must decide whether missing secret hard-fails PRs. |
+| Live RLS tenant isolation | PASS | P0 | `scripts/rls-check.mjs` creates disposable auth users, checks customer A cannot read customer B rows through PostgREST, denies cross-tenant product writes, and runs in the optional `live-regression` job | Run the secret-backed live job before release and preserve the local cleanup behavior. |
 | Service-role tenant filtering | FAIL | P0 | `v2:edge-security-audit` passes known invariants, but `fact-extractor`, `lab-ingest`, and wearable request-context contracts remain open | Do not tighten initial lookups until tenant-context contracts are approved in `docs/v2-open-questions.md`. |
 | Customer chat code path | PASS | P1 | React Query history, persisted messages, consent action, `chat-orchestrator`, marker parsing; `chat:quality` and client audit pass | Keep code-path audits in CI. |
 | Seeded chat regression credentials | PASS | P1 | `scripts/create-test-jwt.mjs` creates/updates `regression-test@miracare.dev`, prints only the token when run directly, and `chat-regression` bootstraps it inline when service-role secrets exist | Run the optional live-regression CI job or local suite against the linked project before release. |

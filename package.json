@@ -57,6 +57,7 @@
     "v2:external-preflight": "node scripts/v2-external-preflight.mjs",
     "v2:local-readiness-audit": "node scripts/v2-local-readiness-audit.mjs",
     "v2:open-questions-audit": "node scripts/v2-open-questions-audit.mjs",
+    "v2:rls-check": "node scripts/rls-check.mjs",
     "v2:schema-audit": "node scripts/v2-schema-audit.mjs",
     "v2:health-safety-audit": "node scripts/v2-health-safety-audit.mjs",
     "v2:client-audit": "node scripts/v2-client-audit.mjs",

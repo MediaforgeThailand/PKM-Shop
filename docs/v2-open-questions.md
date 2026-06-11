@@ -4,14 +4,13 @@
 
 - Local-only implementation status: no unblocked `Missing` rows remain in `docs/v2-gap-analysis.md`; new local work should be added as tests, audits, or docs unless an owner contract is required.
 - Owner decision blockers: canonical catalog, legacy consent mapping, PDPA export/delete, prototype/mockup release policy, `client_msg_id` idempotency sequencing, fact-extractor tenant context, payment slip upload, persisted order-panel reload, manual staff verification, 6-character base32 referral codes, `ref_code` transport, referrer payment endpoint split, default commission scheme, lab fact keys, synonym/alias matrix, `lab-ingest` tenant context, low-confidence lab rows confirmation, medical liability wording, `defaultTenantSlug` tenant resolution, `wearable-ingest` request context, wearable `source_ref`, `wearable-imports` bucket naming, Apple Health export upload UX, and `line-assets` bucket policy.
-- External setup blockers: seed-demo service role setup, shadow RLS database setup, and LINE sandbox setup.
+- External setup blockers: seed-demo service role setup and LINE sandbox setup.
 
 ## Phase 1
 
 - The current `docs/miracare-codex-handoff.md` product catalog section shows the product object contract, but not a canonical seven-product catalog. `scripts/seed-demo.mjs` seeds seven deterministic demo rows so tests can run; replace those rows if the owner has a specific canonical catalog.
 - The repo already had a prototype `consents` table shaped around `user_id`, `purpose`, and `status`. Phase 1 introduces the spec's customer-scoped `consents` table. The migration preserves the old table as `legacy_consents` when needed, but there is no spec-defined mapping from old consent purposes to tenant/customer consent rows.
 - The product plan mentions PDPA export/delete paths for `user_facts`, but the technical spec does not define endpoint names, payloads, authorization rules, or cascade scope. Confirm whether these are in v2 technical scope and, if so, provide the write contract before implementation.
-- The v2 RLS shadow check is wired for CI only when `SUPABASE_SHADOW_DB_URL` is present. `scripts/rls-check.sql` now seeds its own test auth users and covers customer/catalog isolation, fact key visibility, `user_facts`, append-only `consents`, tenant-member/staff/admin boundaries, and customer/staff/admin isolation for chat, orders/events, referrals/commissions, labs, and wearable metrics. Live execution still needs the shadow database URL/secret. Confirm whether PRs should hard-fail when this secret is absent.
 - The product plan leaves existing prototype/mockup screens as an owner decision. Current production route audits keep `/prototype` isolated and production health routes on live v2 data; confirm whether prototype-only demo screens should remain available or be removed before v2 release.
 
 ## Phase 2

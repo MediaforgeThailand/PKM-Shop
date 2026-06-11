@@ -35,7 +35,7 @@ npm run v2:verify
 npm run v2:external-preflight
 ```
 
-`v2:verify` runs the deterministic local gates for the v2 implementation. `v2:external-preflight` reports which live Supabase/OpenAI/LINE prerequisites are present without printing secret values; use it before seeded chat regression, shadow RLS checks, OpenAI prompt-content verification, or LINE sandbox runs.
+`v2:verify` runs the deterministic local gates for the v2 implementation. `v2:external-preflight` reports which live Supabase/LINE prerequisites are present without printing secret values; use it before live seeding, live RLS checks, chat regression, or LINE sandbox runs.
 
 `v2:verify` also runs `v2:open-questions-audit`, which keeps unresolved contract decisions parked in `docs/v2-open-questions.md`, `v2:local-readiness-audit`, which verifies there are no unblocked local `Missing` rows, and `v2:docs-audit`, which catches stale verification evidence in v2 docs.
 

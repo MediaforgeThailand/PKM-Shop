@@ -5,6 +5,16 @@ import { createClient } from '@supabase/supabase-js';
 export const REGRESSION_TEST_EMAIL = 'regression-test@miracare.dev';
 
 export async function createRegressionTestJwt(env = process.env) {
+  const { accessToken } = await createAuthUserSession({
+    email: REGRESSION_TEST_EMAIL,
+    env,
+    purpose: 'miracare-v2-regression',
+  });
+
+  return accessToken;
+}
+
+export async function createAuthUserSession({ email, env = process.env, purpose }) {
   const supabaseUrl = env.SUPABASE_URL ?? env.EXPO_PUBLIC_SUPABASE_URL;
   const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY;
   const anonKey = env.SUPABASE_ANON_KEY ?? env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
@@ -28,9 +38,13 @@ export async function createRegressionTestJwt(env = process.env) {
     },
   });
   const password = randomBytes(36).toString('base64url');
-  const user = await upsertRegressionUser(admin, password);
+  const user = await upsertAuthUser(admin, {
+    email,
+    password,
+    purpose,
+  });
   const { data, error } = await auth.auth.signInWithPassword({
-    email: REGRESSION_TEST_EMAIL,
+    email,
     password,
   });
 
@@ -38,22 +52,29 @@ export async function createRegressionTestJwt(env = process.env) {
     throw new Error(error?.message ?? `Unable to sign in regression test user ${user.id}.`);
   }
 
-  return data.session.access_token;
+  return {
+    accessToken: data.session.access_token,
+    user,
+  };
 }
 
-async function upsertRegressionUser(admin, password) {
-  const existing = await findAuthUserByEmail(admin, REGRESSION_TEST_EMAIL);
+async function upsertAuthUser(admin, { email, password, purpose }) {
+  const existing = await findAuthUserByEmail(admin, email);
 
   if (existing) {
-    return updateRegressionUser(admin, existing.id, password);
+    return updateAuthUser(admin, {
+      password,
+      purpose,
+      userId: existing.id,
+    });
   }
 
   const { data, error } = await admin.auth.admin.createUser({
-    email: REGRESSION_TEST_EMAIL,
+    email,
     email_confirm: true,
     password,
     user_metadata: {
-      purpose: 'miracare-v2-regression',
+      purpose,
     },
   });
 
@@ -62,22 +83,26 @@ async function upsertRegressionUser(admin, password) {
   }
 
   if (error && /already|registered|exists/i.test(error.message)) {
-    const raceWinner = await findAuthUserByEmail(admin, REGRESSION_TEST_EMAIL);
+    const raceWinner = await findAuthUserByEmail(admin, email);
 
     if (raceWinner) {
-      return updateRegressionUser(admin, raceWinner.id, password);
+      return updateAuthUser(admin, {
+        password,
+        purpose,
+        userId: raceWinner.id,
+      });
     }
   }
 
   throw new Error(error?.message ?? 'Unable to create regression test user.');
 }
 
-async function updateRegressionUser(admin, userId, password) {
+async function updateAuthUser(admin, { password, purpose, userId }) {
   const { data, error } = await admin.auth.admin.updateUserById(userId, {
     email_confirm: true,
     password,
     user_metadata: {
-      purpose: 'miracare-v2-regression',
+      purpose,
     },
   });
 
