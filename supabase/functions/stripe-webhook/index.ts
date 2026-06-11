@@ -1,4 +1,4 @@
-import { insertRow, selectOne, updateRows } from '../_shared/db.ts';
+﻿import { insertRow, selectOne, updateRows } from '../_shared/db.ts';
 import { handleOptions, HttpError, json, toErrorResponse } from '../_shared/http.ts';
 import { transition } from '../_shared/orders.ts';
 import { asStripeCheckoutSession, stripeMinorUnitsForBaht, verifyStripeWebhookEvent } from '../_shared/stripe.ts';
@@ -52,7 +52,7 @@ async function loadOrder(orderId: string, tenantId?: string | null) {
   return selectOne<StripeOrderRow>('orders', {
     id: `eq.${orderId}`,
     select:
-      'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,channel,referrer_id,commission_scheme_snapshot,status,slip_url,booking_at,admin_note,created_at,updated_at,payment_provider,stripe_checkout_session_id,stripe_payment_intent_id,stripe_payment_status,paid_at,products(name)',
+      'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,channel,referrer_id,commission_scheme_snapshot,status,slip_url,booking_at,branch_id,buyer_age,admin_note,created_at,updated_at,payment_provider,stripe_checkout_session_id,stripe_payment_intent_id,stripe_payment_status,paid_at,products(name)',
     ...(tenantId ? { tenant_id: `eq.${tenantId}` } : {}),
   });
 }
@@ -106,7 +106,7 @@ async function markStripeSessionPaid(eventId: string, session: NonNullable<Retur
     {
       id: `eq.${order.id}`,
       select:
-        'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,channel,referrer_id,commission_scheme_snapshot,status,slip_url,booking_at,admin_note,created_at,updated_at,payment_provider,stripe_checkout_session_id,stripe_payment_intent_id,stripe_payment_status,paid_at',
+        'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,channel,referrer_id,commission_scheme_snapshot,status,slip_url,booking_at,branch_id,buyer_age,admin_note,created_at,updated_at,payment_provider,stripe_checkout_session_id,stripe_payment_intent_id,stripe_payment_status,paid_at',
       tenant_id: `eq.${order.tenant_id}`,
     },
   );
@@ -175,7 +175,7 @@ async function markStripeSessionUnpaid(eventId: string, session: NonNullable<Ret
     {
       id: `eq.${order.id}`,
       select:
-        'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,channel,referrer_id,commission_scheme_snapshot,status,slip_url,booking_at,admin_note,created_at,updated_at,payment_provider,stripe_checkout_session_id,stripe_payment_intent_id,stripe_payment_status,paid_at',
+        'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,channel,referrer_id,commission_scheme_snapshot,status,slip_url,booking_at,branch_id,buyer_age,admin_note,created_at,updated_at,payment_provider,stripe_checkout_session_id,stripe_payment_intent_id,stripe_payment_status,paid_at',
       tenant_id: `eq.${order.tenant_id}`,
     },
   );

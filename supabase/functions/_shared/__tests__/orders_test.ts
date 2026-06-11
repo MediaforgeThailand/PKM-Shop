@@ -23,9 +23,10 @@ function assertSame<T>(actual: T, expected: T, message: string) {
   }
 }
 
-function order(status: OrderStatus, overrides: Partial<OrderRow> = {}): Pick<OrderRow, 'booking_at' | 'buyer_name' | 'buyer_phone' | 'status'> {
+function order(status: OrderStatus, overrides: Partial<OrderRow> = {}): Pick<OrderRow, 'booking_at' | 'buyer_age' | 'buyer_name' | 'buyer_phone' | 'status'> {
   return {
     booking_at: null,
+    buyer_age: 35,
     buyer_name: 'Test Buyer',
     buyer_phone: '0812345678',
     status,
@@ -39,6 +40,18 @@ Deno.test('canTransition allows collecting info to awaiting payment with buyer i
 
 Deno.test('canTransition blocks collecting info without buyer name', () => {
   assert(!canTransition(order('collecting_info', { buyer_name: null }), 'awaiting_payment', 'ai'), 'expected missing buyer name to block');
+});
+
+Deno.test('canTransition blocks collecting info without buyer age', () => {
+  assert(!canTransition(order('collecting_info', { buyer_age: null }), 'awaiting_payment', 'ai'), 'expected missing buyer age to block');
+});
+
+Deno.test('canTransition allows selecting branch to collecting info for customer', () => {
+  assert(canTransition(order('selecting_branch'), 'collecting_info', 'customer'), 'expected selecting_branch -> collecting_info');
+});
+
+Deno.test('canTransition blocks selecting branch for non-customer actors', () => {
+  assert(!canTransition(order('selecting_branch'), 'collecting_info', 'ai'), 'expected ai selecting_branch transition to block');
 });
 
 Deno.test('canTransition allows awaiting payment to submitted', () => {
@@ -70,6 +83,8 @@ Deno.test('canTransition allows every legal transition in the state machine', ()
     overrides?: Partial<OrderRow>;
     to: OrderStatus;
   }> = [
+    { actor: 'customer', from: 'selecting_branch', to: 'collecting_info' },
+    { actor: 'customer', from: 'selecting_branch', to: 'cancelled' },
     { actor: 'ai', from: 'collecting_info', to: 'awaiting_payment' },
     { actor: 'customer', from: 'collecting_info', to: 'cancelled' },
     { actor: 'customer', from: 'awaiting_payment', to: 'submitted' },
@@ -97,7 +112,10 @@ Deno.test('canTransition blocks representative illegal transitions', () => {
     overrides?: Partial<OrderRow>;
     to: OrderStatus;
   }> = [
+    { actor: 'ai', from: 'selecting_branch', to: 'collecting_info' },
+    { actor: 'admin:user', from: 'selecting_branch', to: 'collecting_info' },
     { actor: 'ai', from: 'collecting_info', overrides: { buyer_phone: null }, to: 'awaiting_payment' },
+    { actor: 'ai', from: 'collecting_info', overrides: { buyer_age: null }, to: 'awaiting_payment' },
     { actor: 'customer', from: 'awaiting_payment', to: 'confirmed' },
     { actor: 'customer', from: 'submitted', to: 'confirmed' },
     { actor: 'customer', from: 'submitted', to: 'cancelled' },

@@ -32,6 +32,13 @@ Deno.test('orderBookedNoticeTh formats Bangkok booking time deterministically', 
   );
 });
 
+Deno.test('orderBookedNoticeTh includes branch name when available', () => {
+  assertEquals(
+    orderBookedNoticeTh('ตรวจสุขภาพพื้นฐาน', '2026-06-11T03:45:00Z', 'สุขุมวิท'),
+    'ยืนยันการจอง ตรวจสุขภาพพื้นฐาน สาขา สุขุมวิท วันที่ 2026-06-11 10:45 เรียบร้อยค่ะ',
+  );
+});
+
 Deno.test('orderSystemNoticeForStatus returns null for non-notice transitions', () => {
   assertEquals(orderSystemNoticeForStatus('done', 'ตรวจสุขภาพพื้นฐาน', null), null);
   assertEquals(orderSystemNoticeForStatus('cancelled', 'ตรวจสุขภาพพื้นฐาน', null), null);

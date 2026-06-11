@@ -1,10 +1,11 @@
 import { supabase, supabaseConfigStatus } from '@/lib/supabase';
-import type { CatalogCategory, ProductSummary, TenantSummary } from '@/lib/types/api';
+import type { BranchRow, CatalogCategory, ProductCategoryRow, ProductSummary, TenantSummary } from '@/lib/types/api';
 
 export type ProductCategory = CatalogCategory;
 
 export type HospitalProductDraft = {
   branchInfo?: string;
+  branchIds?: string[];
   category?: ProductCategory;
   description: string;
   hospitalAddress: string;
@@ -50,6 +51,8 @@ export type ProductClassification = {
 
 export type HospitalProduct = {
   bookingNote?: string | null;
+  branchIds: string[];
+  branches: BranchSummary[];
   catalogKey: string;
   category: ProductCategory;
   createdAt: string;
@@ -81,6 +84,47 @@ export type HospitalProductStatus = HospitalProduct['status'];
 export type ProductImageUploadResult = {
   path: string;
   publicUrl: string;
+};
+
+export type BranchSummary = {
+  active: boolean;
+  address: string | null;
+  district: string | null;
+  id: string;
+  imageUrl: string | null;
+  mapUrl: string | null;
+  name: string;
+  phone: string | null;
+  sort: number;
+};
+
+export type BranchDraft = {
+  active?: boolean;
+  address?: string;
+  district?: string;
+  imageUrl?: string;
+  mapUrl?: string;
+  name: string;
+  phone?: string;
+  sort?: string;
+};
+
+export type ProductCategoryOption = {
+  active: boolean;
+  icon: string | null;
+  imageUrl: string | null;
+  key: string;
+  labelTh: string;
+  sort: number;
+};
+
+export type ProductCategoryDraft = {
+  active?: boolean;
+  icon?: string;
+  imageUrl?: string;
+  key: string;
+  labelTh: string;
+  sort?: string;
 };
 
 export type TenantMemberContext = TenantSummary & {
@@ -119,17 +163,23 @@ type ProductRow = {
   updated_at: string;
 };
 
+type ProductBranchJoinRow = {
+  branch_id: string;
+  branches?: BranchRow | BranchRow[] | null;
+  product_id: string;
+};
+
 type TenantRow = TenantSummary;
 
 export const defaultTenantSlug = process.env.EXPO_PUBLIC_MIRA_TENANT_SLUG?.trim() || 'demo-hospital';
 
-const categoryLabels: Record<ProductCategory, string> = {
+const categoryLabels: Record<string, string> = {
   checkup: 'Checkup',
   general: 'General',
   vaccine: 'Vaccine',
 };
 
-const productCategories = Object.keys(categoryLabels) as ProductCategory[];
+const productCategories = Object.keys(categoryLabels);
 
 function compactText(value: string) {
   return value.replace(/\s+/g, ' ').trim();
@@ -152,7 +202,7 @@ function unique(values: string[]) {
 }
 
 function asCategory(value: string): ProductCategory {
-  return productCategories.includes(value as ProductCategory) ? (value as ProductCategory) : 'general';
+  return value.trim() || 'general';
 }
 
 function tenantNameFromJoin(value: ProductRow['tenants']) {
@@ -218,10 +268,12 @@ function deriveIncludes(description: string) {
 
 function toHospitalProduct(row: ProductRow): HospitalProduct {
   const category = asCategory(row.category);
-  const tags = unique([categoryLabels[category], row.requires_appointment ? 'Appointment' : 'Walk-in']);
+  const tags = unique([categoryLabels[category] ?? category, row.requires_appointment ? 'Appointment' : 'Walk-in']);
 
   return {
     bookingNote: row.requires_appointment ? 'Requires appointment' : 'Walk-in allowed',
+    branchIds: [],
+    branches: [],
     catalogKey: row.catalog_key,
     category,
     createdAt: row.created_at,
@@ -330,7 +382,8 @@ export function analyzeProductDescription(draft: HospitalProductDraft, category:
   const extractedIncludes = deriveIncludes(description);
   const extractedPreparationNotes = splitList(description).filter((item) => /fast|prepare|appointment|งด|ยา|แพ้/.test(item.toLowerCase()));
   const summary = description.length > 180 ? `${description.slice(0, 177).trim()}...` : description;
-  const suggestedTags = unique([categoryLabels[category], ...extractedIncludes.slice(0, 4)]).slice(0, 8);
+  const categoryLabel = getProductCategoryLabel(category);
+  const suggestedTags = unique([categoryLabel, ...extractedIncludes.slice(0, 4)]).slice(0, 8);
   const bookingGuidance = draft.requiresAppointment === false ? 'Walk-in allowed if the tenant confirms availability.' : 'Appointment is required before service.';
   const warnings = description.length < 60 ? ['Description is short; confirm medical and booking details before publishing.'] : [];
   const ragSections: DescriptionRagSection[] = [
@@ -367,7 +420,7 @@ export function analyzeProductDescription(draft: HospitalProductDraft, category:
     bookingGuidance,
     extractedIncludes,
     extractedPreparationNotes,
-    keywords: unique([draft.title, categoryLabels[category], ...suggestedTags, ...extractedIncludes]).slice(0, 16),
+    keywords: unique([draft.title, categoryLabel, ...suggestedTags, ...extractedIncludes]).slice(0, 16),
     ragSections,
     suggestedTags,
     summary,
@@ -391,17 +444,99 @@ export function classifyHospitalProduct(draft: HospitalProductDraft): ProductCla
 }
 
 export function getProductCategoryLabel(category: ProductCategory) {
-  return categoryLabels[category];
+  return categoryLabels[category] ?? category;
 }
 
 export function getProductCategories() {
   return productCategories;
 }
 
+function toBranchSummary(row: BranchRow): BranchSummary {
+  return {
+    active: row.active,
+    address: row.address,
+    district: row.district,
+    id: row.id,
+    imageUrl: row.image_url,
+    mapUrl: row.map_url,
+    name: row.name,
+    phone: row.phone,
+    sort: row.sort,
+  };
+}
+
+function toProductCategoryOption(row: ProductCategoryRow): ProductCategoryOption {
+  return {
+    active: row.active,
+    icon: row.icon,
+    imageUrl: row.image_url,
+    key: row.key,
+    labelTh: row.label_th,
+    sort: row.sort,
+  };
+}
+
+function normalizeCategoryKey(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 48);
+}
+
+function parseSort(value: string | undefined) {
+  return Math.round(Number(value) || 0);
+}
+
+function compactOptional(value: string | undefined) {
+  const compacted = compactText(value ?? '');
+
+  return compacted || null;
+}
+
+function embeddedBranch(value: ProductBranchJoinRow['branches']) {
+  return Array.isArray(value) ? value[0] ?? null : value ?? null;
+}
+
+async function attachBranches(products: HospitalProduct[]) {
+  if (products.length === 0) {
+    return products;
+  }
+
+  const { data, error } = await supabase
+    .from('product_branches')
+    .select('product_id,branch_id,branches(id,tenant_id,name,address,district,phone,map_url,image_url,active,sort,created_at)')
+    .in('product_id', products.map((product) => product.id));
+
+  if (error || !data) {
+    return products;
+  }
+
+  const branchesByProduct = new Map<string, BranchSummary[]>();
+  const branchIdsByProduct = new Map<string, string[]>();
+
+  for (const row of data as unknown as ProductBranchJoinRow[]) {
+    const branch = embeddedBranch(row.branches);
+
+    branchIdsByProduct.set(row.product_id, [...(branchIdsByProduct.get(row.product_id) ?? []), row.branch_id]);
+
+    if (branch) {
+      branchesByProduct.set(row.product_id, [...(branchesByProduct.get(row.product_id) ?? []), toBranchSummary(branch)]);
+    }
+  }
+
+  return products.map((product) => ({
+    ...product,
+    branchIds: branchIdsByProduct.get(product.id) ?? [],
+    branches: branchesByProduct.get(product.id) ?? [],
+  }));
+}
+
 export function buildProductRagPreview(draft: HospitalProductDraft, classification = classifyHospitalProduct(draft)) {
   const price = parsePriceBaht(draft.priceAmount);
   const lines = [
-    `${compactText(draft.title)} (${categoryLabels[classification.category]})`,
+    `${compactText(draft.title)} (${getProductCategoryLabel(classification.category)})`,
     `Price: ${price.toLocaleString('th-TH')} THB`,
     draft.branchInfo || draft.hospitalAddress ? `Branch: ${compactText(draft.branchInfo || draft.hospitalAddress)}` : '',
     classification.analysis.summary ? `Description: ${classification.analysis.summary}` : '',
@@ -429,7 +564,7 @@ export async function loadActiveHospitalProducts(limit = 20): Promise<HospitalPr
     return [];
   }
 
-  return (data as unknown as ProductRow[]).map(toHospitalProduct);
+  return attachBranches((data as unknown as ProductRow[]).map(toHospitalProduct));
 }
 
 export async function loadManagedHospitalProducts(limit = 80): Promise<HospitalProduct[]> {
@@ -450,7 +585,115 @@ export async function loadManagedHospitalProducts(limit = 80): Promise<HospitalP
     return [];
   }
 
-  return (data as unknown as ProductRow[]).map(toHospitalProduct);
+  return attachBranches((data as unknown as ProductRow[]).map(toHospitalProduct));
+}
+
+export async function loadBranches(includeInactive = true): Promise<BranchSummary[]> {
+  const tenant = await requireTenant();
+  let query = supabase
+    .from('branches')
+    .select('id,tenant_id,name,address,district,phone,map_url,image_url,active,sort,created_at')
+    .eq('tenant_id', tenant.id)
+    .order('sort', { ascending: true })
+    .order('created_at', { ascending: true });
+
+  if (!includeInactive) {
+    query = query.eq('active', true);
+  }
+
+  const { data, error } = await query;
+
+  if (error || !data) {
+    throw new Error(error?.message ?? 'Unable to load branches.');
+  }
+
+  return (data as unknown as BranchRow[]).map(toBranchSummary);
+}
+
+export async function saveBranch(draft: BranchDraft, branchId?: string): Promise<BranchSummary> {
+  await requireAuthenticatedUser();
+  const tenant = await requireTenant();
+  const payload = {
+    active: draft.active ?? true,
+    address: compactOptional(draft.address),
+    district: compactOptional(draft.district),
+    image_url: compactOptional(draft.imageUrl),
+    map_url: compactOptional(draft.mapUrl),
+    name: compactText(draft.name),
+    phone: compactOptional(draft.phone),
+    sort: parseSort(draft.sort),
+    tenant_id: tenant.id,
+  };
+
+  if (!payload.name) {
+    throw new Error('Branch name is required.');
+  }
+
+  const query = branchId
+    ? supabase.from('branches').update(payload).eq('id', branchId).eq('tenant_id', tenant.id)
+    : supabase.from('branches').insert(payload);
+  const { data, error } = await query
+    .select('id,tenant_id,name,address,district,phone,map_url,image_url,active,sort,created_at')
+    .single();
+
+  if (error || !data) {
+    throw new Error(error?.message ?? 'Unable to save branch.');
+  }
+
+  return toBranchSummary(data as unknown as BranchRow);
+}
+
+export async function loadProductCategories(includeInactive = true): Promise<ProductCategoryOption[]> {
+  const tenant = await requireTenant();
+  let query = supabase
+    .from('product_categories')
+    .select('tenant_id,key,label_th,icon,image_url,sort,active')
+    .eq('tenant_id', tenant.id)
+    .order('sort', { ascending: true })
+    .order('key', { ascending: true });
+
+  if (!includeInactive) {
+    query = query.eq('active', true);
+  }
+
+  const { data, error } = await query;
+
+  if (error || !data) {
+    throw new Error(error?.message ?? 'Unable to load product categories.');
+  }
+
+  return (data as unknown as ProductCategoryRow[]).map(toProductCategoryOption);
+}
+
+export async function saveProductCategory(draft: ProductCategoryDraft): Promise<ProductCategoryOption> {
+  await requireAuthenticatedUser();
+  const tenant = await requireTenant();
+  const key = normalizeCategoryKey(draft.key);
+
+  if (!key) {
+    throw new Error('Category key is required.');
+  }
+
+  const payload = {
+    active: draft.active ?? true,
+    icon: compactOptional(draft.icon),
+    image_url: compactOptional(draft.imageUrl),
+    key,
+    label_th: compactText(draft.labelTh) || key,
+    sort: parseSort(draft.sort),
+    tenant_id: tenant.id,
+  };
+  const { data, error } = await supabase
+    .from('product_categories')
+    .upsert(payload, { onConflict: 'tenant_id,key' })
+    .select('tenant_id,key,label_th,icon,image_url,sort,active')
+    .single();
+
+  if (error || !data) {
+    throw new Error(error?.message ?? 'Unable to save product category.');
+  }
+
+  return toProductCategoryOption(data as unknown as ProductCategoryRow);
 }
 
 export async function updateHospitalProductStatus(product: HospitalProduct, status: HospitalProductStatus): Promise<HospitalProduct> {
@@ -470,7 +713,10 @@ export async function updateHospitalProductStatus(product: HospitalProduct, stat
     throw new Error(error?.message ?? 'Unable to update product status.');
   }
 
-  return toHospitalProduct(data as unknown as ProductRow);
+  const productWithStatus = toHospitalProduct(data as unknown as ProductRow);
+  const [productWithBranches] = await attachBranches([productWithStatus]);
+
+  return productWithBranches ?? productWithStatus;
 }
 
 export async function uploadProductImage(file: Blob & { name?: string; type?: string }, productId?: string): Promise<ProductImageUploadResult> {
@@ -532,6 +778,25 @@ export async function saveHospitalProductWithRag(draft: HospitalProductDraft, pr
   }
 
   const product = toHospitalProduct(data as unknown as ProductRow);
+  const branchIds = (draft.branchIds ?? []).filter(Boolean);
+
+  if (draft.branchIds !== undefined) {
+    await supabase.from('product_branches').delete().eq('product_id', product.id);
+
+    if (branchIds.length > 0) {
+      const { error: branchError } = await supabase.from('product_branches').insert(
+        branchIds.map((branchId) => ({
+          branch_id: branchId,
+          product_id: product.id,
+        })),
+      );
+
+      if (branchError) {
+        throw new Error(branchError.message || 'Unable to save product branches.');
+      }
+    }
+  }
+  const [productWithBranches] = await attachBranches([product]);
 
   return {
     catalogKey: product.catalogKey,
@@ -540,7 +805,7 @@ export async function saveHospitalProductWithRag(draft: HospitalProductDraft, pr
       message: 'Phase 1 stores catalog rows only; chat/RAG integration moves to Phase 2.',
       status: 'skipped',
     },
-    product,
+    product: productWithBranches ?? product,
     ragChunkId: product.catalogKey,
   };
 }

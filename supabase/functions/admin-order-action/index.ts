@@ -1,4 +1,4 @@
-import { insertRow, resolveAuthUserId, selectMany, selectOne, updateRows } from '../_shared/db.ts';
+﻿import { insertRow, resolveAuthUserId, selectMany, selectOne, updateRows } from '../_shared/db.ts';
 import { HttpError, handleOptions, json, toErrorResponse, validateJson, z } from '../_shared/http.ts';
 import { pushLineMessages, textLineMessage } from '../_shared/line.ts';
 import { normalizePaymentSlipPath, transition } from '../_shared/orders.ts';
@@ -11,7 +11,7 @@ declare const Deno: {
 };
 
 const requestSchema = z.object({
-  action: z.enum(['confirm', 'book', 'done', 'cancel', 'slip_url']),
+  action: z.enum(['confirm', 'book', 'done', 'cancel', 'note', 'slip_url']),
   booking_at: z.string().optional(),
   note: z.string().optional(),
   order_id: z.string().uuid(),
@@ -24,6 +24,9 @@ type OrderNotificationRow = Pick<OrderRow, 'channel' | 'customer_id' | 'id' | 's
     line_user_id: string | null;
   }>;
   products: Embedded<{
+    name: string | null;
+  }>;
+  branches: Embedded<{
     name: string | null;
   }>;
   tenants: Embedded<{
@@ -97,7 +100,7 @@ async function signedSlipUrl(order: Pick<OrderRow, 'slip_url'>): Promise<AdminSl
 async function loadOrderNotification(orderId: string, tenantId: string) {
   return selectOne<OrderNotificationRow>('orders', {
     id: `eq.${orderId}`,
-    select: 'id,tenant_id,customer_id,session_id,channel,tenants(slug),customers(line_user_id),products(name)',
+    select: 'id,tenant_id,customer_id,session_id,channel,tenants(slug),customers(line_user_id),products(name),branches(name)',
     tenant_id: `eq.${tenantId}`,
   });
 }
@@ -195,7 +198,7 @@ Deno.serve(async (req) => {
     const order = await selectOne<OrderRow>('orders', {
       id: `eq.${body.order_id}`,
       select:
-        'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,channel,referrer_id,commission_scheme_snapshot,status,slip_url,booking_at,admin_note,created_at,updated_at',
+        'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,channel,referrer_id,commission_scheme_snapshot,status,slip_url,booking_at,branch_id,buyer_age,admin_note,created_at,updated_at',
       tenant_id: `in.(${tenantFilter})`,
     });
 
@@ -213,6 +216,35 @@ Deno.serve(async (req) => {
       return json(await signedSlipUrl(order));
     }
 
+    if (body.action === 'note') {
+      const note = body.note?.trim();
+
+      if (!note) {
+        throw new HttpError('VALIDATION', 'note is required to update an internal note.', 400);
+      }
+
+      const rows = await updateRows<OrderRow>(
+        'orders',
+        {
+          admin_note: note,
+          updated_at: new Date().toISOString(),
+        },
+        {
+          id: `eq.${order.id}`,
+          select:
+            'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,channel,referrer_id,commission_scheme_snapshot,status,slip_url,booking_at,branch_id,buyer_age,admin_note,created_at,updated_at',
+          tenant_id: `eq.${order.tenant_id}`,
+        },
+      );
+      const updatedOrder = rows[0];
+
+      if (!updatedOrder) {
+        throw new HttpError('VALIDATION', 'Order not found.', 404);
+      }
+
+      return json({ order: updatedOrder });
+    }
+
     if (body.action === 'book' && !body.booking_at) {
       throw new HttpError('VALIDATION', 'booking_at is required to book an order.', 400);
     }
@@ -228,7 +260,7 @@ Deno.serve(async (req) => {
         {
           id: `eq.${order.id}`,
           select:
-            'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,channel,referrer_id,commission_scheme_snapshot,status,slip_url,booking_at,admin_note,created_at,updated_at',
+            'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,channel,referrer_id,commission_scheme_snapshot,status,slip_url,booking_at,branch_id,buyer_age,admin_note,created_at,updated_at',
           tenant_id: `eq.${order.tenant_id}`,
         },
       );
@@ -241,8 +273,9 @@ Deno.serve(async (req) => {
     });
     const notificationOrder = await loadOrderNotification(order.id, order.tenant_id);
     const productName = embeddedOne(notificationOrder?.products ?? null)?.name ?? null;
+    const branchName = embeddedOne(notificationOrder?.branches ?? null)?.name ?? null;
     const didTransition = order.status !== updatedOrder.status;
-    const noticeText = didTransition ? orderSystemNoticeForStatus(updatedOrder.status, productName, updatedOrder.booking_at) : null;
+    const noticeText = didTransition ? orderSystemNoticeForStatus(updatedOrder.status, productName, updatedOrder.booking_at, branchName) : null;
 
     if (noticeText && notificationOrder?.session_id) {
       await persistSystemNotice(notificationOrder.session_id, noticeText);

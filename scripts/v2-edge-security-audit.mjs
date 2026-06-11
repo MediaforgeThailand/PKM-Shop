@@ -197,7 +197,7 @@ expect(
 
 expect(
   'admin payment slip signed read contract',
-  sources.adminOrderAction.includes("action: z.enum(['confirm', 'book', 'done', 'cancel', 'slip_url'])") &&
+  sources.adminOrderAction.includes("action: z.enum(['confirm', 'book', 'done', 'cancel', 'note', 'slip_url'])") &&
     sources.adminOrderAction.includes("createSignedReadUrl('payment-slips', storagePath, 60 * 60)") &&
     sources.adminOrderAction.includes('normalizePaymentSlipPath') &&
     sources.storage.includes('createSignedReadUrl') &&

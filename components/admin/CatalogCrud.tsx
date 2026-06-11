@@ -10,20 +10,27 @@ import {
   defaultTenantSlug,
   getProductCategories,
   getProductCategoryLabel,
+  loadBranches,
   loadTenantMemberContext,
   loadManagedHospitalProducts,
+  loadProductCategories,
   saveCatalogProduct,
+  saveProductCategory,
   updateHospitalProductStatus,
   uploadProductImage,
+  type BranchSummary,
   type HospitalProduct,
   type HospitalProductDraft,
   type HospitalProductStatus,
   type ProductCategory,
+  type ProductCategoryDraft,
+  type ProductCategoryOption,
   type TenantMemberContext,
 } from '@/lib/marketplace/hospitalProducts';
 
 const emptyDraft: HospitalProductDraft = {
   branchInfo: '',
+  branchIds: [],
   category: 'checkup',
   description: '',
   hospitalAddress: '',
@@ -44,6 +51,15 @@ export function CatalogCrud({ title = 'Catalog CRUD' }: { title?: string }) {
   const { width } = useWindowDimensions();
   const [draft, setDraft] = useState<HospitalProductDraft>(emptyDraft);
   const [editingProduct, setEditingProduct] = useState<HospitalProduct | null>(null);
+  const [branches, setBranches] = useState<BranchSummary[]>([]);
+  const [categories, setCategories] = useState<ProductCategoryOption[]>([]);
+  const [categoryDraft, setCategoryDraft] = useState<ProductCategoryDraft>({
+    active: true,
+    icon: '',
+    key: '',
+    labelTh: '',
+    sort: '',
+  });
   const [products, setProducts] = useState<HospitalProduct[]>([]);
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
@@ -62,6 +78,21 @@ export function CatalogCrud({ title = 'Catalog CRUD' }: { title?: string }) {
     draft.title.trim().length > 1 &&
     draft.description.trim().length > 3 &&
     Number(draft.priceAmount.replace(/,/g, '')) >= 0;
+  const categoryOptions = useMemo<ProductCategoryOption[]>(
+    () =>
+      categories.length > 0
+        ? categories
+        : getProductCategories().map((category, index) => ({
+            active: true,
+            icon: null,
+            imageUrl: null,
+            key: category,
+            labelTh: getProductCategoryLabel(category),
+            sort: index,
+          })),
+    [categories],
+  );
+  const activeCategoryOptions = useMemo(() => categoryOptions.filter((category) => category.active), [categoryOptions]);
 
   const filteredProducts = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -69,6 +100,7 @@ export function CatalogCrud({ title = 'Catalog CRUD' }: { title?: string }) {
     return products.filter((product) => {
       const matchesStatus = statusFilter === 'all' || product.status === statusFilter;
       const matchesCategory = categoryFilter === 'all' || product.category === categoryFilter;
+      const categoryLabel = categoryOptions.find((category) => category.key === product.category)?.labelTh ?? getProductCategoryLabel(product.category);
       const searchText = [
         product.title,
         product.catalogKey,
@@ -76,13 +108,15 @@ export function CatalogCrud({ title = 'Catalog CRUD' }: { title?: string }) {
         product.hospitalName,
         product.hospitalAddress,
         product.category,
+        categoryLabel,
+        ...product.branches.flatMap((branch) => [branch.name, branch.address, branch.district]),
       ]
         .join(' ')
         .toLowerCase();
 
       return matchesStatus && matchesCategory && (!normalizedQuery || searchText.includes(normalizedQuery));
     });
-  }, [categoryFilter, products, query, statusFilter]);
+  }, [categoryFilter, categoryOptions, products, query, statusFilter]);
 
   const summary = useMemo(
     () => ({
@@ -114,6 +148,8 @@ export function CatalogCrud({ title = 'Catalog CRUD' }: { title?: string }) {
       if (!auth.user) {
         setTenantContext(null);
         setProducts([]);
+        setBranches([]);
+        setCategories([]);
         return;
       }
 
@@ -122,20 +158,42 @@ export function CatalogCrud({ title = 'Catalog CRUD' }: { title?: string }) {
 
       if (!context) {
         setProducts([]);
+        setBranches([]);
+        setCategories([]);
         return;
       }
 
-      const items = await loadManagedHospitalProducts();
+      const [items, branchList, categoryList] = await Promise.all([
+        loadManagedHospitalProducts(),
+        loadBranches(),
+        loadProductCategories(),
+      ]);
       setProducts(items);
+      setBranches(branchList);
+      setCategories(categoryList);
     } catch (loadError) {
       setTenantContext(null);
       setProducts([]);
+      setBranches([]);
+      setCategories([]);
       setError(loadError instanceof Error ? loadError.message : 'Unable to load catalog.');
     }
   }
 
-  function updateDraft(field: keyof HospitalProductDraft, value: string | boolean) {
+  function updateDraft<K extends keyof HospitalProductDraft>(field: K, value: HospitalProductDraft[K]) {
     setDraft((current) => ({ ...current, [field]: value }));
+  }
+
+  function toggleDraftBranch(branchId: string) {
+    setDraft((current) => {
+      const currentIds = current.branchIds ?? [];
+      const nextIds = currentIds.includes(branchId) ? currentIds.filter((id) => id !== branchId) : [...currentIds, branchId];
+
+      return {
+        ...current,
+        branchIds: nextIds,
+      };
+    });
   }
 
   async function refreshProducts() {
@@ -147,10 +205,49 @@ export function CatalogCrud({ title = 'Catalog CRUD' }: { title?: string }) {
         return;
       }
 
-      const items = await loadManagedHospitalProducts();
+      const [items, branchList, categoryList] = await Promise.all([
+        loadManagedHospitalProducts(),
+        loadBranches(),
+        loadProductCategories(),
+      ]);
       setProducts(items);
+      setBranches(branchList);
+      setCategories(categoryList);
     } catch (refreshError) {
       setError(refreshError instanceof Error ? refreshError.message : 'Unable to load catalog.');
+    }
+  }
+
+  async function addCategory() {
+    if (!canEditCatalog) {
+      setError('Only tenant admins can add product categories.');
+      return;
+    }
+
+    if (!categoryDraft.key.trim() || !categoryDraft.labelTh.trim()) {
+      setError('Category key and Thai label are required.');
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+      setError(null);
+      setMessage(null);
+      const saved = await saveProductCategory(categoryDraft);
+      setCategories((current) => [saved, ...current.filter((category) => category.key !== saved.key)].sort((a, b) => a.sort - b.sort || a.key.localeCompare(b.key)));
+      updateDraft('category', saved.key);
+      setCategoryDraft({
+        active: true,
+        icon: '',
+        key: '',
+        labelTh: '',
+        sort: '',
+      });
+      setMessage(`Added category ${saved.labelTh}.`);
+    } catch (categoryError) {
+      setError(categoryError instanceof Error ? categoryError.message : 'Unable to add category.');
+    } finally {
+      setIsSaving(false);
     }
   }
 
@@ -276,6 +373,11 @@ export function CatalogCrud({ title = 'Catalog CRUD' }: { title?: string }) {
             <Pressable disabled={isLoading} onPress={refreshProducts} style={[styles.secondaryButton, isLoading ? styles.disabled : null]}>
               <Text style={styles.secondaryButtonText}>{isLoading ? 'Refreshing' : 'Refresh'}</Text>
             </Pressable>
+            <Link href="/admin/branches" asChild>
+              <Pressable style={styles.secondaryButton}>
+                <Text style={styles.secondaryButtonText}>Branches</Text>
+              </Pressable>
+            </Link>
             <Link href="/" asChild>
               <Pressable style={styles.primaryButton}>
                 <Text style={styles.primaryButtonText}>Product Overview</Text>
@@ -356,23 +458,96 @@ export function CatalogCrud({ title = 'Catalog CRUD' }: { title?: string }) {
                 ) : null}
               </View>
             </View>
-            <Field label="Branch Info" multiline onChangeText={(value) => updateDraft('branchInfo', value)} value={draft.branchInfo ?? ''} />
+
+            {draft.branchInfo ? (
+              <View style={styles.legacyNotice}>
+                <Text style={styles.legacyTitle}>Legacy branch_info TODO</Text>
+                <Text style={styles.legacyBody}>{draft.branchInfo}</Text>
+                <Text style={styles.helperText}>Use branch availability below for v3. Legacy text is preserved but not parsed.</Text>
+              </View>
+            ) : null}
 
             <View style={styles.controlGroup}>
               <Text style={styles.fieldLabel}>Category</Text>
               <View style={styles.segmentRow}>
-                {getProductCategories().map((category) => (
+                {activeCategoryOptions.map((category) => (
                   <Pressable
-                    key={category}
-                    onPress={() => updateDraft('category', category)}
-                    style={[styles.segment, draft.category === category ? styles.segmentActive : null]}
+                    key={category.key}
+                    onPress={() => updateDraft('category', category.key)}
+                    style={[styles.segment, draft.category === category.key ? styles.segmentActive : null]}
                   >
-                    <Text style={[styles.segmentText, draft.category === category ? styles.segmentTextActive : null]}>
-                      {getProductCategoryLabel(category)}
+                    <Text style={[styles.segmentText, draft.category === category.key ? styles.segmentTextActive : null]}>
+                      {category.icon ? `${category.icon} ` : ''}
+                      {category.labelTh}
                     </Text>
                   </Pressable>
                 ))}
               </View>
+            </View>
+
+            {canEditCatalog ? (
+              <View style={styles.inlineAdminPanel}>
+                <Text style={styles.fieldLabel}>Add Category</Text>
+                <View style={styles.categoryAdminRow}>
+                  <TextInput
+                    onChangeText={(value) => setCategoryDraft((current) => ({ ...current, key: value }))}
+                    placeholder="key"
+                    placeholderTextColor={MiraDesign.color.muted}
+                    style={[styles.input, styles.compactInput]}
+                    value={categoryDraft.key}
+                  />
+                  <TextInput
+                    onChangeText={(value) => setCategoryDraft((current) => ({ ...current, labelTh: value }))}
+                    placeholder="label_th"
+                    placeholderTextColor={MiraDesign.color.muted}
+                    style={[styles.input, styles.compactInput]}
+                    value={categoryDraft.labelTh}
+                  />
+                  <TextInput
+                    onChangeText={(value) => setCategoryDraft((current) => ({ ...current, icon: value }))}
+                    placeholder="icon"
+                    placeholderTextColor={MiraDesign.color.muted}
+                    style={[styles.input, styles.iconInput]}
+                    value={categoryDraft.icon ?? ''}
+                  />
+                  <Pressable disabled={isSaving} onPress={addCategory} style={[styles.inlineButton, isSaving ? styles.disabled : null]}>
+                    <Text style={styles.inlineButtonText}>Add</Text>
+                  </Pressable>
+                </View>
+              </View>
+            ) : null}
+
+            <View style={styles.controlGroup}>
+              <Text style={styles.fieldLabel}>Branch Availability</Text>
+              {branches.length === 0 ? (
+                <Text style={styles.helperText}>No branches yet. Add a branch before assigning availability.</Text>
+              ) : (
+                <View style={styles.branchOptionList}>
+                  {branches.map((branch) => {
+                    const selected = (draft.branchIds ?? []).includes(branch.id);
+
+                    return (
+                      <Pressable
+                        key={branch.id}
+                        disabled={!canEditCatalog}
+                        onPress={() => toggleDraftBranch(branch.id)}
+                        style={[styles.branchOption, selected ? styles.branchOptionActive : null, !branch.active ? styles.branchOptionInactive : null]}
+                      >
+                        <View style={[styles.radioDot, selected ? styles.radioDotActive : null]} />
+                        <View style={styles.branchOptionCopy}>
+                          <Text style={styles.branchOptionTitle}>
+                            {branch.name}
+                            {!branch.active ? ' (inactive)' : ''}
+                          </Text>
+                          <Text numberOfLines={2} style={styles.branchOptionMeta}>
+                            {[branch.address, branch.district, branch.phone].filter(Boolean).join(' · ') || 'No address'}
+                          </Text>
+                        </View>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              )}
             </View>
 
             <View style={styles.controlGroup}>
@@ -429,6 +604,7 @@ export function CatalogCrud({ title = 'Catalog CRUD' }: { title?: string }) {
               <FilterChips
                 activeCategory={categoryFilter}
                 activeStatus={statusFilter}
+                categories={categoryOptions}
                 onCategoryChange={setCategoryFilter}
                 onStatusChange={setStatusFilter}
               />
@@ -449,6 +625,7 @@ export function CatalogCrud({ title = 'Catalog CRUD' }: { title?: string }) {
                   onEdit={() => editProduct(product)}
                   onRestore={() => changeStatus(product, 'active')}
                   product={product}
+                  productCategoryLabel={categoryOptions.find((category) => category.key === product.category)?.labelTh ?? getProductCategoryLabel(product.category)}
                   selected={editingProduct?.id === product.id}
                 />
               ))
@@ -463,6 +640,7 @@ export function CatalogCrud({ title = 'Catalog CRUD' }: { title?: string }) {
 function draftFromProduct(product: HospitalProduct): HospitalProductDraft {
   return {
     branchInfo: product.hospitalAddress ?? '',
+    branchIds: product.branchIds,
     category: product.category,
     description: product.description,
     hospitalAddress: product.hospitalAddress ?? '',
@@ -478,14 +656,18 @@ function draftFromProduct(product: HospitalProduct): HospitalProductDraft {
 function FilterChips({
   activeCategory,
   activeStatus,
+  categories,
   onCategoryChange,
   onStatusChange,
 }: {
   activeCategory: ProductCategory | 'all';
   activeStatus: StatusFilter;
+  categories: ProductCategoryOption[];
   onCategoryChange: (category: ProductCategory | 'all') => void;
   onStatusChange: (status: StatusFilter) => void;
 }) {
+  const activeCategories = categories.filter((category) => category.active);
+
   return (
     <View style={styles.chipGroup}>
       <View style={styles.chipRow}>
@@ -506,14 +688,15 @@ function FilterChips({
         >
           <Text style={[styles.filterChipText, activeCategory === 'all' ? styles.filterChipTextActive : null]}>all</Text>
         </Pressable>
-        {getProductCategories().map((category) => (
+        {activeCategories.map((category) => (
           <Pressable
-            key={category}
-            onPress={() => onCategoryChange(category)}
-            style={[styles.filterChip, activeCategory === category ? styles.filterChipActive : null]}
+            key={category.key}
+            onPress={() => onCategoryChange(category.key)}
+            style={[styles.filterChip, activeCategory === category.key ? styles.filterChipActive : null]}
           >
-            <Text style={[styles.filterChipText, activeCategory === category ? styles.filterChipTextActive : null]}>
-              {getProductCategoryLabel(category)}
+            <Text style={[styles.filterChipText, activeCategory === category.key ? styles.filterChipTextActive : null]}>
+              {category.icon ? `${category.icon} ` : ''}
+              {category.labelTh}
             </Text>
           </Pressable>
         ))}
@@ -529,6 +712,7 @@ function ProductRow({
   onEdit,
   onRestore,
   product,
+  productCategoryLabel,
   selected,
 }: {
   disabled: boolean;
@@ -537,9 +721,11 @@ function ProductRow({
   onEdit: () => void;
   onRestore: () => void;
   product: HospitalProduct;
+  productCategoryLabel: string;
   selected: boolean;
 }) {
   const isActive = product.status === 'active';
+  const branchNames = product.branches.map((branch) => branch.name).join(', ');
 
   return (
     <View style={[styles.productRow, selected ? styles.productRowSelected : null]}>
@@ -550,7 +736,7 @@ function ProductRow({
         </View>
         <View style={styles.rowPills}>
           <Pill label={product.status} tone={isActive ? 'mint' : 'amber'} />
-          <Pill label={getProductCategoryLabel(product.category)} tone="blue" />
+          <Pill label={productCategoryLabel} tone="blue" />
         </View>
       </View>
       <Text numberOfLines={2} style={styles.productDescription}>
@@ -559,8 +745,9 @@ function ProductRow({
       <View style={styles.productMetaGrid}>
         <Meta label="Price" value={`${product.priceAmount.toLocaleString('th-TH')} THB`} />
         <Meta label="Booking" value={product.requiresAppointment ? 'Appointment' : 'Walk-in'} />
-        <Meta label="Branch" value={product.hospitalAddress || 'Not set'} />
+        <Meta label="Branches" value={branchNames || 'Not assigned'} />
       </View>
+      {product.hospitalAddress ? <Text style={styles.helperText}>Legacy branch_info TODO: {product.hospitalAddress}</Text> : null}
       <View style={styles.productFooter}>
         <Pressable onPress={onEdit} style={styles.editButton}>
           <Text style={styles.editButtonText}>Edit</Text>
@@ -893,6 +1080,111 @@ const styles = StyleSheet.create({
   },
   segmentTextActive: {
     color: MiraDesign.color.primaryDeep,
+  },
+  inlineAdminPanel: {
+    backgroundColor: '#F7FBFA',
+    borderColor: MiraDesign.color.line,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 8,
+    padding: 12,
+  },
+  categoryAdminRow: {
+    alignItems: 'stretch',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  compactInput: {
+    flex: 1,
+    minWidth: 120,
+  },
+  iconInput: {
+    width: 70,
+  },
+  inlineButton: {
+    alignItems: 'center',
+    backgroundColor: MiraDesign.color.primaryDeep,
+    borderRadius: 8,
+    justifyContent: 'center',
+    minHeight: 46,
+    paddingHorizontal: 14,
+  },
+  inlineButtonText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  branchOptionList: {
+    gap: 8,
+  },
+  branchOption: {
+    alignItems: 'center',
+    backgroundColor: '#F7FBFA',
+    borderColor: MiraDesign.color.line,
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 10,
+    minHeight: 58,
+    padding: 10,
+  },
+  branchOptionActive: {
+    backgroundColor: '#E7F4ED',
+    borderColor: MiraDesign.color.primary,
+  },
+  branchOptionInactive: {
+    opacity: 0.65,
+  },
+  radioDot: {
+    borderColor: MiraDesign.color.inkSoft,
+    borderRadius: 8,
+    borderWidth: 2,
+    height: 16,
+    width: 16,
+  },
+  radioDotActive: {
+    backgroundColor: MiraDesign.color.primary,
+    borderColor: MiraDesign.color.primary,
+  },
+  branchOptionCopy: {
+    flex: 1,
+    gap: 3,
+  },
+  branchOptionTitle: {
+    color: MiraDesign.color.ink,
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  branchOptionMeta: {
+    color: MiraDesign.color.inkSoft,
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  legacyNotice: {
+    backgroundColor: '#FFF7DD',
+    borderColor: '#F3D17B',
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 6,
+    padding: 12,
+  },
+  legacyTitle: {
+    color: '#6F5100',
+    fontSize: 12,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+  },
+  legacyBody: {
+    color: MiraDesign.color.ink,
+    fontSize: 13,
+    fontWeight: '800',
+    lineHeight: 18,
+  },
+  helperText: {
+    color: MiraDesign.color.inkSoft,
+    fontSize: 12,
+    lineHeight: 17,
   },
   saveButton: {
     alignItems: 'center',

@@ -351,7 +351,7 @@ DoD: ✅ 2026-06-12 marker tests cover 3 types + 4-id cap + legacy 2-id; ✅ 202
 
 **V3-1 — Data & admin.**
 Migrations §3 (branches, product_branches, product_categories, orders columns, `selecting_branch` in check + `transition_order`); seed default branch + categories (checkup/vaccine) per tenant; admin branches screen + catalog bindings + orders queue deltas.
-DoD: ❌ RLS checks extended (`scripts/rls-check.mjs`); ❌ illegal `selecting_branch` transitions rejected in `orders_test.ts`; ❌ admin can CRUD branches/categories and assign products; ❌ booking modal writes valid `booking_at`.
+DoD: ✅ 2026-06-12 RLS checks extended (`scripts/rls-check.mjs`); ✅ 2026-06-12 illegal `selecting_branch` transitions rejected in `orders_test.ts`; ✅ 2026-06-12 admin can CRUD branches/categories and assign products; ✅ 2026-06-12 booking modal writes valid `booking_at`.
 
 **V3-2 — Chat commerce UX (app/PWA).**
 Actions §4.3; order context §4.4; ProductGrid, CategoryGrid, BranchPicker, BookingSheet, OrderStatusCard; OrderPanel slimming; chatbot.tsx wiring; QR-only payment (Stripe behind flag).

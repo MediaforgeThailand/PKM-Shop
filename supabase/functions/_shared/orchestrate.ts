@@ -87,11 +87,11 @@ export const chatRequestSchema = z.object({
 
 const CHAT_MESSAGE_SELECT = 'id,session_id,role,content,marker_product_ids,cards,openai_response_id,client_msg_id,created_at';
 const ORDER_PANEL_SELECT =
-  'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,channel,referrer_id,commission_scheme_snapshot,status,slip_url,booking_at,admin_note,created_at,updated_at,products(name,catalog_key,category,price_baht)';
+  'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,channel,referrer_id,commission_scheme_snapshot,status,slip_url,booking_at,branch_id,buyer_age,admin_note,created_at,updated_at,products(name,catalog_key,category,price_baht)';
 const CATEGORY_FALLBACK_LABELS: Record<string, { icon: string | null; label_th: string; sort: number }> = {
-  checkup: { icon: '🩺', label_th: 'ตรวจสุขภาพ', sort: 10 },
-  vaccine: { icon: '💉', label_th: 'วัคซีน', sort: 20 },
-  general: { icon: '🏥', label_th: 'บริการทั่วไป', sort: 30 },
+  checkup: { icon: '??', label_th: '??????????', sort: 10 },
+  vaccine: { icon: '??', label_th: '??????', sort: 20 },
+  general: { icon: '??', label_th: '????????????', sort: 30 },
 };
 
 function nowIso() {
@@ -133,7 +133,6 @@ async function resolveOrCreateSession({
     select: 'id,tenant_id,customer_id,channel,flagged,last_message_at,created_at',
   });
 }
-
 type ActionResult = {
   order?: OrderWithProductRow | null;
   response?: ChatOrchestratorResponse;
@@ -575,7 +574,7 @@ function toOrderStatusInfo(order: OrderWithProductRow): OrderStatusInfo {
     branch_name: order.preferred_branch,
     created_at: order.created_at,
     id: order.id,
-    product_name: product?.name ?? 'แพ็กเกจ',
+    product_name: product?.name ?? '???????',
     status: order.status,
   };
 }
@@ -677,7 +676,7 @@ async function persistSystemNotice(sessionId: string, text: string) {
 }
 
 async function updateSessionAfterAssistant(sessionId: string, tenantId: string, text: string) {
-  const emergency = text.includes('1669') || text.includes('ฉุกเฉิน') || text.includes('ห้องฉุกเฉิน');
+  const emergency = text.includes('1669') || text.includes('???????') || text.includes('???????????');
 
   // Never clear an existing flag: a session escalated earlier must stay visible
   // to admin oversight even after the conversation moves on.
@@ -850,7 +849,7 @@ async function completeChatTurn({
       personal_context: personalContext,
       product_catalog: productCatalog,
       recent_chat: recentChat,
-      user_nickname: customer.nickname ?? 'ลูกค้า',
+      user_nickname: customer.nickname ?? '??????',
     },
     message,
   );
