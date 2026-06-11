@@ -11,6 +11,7 @@ const expectedFunctions = [
   'referrer-order',
   'line-webhook',
   'lab-ingest',
+  'lab-confirm',
   'wearable-ingest',
 ];
 const scanRoots = ['scripts', '.github', 'README.md', 'docs'];

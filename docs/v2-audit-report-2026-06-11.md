@@ -7,18 +7,18 @@ Scope: current worktree against `docs/miracare-codex-handoff.md`, `docs/miracare
 - PASS: `npm run typecheck`
 - PASS: `npm run v2:verify` (deterministic local verification bundle)
 - PASS: `npm run v2:external-preflight` (script ran; four external gates report WAIT in this environment)
-- PASS: `npm run v2:type-safety-audit` (106 TypeScript files scanned)
+- PASS: `npm run v2:type-safety-audit` (109 TypeScript files scanned)
 - PASS: `npm run chat:quality`
 - PASS: `npm run orders:status-audit`
 - PASS: `npm run v2:schema-audit` (16 tables, 32 policies, 30 indexes, 31 migrations checked)
-- PASS: `npm run v2:open-questions-audit` (20 unresolved-contract topics, 3 blocked rows checked)
-- PASS: `npm run v2:local-readiness-audit` (0 Missing rows, 18 decision blockers, 4 external gates checked)
+- PASS: `npm run v2:open-questions-audit` (19 unresolved-contract topics, 3 blocked rows checked)
+- PASS: `npm run v2:local-readiness-audit` (0 Missing rows, 17 decision blockers, 4 external gates checked)
 - PASS: `npm run v2:docs-audit` (11 docs checked)
-- PASS: `npm run v2:client-audit` (29 production files, 3 removed routes, 64 client files secret-scanned)
-- PASS: `npm run v2:edge-security-audit` (16 edge/shared/storage/template files scanned)
+- PASS: `npm run v2:client-audit` (30 production files, 3 removed routes, 65 client files secret-scanned)
+- PASS: `npm run v2:edge-security-audit` (17 files scanned)
 - PASS: `npm run v2:health-safety-audit` (14 files scanned)
-- PASS: `npm run types:mirror-audit` (36 exported types checked)
-- PASS: `npm run v2:deno-check` (7 v2 edge entrypoints)
+- PASS: `npm run types:mirror-audit` (38 exported types checked)
+- PASS: `npm run v2:deno-check` (8 v2 edge entrypoints)
 - PASS: `npx.cmd -y deno@2.8.2 test --allow-env --allow-net --import-map=supabase/functions/import_map.json supabase/functions/_shared/__tests__/` (83 passed)
 - PASS: `git diff --check` (Windows line-ending warnings only)
 
@@ -45,7 +45,7 @@ Scope: current worktree against `docs/miracare-codex-handoff.md`, `docs/miracare
 | Referral and commissions code path | PASS | P1 | attribution route, assisted purchase, commission unit tests, referrer admin audit | Keep deterministic tests/audits required in CI. |
 | Referral production contracts and live E2E | FAIL | P1 | `ref_code` format/transport, default commission schemes, endpoint split, and live E2E proof remain open | Confirm contracts and run live attributed/assisted E2E. |
 | Lab/wearable deterministic pipeline | PASS | P1 | lab/wearable schema, lab safety audit, fixture-backed normalizer tests, Apple Health XML/zip streaming tests | Keep health safety audit and shared Deno tests required in CI. |
-| Lab confirmation, legal wording, and live sample evidence | FAIL | P1 | Confirmation write path, legal disclaimer approval, alias table, tenant resolution, and real image-to-OpenAI sample proof remain open | Resolve contracts and capture live sample evidence. |
+| Lab confirmation, legal wording, and live sample evidence | FAIL | P1 | Authenticated `lab-confirm` writes exist and share lab fact insertion with `lab-ingest`; legal disclaimer approval, alias table, tenant resolution, and real image-to-OpenAI sample proof remain open | Resolve remaining contracts and capture live sample evidence. |
 | Wearable production contracts | FAIL | P1 | Bucket naming, wearable `source_ref`, and export-upload UX acceptance remain open | Resolve owner questions before production rollout. |
 | LINE deterministic surface | PASS | P1 | signature/postback/Flex/QR helper tests, edge audit, `line-webhook` check | Keep deterministic LINE tests in CI. |
 | LINE sandbox regression | FAIL | P1 | No tenant LINE sandbox channel credentials/test account were available | Provide LINE sandbox channel credentials and confirm `line-assets` bucket policy; then run sandbox regression. |

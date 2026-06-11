@@ -31,6 +31,7 @@ const productionFiles = [
   'components/chat/ProductCarousel.tsx',
   'lib/ai/miraChat.ts',
   'lib/api/client.ts',
+  'lib/health/labConfirm.ts',
   'lib/health/v2HealthDashboard.ts',
   'lib/marketplace/hospitalProducts.ts',
 ];
@@ -330,6 +331,21 @@ const requiredSnippets = [
     relativePath: 'lib/health/v2HealthDashboard.ts',
     snippet: ".from('user_facts')",
     message: 'health dashboard loader must read user facts from Supabase',
+  },
+  {
+    relativePath: 'lib/health/labConfirm.ts',
+    snippet: "invokeFunction<LabConfirmRequest, LabConfirmResponse>('lab-confirm'",
+    message: 'lab confirmation client must call the trusted lab-confirm edge function',
+  },
+  {
+    relativePath: 'components/HealthInsightScreens.tsx',
+    snippet: 'confirmLabResults',
+    message: 'health results screen must wire low-confidence lab confirmation to the trusted endpoint',
+  },
+  {
+    relativePath: 'components/HealthInsightScreens.tsx',
+    snippet: 'LabConfirmationCard',
+    message: 'health results screen must expose editable low-confidence lab confirmation rows',
   },
   {
     relativePath: 'components/admin/ReferrersAdmin.tsx',

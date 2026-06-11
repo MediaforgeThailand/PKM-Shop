@@ -55,7 +55,6 @@ const decisionTopics = [
   'default commission',
   'lab fact keys',
   'synonym/alias matrix',
-  'low-confidence lab rows',
   'medical liability wording',
   'defaultTenantSlug',
   'source_ref',

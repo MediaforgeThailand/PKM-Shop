@@ -157,6 +157,20 @@ export type LabIngestResponse = {
   results: LabResultRow[];
 };
 
+export type LabConfirmRequest = {
+  confirmations: {
+    test_code: string;
+    unit: string | null;
+    value: number;
+  }[];
+  report_id: string;
+};
+
+export type LabConfirmResponse = {
+  report: LabReportRow;
+  results: LabResultRow[];
+};
+
 export type WearableIngestRequest = {
   customer_id: string;
   storage_path: string;

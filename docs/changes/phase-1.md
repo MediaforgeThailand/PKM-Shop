@@ -27,7 +27,7 @@
 - `npm run v2:open-questions-audit` passed.
 - `npm run v2:docs-audit` passed.
 - `npm run v2:client-audit` passed and now asserts catalog admin role gating, tenant_staff read-only behavior, product-image uploads through `product-images`, public URL resolution, and that catalog save payloads do not write `catalog_key`.
-- `npm run v2:deno-check` passed for the 7 v2 edge entrypoints.
+- `npm run v2:deno-check` passed for the 8 v2 edge entrypoints.
 - `npm run types:mirror-audit` passed.
 - `npm run v2:verify` passed.
 - `npm run v2:external-preflight` ran successfully and reported four external gates waiting on local prerequisites in this environment.

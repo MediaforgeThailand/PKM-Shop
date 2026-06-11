@@ -41,4 +41,5 @@ npx supabase functions deploy admin-order-action --project-ref $projectRef
 npx supabase functions deploy referrer-order --project-ref $projectRef
 npx supabase functions deploy line-webhook --project-ref $projectRef --no-verify-jwt
 npx supabase functions deploy lab-ingest --project-ref $projectRef
+npx supabase functions deploy lab-confirm --project-ref $projectRef
 npx supabase functions deploy wearable-ingest --project-ref $projectRef

@@ -1,6 +1,7 @@
 import { insertRow, selectOne, updateRows, upsertRow } from '../_shared/db.ts';
 import { HttpError, handleOptions, json, toErrorResponse, validateJson, z } from '../_shared/http.ts';
 import { assertInternalServiceRoleAuthorization } from '../_shared/internalAuth.ts';
+import { insertLabFacts } from '../_shared/labFacts.ts';
 import { hasLowConfidenceLabRows, normalizeLabRows } from '../_shared/lab.ts';
 import { callLabSummary, callLabVisionExtractor } from '../_shared/openai.ts';
 import { downloadStorageObject } from '../_shared/storage.ts';
@@ -16,8 +17,6 @@ const requestSchema = z.object({
   storage_path: z.string().min(1),
 });
 
-const factCodes = new Set(['FBS', 'HBA1C', 'CHOL']);
-
 async function loadCustomerForInternalIngest(customerId: string) {
   const customer = await selectOne<CustomerRow>('customers', {
     id: `eq.${customerId}`,
@@ -29,30 +28,6 @@ async function loadCustomerForInternalIngest(customerId: string) {
   }
 
   return customer;
-}
-
-async function insertLabFacts(customer: CustomerRow, report: LabReportRow, rows: LabResultRow[]) {
-  for (const row of rows) {
-    if (!factCodes.has(row.test_code) || row.value === null) {
-      continue;
-    }
-
-    await upsertRow(
-      'user_facts',
-      {
-        confidence: row.confidence,
-        customer_id: customer.id,
-        key: row.test_code,
-        source: 'lab_import',
-        source_ref: report.id,
-        status: 'active',
-        tenant_id: customer.tenant_id,
-        value_num: row.value,
-        value_text: null,
-      },
-      'customer_id,key,source,source_ref',
-    );
-  }
 }
 
 export async function handleLabIngest(req: Request) {

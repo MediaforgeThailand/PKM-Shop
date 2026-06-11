@@ -25,7 +25,7 @@ Local work that is still safe without external setup should be added as a concre
 - Phase 2: `client_msg_id` action idempotency sequencing.
 - Phase 3: manual staff verification acceptance.
 - Phase 4: 6-character base32 referral code alphabet/normalization, `ref_code` transport, referrer payment endpoint split, and default commission scheme.
-- Phase 5: lab fact keys, synonym/alias matrix, low-confidence lab rows confirmation write path, medical liability wording, `defaultTenantSlug` dashboard tenant resolution, wearable `source_ref`, `wearable-imports` bucket naming, and Apple Health export upload UX acceptance.
+- Phase 5: lab fact keys, synonym/alias matrix, medical liability wording, `defaultTenantSlug` dashboard tenant resolution, wearable `source_ref`, `wearable-imports` bucket naming, and Apple Health export upload UX acceptance.
 - Phase 6: `line-assets` bucket/public URL policy.
 
 ## Still Blocked By External Setup

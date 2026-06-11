@@ -29,7 +29,6 @@ const requiredTopics = [
   ['commission default scheme', ['default commission schemes']],
   ['lab fact keys', ['`fbs`']],
   ['lab alias matrix', ['synonym/alias matrix']],
-  ['lab confirmation write contract', ['low-confidence lab rows']],
   ['legal lab wording', ['medical liability wording']],
   ['dashboard tenant resolution', ['defaulttenantslug']],
   ['wearable source ref', ['source_ref']],

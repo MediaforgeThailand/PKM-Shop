@@ -1,10 +1,11 @@
 import { Link } from 'expo-router';
 import type { ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { MiraDesign } from '@/constants/Design';
+import { confirmLabResults } from '@/lib/health/labConfirm';
 import { loadHealthDashboardData, type HealthDashboardData, type LabReportWithResults } from '@/lib/health/v2HealthDashboard';
 import type { LabResultRow, UserFactRow, WearableMetricRow } from '@/lib/types/api';
 
@@ -98,7 +99,9 @@ function latestByMetric(metrics: WearableMetricRow[]) {
 
 export function HealthInsightScreen({ screen }: { screen: HealthInsightKind }) {
   const [data, setData] = useState<HealthDashboardData>(emptyData);
+  const [confirmationNotice, setConfirmationNotice] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isConfirmingLab, setIsConfirmingLab] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -129,6 +132,30 @@ export function HealthInsightScreen({ screen }: { screen: HealthInsightKind }) {
 
   const latestReport = data.labReports[0] ?? null;
   const latestMetrics = useMemo(() => latestByMetric(data.wearableMetrics), [data.wearableMetrics]);
+
+  async function handleConfirmLabReport(
+    reportId: string,
+    confirmations: { test_code: string; unit: string | null; value: number }[],
+  ) {
+    setIsConfirmingLab(true);
+    setError(null);
+    setConfirmationNotice(null);
+
+    try {
+      await confirmLabResults({
+        confirmations,
+        report_id: reportId,
+      });
+      const refreshed = await loadHealthDashboardData();
+
+      setData(refreshed);
+      setConfirmationNotice('Lab results confirmed and profile facts updated.');
+    } catch (confirmError) {
+      setError(confirmError instanceof Error ? confirmError.message : 'Unable to confirm lab results.');
+    } finally {
+      setIsConfirmingLab(false);
+    }
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -168,8 +195,14 @@ export function HealthInsightScreen({ screen }: { screen: HealthInsightKind }) {
           </View>
         ) : null}
 
+        {confirmationNotice ? (
+          <View style={styles.notice}>
+            <Text style={styles.noticeText}>{confirmationNotice}</Text>
+          </View>
+        ) : null}
+
         {screen === 'overview' ? <Overview data={data} latestMetrics={latestMetrics} latestReport={latestReport} /> : null}
-        {screen === 'results' ? <Results reports={data.labReports} /> : null}
+        {screen === 'results' ? <Results isConfirming={isConfirmingLab} onConfirm={handleConfirmLabReport} reports={data.labReports} /> : null}
         {screen === 'wearable' ? <Wearables metrics={data.wearableMetrics} /> : null}
       </ScrollView>
     </SafeAreaView>
@@ -220,10 +253,82 @@ function Overview({
   );
 }
 
-function Results({ reports }: { reports: LabReportWithResults[] }) {
+function Results({
+  isConfirming,
+  onConfirm,
+  reports,
+}: {
+  isConfirming: boolean;
+  onConfirm: (reportId: string, confirmations: { test_code: string; unit: string | null; value: number }[]) => Promise<void>;
+  reports: LabReportWithResults[];
+}) {
   const latest = reports[0] ?? null;
   const results = latest?.lab_results ?? [];
-  const lowConfidenceResults = results.filter((result) => !result.confirmed || result.confidence < 0.8);
+  const lowConfidenceResults = results.filter((result) => !result.confirmed && result.confidence < 0.8);
+  const lowConfidenceSignature = lowConfidenceResults
+    .map((result) => `${result.id}:${result.value ?? ''}:${result.unit ?? ''}:${result.confirmed}`)
+    .join('|');
+  const [drafts, setDrafts] = useState<Record<string, { unit: string; value: string }>>({});
+  const [draftError, setDraftError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const nextDrafts: Record<string, { unit: string; value: string }> = {};
+
+    for (const result of lowConfidenceResults) {
+      nextDrafts[result.test_code] = {
+        unit: result.unit ?? '',
+        value: result.value === null ? '' : String(result.value),
+      };
+    }
+
+    setDrafts(nextDrafts);
+    setDraftError(null);
+  }, [lowConfidenceSignature]);
+
+  function updateDraft(testCode: string, field: 'unit' | 'value', value: string) {
+    setDrafts((current) => ({
+      ...current,
+      [testCode]: {
+        unit: current[testCode]?.unit ?? '',
+        value: current[testCode]?.value ?? '',
+        [field]: value,
+      },
+    }));
+  }
+
+  function submitConfirmations() {
+    if (!latest) {
+      return;
+    }
+
+    const confirmations = lowConfidenceResults.map((result) => {
+      const draft = drafts[result.test_code] ?? { unit: result.unit ?? '', value: result.value === null ? '' : String(result.value) };
+      const numericValue = Number(draft.value);
+
+      if (!Number.isFinite(numericValue)) {
+        throw new Error(`${result.test_code} needs a numeric value.`);
+      }
+
+      return {
+        test_code: result.test_code,
+        unit: draft.unit.trim() || null,
+        value: numericValue,
+      };
+    });
+
+    setDraftError(null);
+    void onConfirm(latest.id, confirmations).catch((confirmError) => {
+      setDraftError(confirmError instanceof Error ? confirmError.message : 'Unable to confirm lab results.');
+    });
+  }
+
+  function handleSubmitConfirmations() {
+    try {
+      submitConfirmations();
+    } catch (confirmError) {
+      setDraftError(confirmError instanceof Error ? confirmError.message : 'Unable to confirm lab results.');
+    }
+  }
 
   return (
     <View style={styles.sectionStack}>
@@ -246,7 +351,18 @@ function Results({ reports }: { reports: LabReportWithResults[] }) {
 
       {lowConfidenceResults.length > 0 ? (
         <Panel title="Needs Confirmation">
-          {lowConfidenceResults.map((result) => <LabResultCard key={`review-${result.id}`} result={result} />)}
+          {lowConfidenceResults.map((result) => (
+            <LabConfirmationCard
+              draft={drafts[result.test_code] ?? { unit: result.unit ?? '', value: result.value === null ? '' : String(result.value) }}
+              key={`review-${result.id}`}
+              onChange={updateDraft}
+              result={result}
+            />
+          ))}
+          {draftError ? <Text style={styles.inlineError}>{draftError}</Text> : null}
+          <Pressable disabled={isConfirming} onPress={handleSubmitConfirmations} style={[styles.confirmButton, isConfirming ? styles.confirmButtonDisabled : null]}>
+            <Text style={styles.confirmButtonText}>{isConfirming ? 'Confirming...' : 'Confirm reviewed rows'}</Text>
+          </Pressable>
         </Panel>
       ) : null}
 
@@ -353,6 +469,42 @@ function LabResultCard({ result }: { result: LabResultRow }) {
         <MetricMini label="Value" value={value} />
         <MetricMini label="Range" value={range} />
         <MetricMini label="Confidence" value={`${Math.round(result.confidence * 100)}%`} />
+      </View>
+    </View>
+  );
+}
+
+function LabConfirmationCard({
+  draft,
+  onChange,
+  result,
+}: {
+  draft: { unit: string; value: string };
+  onChange: (testCode: string, field: 'unit' | 'value', value: string) => void;
+  result: LabResultRow;
+}) {
+  return (
+    <View style={styles.confirmCard}>
+      <LabResultCard result={result} />
+      <View style={styles.confirmInputRow}>
+        <View style={styles.confirmInputGroup}>
+          <Text style={styles.confirmInputLabel}>Value</Text>
+          <TextInput
+            keyboardType="decimal-pad"
+            onChangeText={(value) => onChange(result.test_code, 'value', value)}
+            style={styles.confirmInput}
+            value={draft.value}
+          />
+        </View>
+        <View style={styles.confirmInputGroup}>
+          <Text style={styles.confirmInputLabel}>Unit</Text>
+          <TextInput
+            autoCapitalize="none"
+            onChangeText={(value) => onChange(result.test_code, 'unit', value)}
+            style={styles.confirmInput}
+            value={draft.unit}
+          />
+        </View>
       </View>
     </View>
   );
@@ -677,6 +829,58 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
+  },
+  confirmCard: {
+    gap: 10,
+  },
+  confirmInputRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  confirmInputGroup: {
+    flex: 1,
+    gap: 5,
+    minWidth: 120,
+  },
+  confirmInputLabel: {
+    color: MiraDesign.color.inkSoft,
+    fontSize: 11,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+  },
+  confirmInput: {
+    backgroundColor: '#FFFFFF',
+    borderColor: MiraDesign.color.line,
+    borderRadius: 8,
+    borderWidth: 1,
+    color: MiraDesign.color.ink,
+    fontSize: 14,
+    fontWeight: '800',
+    minHeight: 40,
+    paddingHorizontal: 10,
+  },
+  confirmButton: {
+    alignItems: 'center',
+    backgroundColor: MiraDesign.color.primary,
+    borderRadius: 8,
+    justifyContent: 'center',
+    minHeight: 42,
+    paddingHorizontal: 14,
+  },
+  confirmButtonDisabled: {
+    opacity: 0.6,
+  },
+  confirmButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  inlineError: {
+    color: '#9B2C2C',
+    fontSize: 12,
+    fontWeight: '800',
+    lineHeight: 17,
   },
   metricMini: {
     backgroundColor: '#FFFFFF',

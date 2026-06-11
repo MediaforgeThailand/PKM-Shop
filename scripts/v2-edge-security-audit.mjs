@@ -10,6 +10,7 @@ const files = {
   factExtractor: 'supabase/functions/fact-extractor/index.ts',
   facts: 'supabase/functions/_shared/facts.ts',
   internalAuth: 'supabase/functions/_shared/internalAuth.ts',
+  labConfirm: 'supabase/functions/lab-confirm/index.ts',
   labIngest: 'supabase/functions/lab-ingest/index.ts',
   line: 'supabase/functions/_shared/line.ts',
   lineWebhook: 'supabase/functions/line-webhook/index.ts',
@@ -28,6 +29,7 @@ const v2EdgeFunctions = {
   factExtractor: files.factExtractor,
   labIngest: files.labIngest,
   lineWebhook: files.lineWebhook,
+  labConfirm: files.labConfirm,
   referrerOrder: files.referrerOrder,
   wearableIngest: files.wearableIngest,
 };
@@ -213,6 +215,20 @@ expect(
     sources.wearableIngest.includes('tenant_id: customer.tenant_id') &&
     !sources.wearableIngest.includes('tenant_slug'),
   'lab and wearable internal functions must derive tenant context from customer/report rows and reject request tenant fields',
+);
+
+expect(
+  'lab confirmation trusted write path',
+  sources.labConfirm.includes('resolveAuthUserId(req.headers.get') &&
+    sources.labConfirm.includes("report.status !== 'needs_confirmation'") &&
+    sources.labConfirm.includes('auth_user_id: `eq.${authUserId}`') &&
+    sources.labConfirm.includes('tenant_id: `eq.${report.tenant_id}`') &&
+    sources.labConfirm.includes('Lab result ${confirmation.test_code} is not part of this report.') &&
+    sources.labConfirm.includes("confirmed: true") &&
+    sources.labConfirm.includes("status: 'ready'") &&
+    sources.labConfirm.includes('await insertLabFacts(customer, updatedReport, results)') &&
+    sources.labIngest.includes("import { insertLabFacts } from '../_shared/labFacts.ts'"),
+  'lab-confirm must validate customer-owned needs_confirmation reports, update trusted rows, mark ready, and share the lab fact insertion helper',
 );
 
 expect(
