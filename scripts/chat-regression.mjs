@@ -1,10 +1,18 @@
+import { createRegressionTestJwt } from './create-test-jwt.mjs';
+
 const supabaseUrl = process.env.SUPABASE_URL ?? process.env.EXPO_PUBLIC_SUPABASE_URL;
 const anonKey = process.env.SUPABASE_ANON_KEY ?? process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-const jwt = process.env.TEST_SUPABASE_JWT;
+let jwt = process.env.TEST_SUPABASE_JWT;
 const tenantSlug = process.env.MIRA_DEMO_TENANT_SLUG ?? 'demo-hospital';
 
+if (!jwt && hasInlineBootstrapEnv()) {
+  jwt = await createRegressionTestJwt();
+}
+
 if (!supabaseUrl || !anonKey || !jwt) {
-  throw new Error('Set SUPABASE_URL, SUPABASE_ANON_KEY, and TEST_SUPABASE_JWT before running chat regression.');
+  throw new Error(
+    'Set SUPABASE_URL and SUPABASE_ANON_KEY plus either TEST_SUPABASE_JWT or SUPABASE_SERVICE_ROLE_KEY before running chat regression.',
+  );
 }
 
 const endpoint = `${supabaseUrl.replace(/\/$/, '')}/functions/v1/chat-orchestrator`;
@@ -93,6 +101,14 @@ function assertSeededProducts(products) {
   for (const product of products) {
     assert(seededCatalogKeys.has(product.catalog_key), `unexpected product id ${product.catalog_key}`);
   }
+}
+
+function hasInlineBootstrapEnv() {
+  return Boolean(
+    (process.env.SUPABASE_URL ?? process.env.EXPO_PUBLIC_SUPABASE_URL) &&
+      (process.env.SUPABASE_ANON_KEY ?? process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY) &&
+      process.env.SUPABASE_SERVICE_ROLE_KEY,
+  );
 }
 
 function questionCount(text) {

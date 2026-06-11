@@ -14,12 +14,12 @@ const checks = [
     ],
   },
   {
-    detail: 'Needed before running npm run chat:regression against the seeded test tenant.',
+    detail: 'Needed before running npm run chat:regression; scripts/create-test-jwt.mjs provisions the regression auth user inline.',
     name: 'seeded chat regression setup',
     required: [
       ['SUPABASE_URL', 'EXPO_PUBLIC_SUPABASE_URL'],
       ['SUPABASE_ANON_KEY', 'EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY'],
-      ['TEST_SUPABASE_JWT'],
+      ['SUPABASE_SERVICE_ROLE_KEY'],
     ],
   },
   {

@@ -16,6 +16,7 @@
 - Fixed the marker test assertion helper so object equality is structural instead of depending on property insertion order.
 - Hardened fact extraction by making the `fact-extractor` endpoint service-role-only and adding tenant filters once the owning chat session is known.
 - Tightened `scripts/chat-regression.mjs` to enforce the seven-case suite more mechanically: q2/q3 must ask exactly one question, recommendation cases must return seeded catalog IDs, emergency returns no products, and every reply must stay within three short sentences.
+- Added `scripts/create-test-jwt.mjs` so the regression suite can create/update `regression-test@miracare.dev` with the Supabase admin API, sign in, and return a token without requiring a human-managed JWT.
 - Deleted the legacy `supabase/functions/mira-chat` module after routing the app to `chat-orchestrator`, per the spec replacement procedure.
 
 ## Verification
@@ -24,12 +25,12 @@
 - `npm run chat:quality` passed and now asserts the customer chat screen does not read local `prompt_versions` or prompt editor paths.
 - `npm run v2:client-audit` passed and now asserts API-typed `OrderPanel` / `ProductCarousel` props plus no direct fetch/Supabase/React Query reads inside presentational chat components.
 - `npm run v2:edge-security-audit` passed and now asserts that `fact-extractor` remains service-role-only and that v2 edge entrypoints keep using the shared CORS/envelope helpers.
-- `npm run chat:regression` reaches the expected missing-secrets failure locally because `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `TEST_SUPABASE_JWT` are not set. `scripts/seed-demo.mjs` can now attach the demo customer to an existing auth user via `DEMO_CUSTOMER_AUTH_USER_ID` so the provided `TEST_SUPABASE_JWT` can resolve to the seeded customer.
+- `npm run chat:regression` still requires live Supabase credentials, but no longer requires a human-managed `TEST_SUPABASE_JWT`; when `SUPABASE_SERVICE_ROLE_KEY` is present, it provisions the disposable regression auth user inline and keeps the token out of logs.
 - `git diff --check` passed.
 - `npx.cmd -y deno@2.8.2 test --allow-env --allow-net --import-map=supabase/functions/import_map.json supabase/functions/_shared/__tests__/` currently passes with 68 tests. Marker coverage includes the 8 spec cases, and fact normalizer coverage includes decimal kg parsing.
 
 ## Boundaries
 
 - Reloaded history reconstructs text, system notices, and product carousels from persisted chat rows. Status-driven order-panel reload still needs seeded Phase 3 end-to-end proof with real orders.
-- Live chat regression remains blocked until the seeded Supabase test project/JWT secrets are provided; this is logged in `docs/v2-open-questions.md`.
+- Live chat regression remains optional and secret-backed; the required identity is now script-owned through `scripts/create-test-jwt.mjs`.
 - The initial `fact-extractor` message lookup still needs an owner decision on tenant context because the spec-defined internal payload contains only `message_id`.

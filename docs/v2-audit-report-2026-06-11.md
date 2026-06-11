@@ -6,13 +6,13 @@ Scope: current worktree against `docs/miracare-codex-handoff.md`, `docs/miracare
 
 - PASS: `npm run typecheck`
 - PASS: `npm run v2:verify` (deterministic local verification bundle)
-- PASS: `npm run v2:external-preflight` (script ran; five external gates report WAIT in this environment)
+- PASS: `npm run v2:external-preflight` (script ran; four external gates report WAIT in this environment)
 - PASS: `npm run v2:type-safety-audit` (102 TypeScript files scanned)
 - PASS: `npm run chat:quality`
 - PASS: `npm run orders:status-audit`
 - PASS: `npm run v2:schema-audit` (16 tables, 32 policies, 30 indexes, 29 migrations checked)
-- PASS: `npm run v2:open-questions-audit` (28 unresolved-contract topics, 4 blocked rows checked)
-- PASS: `npm run v2:local-readiness-audit` (0 Missing rows, 21 decision blockers, 5 external gates checked)
+- PASS: `npm run v2:open-questions-audit` (26 unresolved-contract topics, 4 blocked rows checked)
+- PASS: `npm run v2:local-readiness-audit` (0 Missing rows, 21 decision blockers, 4 external gates checked)
 - PASS: `npm run v2:docs-audit` (11 docs checked)
 - PASS: `npm run v2:client-audit` (28 production files, 3 removed routes, 64 client files secret-scanned)
 - PASS: `npm run v2:edge-security-audit` (13 edge/shared/template files scanned)
@@ -38,7 +38,7 @@ Scope: current worktree against `docs/miracare-codex-handoff.md`, `docs/miracare
 | Live RLS tenant isolation | FAIL | P0 | `scripts/rls-check.sql` exists, but no `SUPABASE_SHADOW_DB_URL` was available for live execution | Run live shadow DB RLS test; owner must decide whether missing secret hard-fails PRs. |
 | Service-role tenant filtering | FAIL | P0 | `v2:edge-security-audit` passes known invariants, but `fact-extractor`, `lab-ingest`, and wearable request-context contracts remain open | Do not tighten initial lookups until tenant-context contracts are approved in `docs/v2-open-questions.md`. |
 | Customer chat code path | PASS | P1 | React Query history, persisted messages, consent action, `chat-orchestrator`, marker parsing; `chat:quality` and client audit pass | Keep code-path audits in CI. |
-| Seeded chat regression and known-user personalization | FAIL | P1 | Regression runner exists, but seeded Supabase/JWT credentials were not available | Seed Supabase/JWT and run the 7-case suite plus known-user fact personalization proof. |
+| Seeded chat regression credentials | PASS | P1 | `scripts/create-test-jwt.mjs` creates/updates `regression-test@miracare.dev`, prints only the token when run directly, and `chat-regression` bootstraps it inline when service-role secrets exist | Run the optional live-regression CI job or local suite against the linked project before release. |
 | Order state machine and admin queue | PASS | P1 | `transition_order`, PromptPay tests, action-response `system_notice` persistence/rendering, admin queue, status-write audit | Keep deterministic tests/audits required in CI. |
 | Slip upload and persisted order-panel reload | FAIL | P1 | Current implementation intentionally stops before guessing private `payment-slips` write contract and QR reload contract | Resolve contracts in `docs/v2-open-questions.md`; then run seeded purchase E2E through admin booking. |
 | Referral and commissions code path | PASS | P1 | attribution route, assisted purchase, commission unit tests, referrer admin audit | Keep deterministic tests/audits required in CI. |

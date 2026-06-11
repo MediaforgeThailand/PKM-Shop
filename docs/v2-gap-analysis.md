@@ -14,7 +14,7 @@ Status legend:
 ## Current Verification Baseline
 
 - `npm run v2:verify`: passing, deterministic local gate for typecheck, static audits, Deno edge check, and shared Deno tests.
-- `npm run v2:external-preflight`: runs successfully; reports five external gates waiting on local prerequisites in this environment.
+- `npm run v2:external-preflight`: runs successfully; reports four external gates waiting on local prerequisites in this environment.
 - `npm run typecheck`: passing.
 - `npm run v2:type-safety-audit`: passing, 102 TypeScript files scanned.
 - `npm run chat:quality`: passing.
@@ -65,7 +65,7 @@ Status legend:
 | Consent UI/client action | Partial | `components/chat/ConsentSheet.tsx`, `app/(tabs)/chatbot.tsx`, `loadHealthDataConsent`, `consent_granted` action in orchestrator | Needs seeded Supabase proof that the consent row appears and fact extraction subsequently runs. The action-side-effect ordering versus `client_msg_id` idempotency is logged in `docs/v2-open-questions.md` because §3.2 and §0.1 need an owner decision before tightening. |
 | Chat screen messages list from DB, paged, with optimistic append | Partial | `loadLatestChatHistoryPage`, `loadChatHistoryPage`, React Query hydration in `app/(tabs)/chatbot.tsx`, local optimistic append on send | Persisted reload reconstructs text, `system_notice`, and product cards from `marker_product_ids`; persisted order-panel reload is blocked on the order-state/QR payload contract logged in `docs/v2-open-questions.md`. |
 | React Query for caching/retries in typed API client | Exists | `@tanstack/react-query`, `miraQueryClient`, `QueryClientProvider`, chat history/consent query keys | None known. |
-| 7-case chat regression suite in CI | Partial | `scripts/chat-regression.mjs`, `scripts/seed-demo.mjs`, optional CI secrets gate | Script now enforces exact q2/q3 question counts, seeded product IDs for recommendation cases, emergency no-products, and ≤3 sentences. `seed-demo` can attach the demo customer to an existing auth user via `DEMO_CUSTOMER_AUTH_USER_ID`; live execution still needs seeded Supabase credentials/JWT logged in `docs/v2-open-questions.md`. |
+| 7-case chat regression suite in CI | Exists | `scripts/chat-regression.mjs`, `scripts/create-test-jwt.mjs`, optional `live-regression` CI job | Script now enforces exact q2/q3 question counts, seeded product IDs for recommendation cases, emergency no-products, and ≤3 sentences. If `TEST_SUPABASE_JWT` is absent, it uses service-role credentials to create/update `regression-test@miracare.dev`, sign in, and keep the token out of logs; the optional CI job seeds the demo tenant and runs the suite when Supabase secrets exist. |
 
 ## Phase 3 - Orders And Payment
 
@@ -131,4 +131,4 @@ Status legend:
 
 ## Open Questions That Block Completion
 
-See `docs/v2-open-questions.md` for the authoritative list. Current blockers include canonical catalog data, legacy consent mapping, PDPA export/delete contract, production auth seeding, prototype-screen release policy, live shadow RLS database secret/hard-fail policy, seeded chat-regression credentials/JWT, action-side-effect idempotency sequencing, fact-extractor tenant context, manual payment verification acceptance, payment slip upload/write contract, persisted order-panel reload/QR payload contract, referral-code format, referral-code transport shape, referrer payment endpoint split, production commission defaults, lab normalization aliases, lab-ingest tenant context, lab confirmation write contract, legal-approved lab disclaimer wording, customer dashboard tenant-context resolution, wearable request context, wearable fact source refs, wearable bucket naming, Apple Health export-upload UX acceptance, LINE assets bucket policy, and LINE sandbox credentials.
+See `docs/v2-open-questions.md` for the authoritative list. Current blockers include canonical catalog data, legacy consent mapping, PDPA export/delete contract, prototype-screen release policy, live shadow RLS database secret/hard-fail policy, action-side-effect idempotency sequencing, fact-extractor tenant context, manual payment verification acceptance, payment slip upload/write contract, persisted order-panel reload/QR payload contract, referral-code format, referral-code transport shape, referrer payment endpoint split, production commission defaults, lab normalization aliases, lab-ingest tenant context, lab confirmation write contract, legal-approved lab disclaimer wording, customer dashboard tenant-context resolution, wearable request context, wearable fact source refs, wearable bucket naming, Apple Health export-upload UX acceptance, LINE assets bucket policy, and LINE sandbox credentials.

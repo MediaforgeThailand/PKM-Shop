@@ -33,6 +33,6 @@ Local work that is still safe without external setup should be added as a concre
 These are the four external preflight gates that can be checked locally but cannot be completed without outside credentials/state:
 
 - seed-demo service role setup
-- seeded chat regression setup
+- seeded chat regression setup (uses programmatic `regression-test@miracare.dev` JWT bootstrap; no human-managed `TEST_SUPABASE_JWT`)
 - shadow RLS database setup
 - LINE sandbox setup

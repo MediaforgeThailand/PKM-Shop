@@ -224,7 +224,7 @@ Verify the draft implements THIS plan — catching silent scope drift, contract 
 - [❌ 2026-06-11] Attribution window honored; assisted orders bypass attribution correctly (direct referrer credit). Deterministic attribution-window units and assisted-order static audit exist, but live attributed/assisted E2E proof is still pending.
 
 **E. Conversation quality (P1)**
-- [❌ 2026-06-11] 7-case regression suite green on app/PWA (and LINE when built), automated in `scripts/`. Runner exists, but seeded Supabase/JWT and LINE sandbox are missing.
+- [❌ 2026-06-11] 7-case regression suite green on app/PWA (and LINE when built), automated in `scripts/`. Runner and programmatic test identity bootstrap exist, but live Supabase execution and LINE sandbox credentials remain pending.
 - [✅ 2026-06-11] Order-info collection feels conversational (no hardcoded scripted sequences in backend code — grep for canned Thai reply strings outside templates). Evidence: active order context + order field extractor; payment/admin notices are templated system notices.
 - [❌ 2026-06-11] Known-user test: facts from a previous session used, not re-asked. Context builder tests exist, but seeded end-to-end known-user proof is pending.
 
