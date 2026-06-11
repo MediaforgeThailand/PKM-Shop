@@ -33,9 +33,12 @@ Use Expo Go for fast previews. Use EAS Build later when the app needs store-read
 ```bash
 npm run v2:verify
 npm run v2:external-preflight
+npm run v2:e2e-commerce
 ```
 
-`v2:verify` runs the deterministic local gates for the v2 implementation. `v2:external-preflight` reports which live Supabase/LINE prerequisites are present without printing secret values; use it before live seeding, live RLS checks, chat regression, or LINE sandbox runs.
+`v2:verify` runs the deterministic local gates for the v2 implementation. `v2:external-preflight` reports which live Supabase/LINE prerequisites are present without printing secret values; use it before live seeding, live RLS checks, chat regression, commerce E2E, or LINE sandbox runs.
+
+`v2:e2e-commerce` is the credentialed live commerce runner. It provisions disposable admin/customer users, runs direct and referred `chk-basic` purchases through `chat-orchestrator`, validates the PromptPay CRC, confirms through `admin-order-action`, checks commission snapshot math, cancels created orders, and cleans up test rows/users.
 
 `v2:verify` also runs `v2:open-questions-audit`, which keeps unresolved contract decisions parked in `docs/v2-open-questions.md`, `v2:local-readiness-audit`, which verifies there are no unblocked local `Missing` rows, and `v2:docs-audit`, which catches stale verification evidence in v2 docs.
 

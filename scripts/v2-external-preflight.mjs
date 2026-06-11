@@ -32,6 +32,17 @@ const checks = [
     ],
   },
   {
+    detail:
+      'Needed before running npm run v2:e2e-commerce; run scripts/seed-demo.mjs first and ensure the demo tenant has promptpay_id.',
+    name: 'live commerce E2E setup',
+    required: [
+      ['SUPABASE_URL', 'EXPO_PUBLIC_SUPABASE_URL'],
+      ['SUPABASE_ANON_KEY', 'EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY'],
+      ['SUPABASE_SERVICE_ROLE_KEY'],
+      ['MIRA_DEMO_PROMPTPAY_ID'],
+    ],
+  },
+  {
     detail: `Needed before LINE sandbox regression for tenant "${tenantSlug}".`,
     name: 'LINE sandbox setup',
     required: [

@@ -54,6 +54,7 @@
     "v2:deno-check": "npx -y deno@2.8.2 check --import-map=supabase/functions/import_map.json supabase/functions/chat-orchestrator/index.ts supabase/functions/fact-extractor/index.ts supabase/functions/admin-order-action/index.ts supabase/functions/referrer-order/index.ts supabase/functions/lab-ingest/index.ts supabase/functions/lab-confirm/index.ts supabase/functions/wearable-ingest/index.ts supabase/functions/line-webhook/index.ts",
     "v2:deno-test": "npx -y deno@2.8.2 test --allow-env --allow-net --import-map=supabase/functions/import_map.json supabase/functions/_shared/__tests__/",
     "v2:docs-audit": "node scripts/v2-docs-audit.mjs",
+    "v2:e2e-commerce": "node scripts/e2e-commerce.mjs",
     "v2:external-preflight": "node scripts/v2-external-preflight.mjs",
     "v2:local-readiness-audit": "node scripts/v2-local-readiness-audit.mjs",
     "v2:open-questions-audit": "node scripts/v2-open-questions-audit.mjs",

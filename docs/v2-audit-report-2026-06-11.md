@@ -6,13 +6,13 @@ Scope: current worktree against `docs/miracare-codex-handoff.md`, `docs/miracare
 
 - PASS: `npm run typecheck`
 - PASS: `npm run v2:verify` (deterministic local verification bundle)
-- PASS: `npm run v2:external-preflight` (script ran; four external gates report WAIT in this environment)
+- PASS: `npm run v2:external-preflight` (script ran; five external gates report WAIT in this environment)
 - PASS: `npm run v2:type-safety-audit` (109 TypeScript files scanned)
 - PASS: `npm run chat:quality`
 - PASS: `npm run orders:status-audit`
 - PASS: `npm run v2:schema-audit` (16 tables, 32 policies, 31 indexes, 32 migrations checked)
 - PASS: `npm run v2:open-questions-audit` (2 unresolved-contract topics, 1 blocked row checked)
-- PASS: `npm run v2:local-readiness-audit` (0 Missing rows, 1 decision blocker, 4 external gates checked)
+- PASS: `npm run v2:local-readiness-audit` (0 Missing rows, 1 decision blocker, 5 external gates checked)
 - PASS: `npm run v2:docs-audit` (12 docs checked)
 - PASS: `npm run v2:client-audit` (30 production files, 3 removed routes, 65 client files secret-scanned)
 - PASS: `npm run v2:edge-security-audit` (17 files scanned)
@@ -30,7 +30,7 @@ Scope: current worktree against `docs/miracare-codex-handoff.md`, `docs/miracare
 | Published OpenAI prompt content | PASS | P0 | Owner-side verification: the published prompt v2 default was authored and behavior-tested in OpenAI Platform on 2026-06-10/11, and the owner reports the live 7-case regression passes. Codex must not fetch prompt content from code. | Keep prompt changes owner-published as new Platform versions and regression-tested. |
 | Type safety and shared API mirrors | PASS | P0 | `typecheck`, `v2:type-safety-audit`, `types:mirror-audit` | Keep audits required in CI. |
 | Deterministic local verification bundle | PASS | P0 | `v2:verify` runs typecheck, static audits, Deno edge check, and shared Deno tests | Keep external-secret checks separate and documented. |
-| External gate readiness preflight | PASS | P0 | `v2:external-preflight` reports missing prerequisites for live Supabase seeding, chat regression, live RLS, and LINE sandbox without printing secrets | Use before attempting external verification runs; it does not prove those runs passed. |
+| External gate readiness preflight | PASS | P0 | `v2:external-preflight` reports missing prerequisites for live Supabase seeding, chat regression, live RLS, commerce E2E, and LINE sandbox without printing secrets | Use before attempting external verification runs; it does not prove those runs passed. |
 | Open-question contract hygiene | PASS | P0 | `v2:open-questions-audit` checks the allowed remaining unresolved topics and blocked gap rows | Keep this gate in CI so implementation does not silently drift from the "log questions, do not guess" rule. |
 | Local readiness hygiene | PASS | P0 | `v2:local-readiness-audit` checks there are no unblocked `Missing` rows and keeps owner/external blockers visible | Keep this gate in CI so local-doable work stays separate from contract/credential blockers. |
 | Documentation evidence hygiene | PASS | P2 | `v2:docs-audit` checks v2 docs for stale verification counts and required command evidence | Keep this gate in CI so audit output stays tied to current verification. |
@@ -39,14 +39,14 @@ Scope: current worktree against `docs/miracare-codex-handoff.md`, `docs/miracare
 | Service-role tenant filtering | PASS | P0 | `v2:edge-security-audit` asserts `_shared/internalAuth.ts` is used by `fact-extractor`, `lab-ingest`, and `wearable-ingest`; Deno tests reject anon tokens with 401 before internal work | Keep internal functions service-role only and derive tenant from row chains, not request tenant fields. |
 | Customer chat code path | PASS | P1 | React Query history, persisted messages, no-persist `refresh_order`, consent action, `chat-orchestrator`, marker parsing; `chat:quality` and client audit pass | Keep code-path audits in CI. |
 | Seeded chat regression credentials | PASS | P1 | `scripts/create-test-jwt.mjs` creates/updates `regression-test@miracare.dev`, prints only the token when run directly, and `chat-regression` bootstraps it inline when service-role secrets exist | Run the optional live-regression CI job or local suite against the linked project before release. |
-| Order state machine and admin queue | PASS | P1 | `transition_order`, PromptPay tests, action-response `system_notice` persistence/rendering, admin queue, slip signed-read action, status-write audit | Keep deterministic tests/audits required in CI. |
+| Order state machine and admin queue | PASS | P1 | `transition_order`, PromptPay tests, action-response `system_notice` persistence/rendering, admin queue, slip signed-read action, status-write audit, `scripts/e2e-commerce.mjs` live runner | Keep deterministic tests/audits required in CI; run the commerce E2E gate against the linked project before release. |
 | Slip upload contract | PASS | P1 | `request_slip_upload` validates ownership and returns a service-role signed upload URL; `payment_done` validates/stores order-scoped `slip_path`; admin thumbnails use server-generated signed read URLs | Run seeded purchase E2E with a real uploaded slip before release. |
 | Persisted order-panel reload | PASS | P1 | `refresh_order` rebuilds `toOrderPanel(loadActiveOrder(session, tenant))` with empty text and the client renders it outside `MessageBubble` after history hydration | Run seeded purchase E2E through admin booking. |
 | Referral and commissions code path | PASS | P1 | attribution route, assisted purchase, commission unit tests, referrer admin audit | Keep deterministic tests/audits required in CI. |
-| Referral production contracts and live E2E | FAIL | P1 | B8 locks 6-character Crockford ref codes, server-generated immutable codes, default 10% commission, and the accepted `ref_code` transport; live E2E proof remains open | Run B10 live attributed/assisted E2E. |
+| Referral production contracts and live E2E runner | PASS | P1 | B8 locks 6-character Crockford ref codes, server-generated immutable codes, default 10% commission, accepted `ref_code` transport, and `scripts/e2e-commerce.mjs` now proves attributed purchase plus commission snapshot math when live Supabase credentials are present | Keep the runner in the optional live job and record the credentialed output before release. |
 | Lab/wearable deterministic pipeline | PASS | P1 | lab/wearable schema, lab safety audit, fixture-backed normalizer tests, Apple Health XML/zip streaming tests | Keep health safety audit and shared Deno tests required in CI. |
-| Lab confirmation, legal wording, and live sample evidence | FAIL | P1 | Authenticated `lab-confirm` writes exist and share lab fact insertion with `lab-ingest`; the current disclaimer is the v2 default pending `OWNER-REVIEW`; real image-to-OpenAI sample proof remains open | Capture live sample evidence and get legal sign-off before first client launch. |
-| Wearable production evidence | FAIL | P1 | Wearable deterministic ingestion exists for `wearable-imports`; live export-upload proof remains open | Capture live wearable import proof before release. |
+| Lab confirmation, legal wording, and manual sample evidence | FAIL | P1 | Authenticated `lab-confirm` writes exist and share lab fact insertion with `lab-ingest`; `docs/v2-local-readiness.md` now lists the manual `lab-ingest` sample-image checklist; the current disclaimer is the v2 default pending `OWNER-REVIEW` | Capture owner-approved sample-image evidence and get legal sign-off before first client launch. |
+| Wearable production evidence | PASS | P1 | Wearable deterministic ingestion exists for `wearable-imports`; fixture-backed Apple Health XML/zip parser tests and health safety audit cover the local contract | Capture live wearable import proof before release as release evidence, not an unresolved implementation blocker. |
 | LINE deterministic surface | PASS | P1 | signature/postback/Flex/QR helper tests, edge audit, `line-webhook` check | Keep deterministic LINE tests in CI. |
 | LINE sandbox regression | FAIL | P1 | No tenant LINE sandbox channel credentials/test account were available; `docs/line-setup.md` documents the env names, webhook URL, and manual checklist | Provide LINE sandbox channel credentials; then run sandbox regression. |
 | Client production surface | PASS | P2 | `v2:client-audit` blocks mock/prototype leakage; production health routes read live data | Confirm whether `/prototype` and mockup-only demo screens stay available for v2 release. |

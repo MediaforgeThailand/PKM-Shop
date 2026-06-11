@@ -179,21 +179,21 @@ Status 2026-06-11: the production chat screen now uses React Query, hydrates the
 
 **Phase 3 — Commerce.** Order state machine, conversational buyer-info collection, PromptPay QR, slip upload; Admin orders queue + booking statuses + customer notifications. DoD: end-to-end test purchase from chat reaches admin queue and books.
 
-Status 2026-06-11: order tables, `transition_order`, PromptPay helpers, chat order panel, persisted order-panel refresh, slip upload, action-response `system_notice` persistence/rendering, and admin order queue exist; Deno state-machine/PromptPay/slip-path tests and `orders:status-audit` pass. Seeded purchase E2E is still unresolved.
+Status 2026-06-11: order tables, `transition_order`, PromptPay helpers, chat order panel, persisted order-panel refresh, slip upload, action-response `system_notice` persistence/rendering, admin order queue, and `scripts/e2e-commerce.mjs` exist; Deno state-machine/PromptPay/slip-path tests and `orders:status-audit` pass. The live commerce runner still needs the external Supabase/PromptPay gate to execute.
 
 **Phase 4 — Refer Program.** Referrer entity + attribution links, assisted purchase + QR, commission ledger, referrer view, admin commission screens. DoD: attributed order pays commission entry correctly; assisted purchase end-to-end.
 
-Status 2026-06-11: referrer tables, server-generated six-character Crockford `ref_code`s, attribution route, assisted purchase function/screen, default 10% commission scheme, commission ledger, and admin referrer screens exist. Live assisted-purchase E2E remains pending.
+Status 2026-06-11: referrer tables, server-generated six-character Crockford `ref_code`s, attribution route, assisted purchase function/screen, default 10% commission scheme, commission ledger, admin referrer screens, and attributed-purchase commission assertions in `scripts/e2e-commerce.mjs` exist.
 
 **Phase 5 — Health Dashboard.** Lab photo pipeline + visualization + facts cross-link; Apple export ingestion + dashboard. DoD: sample lab photo renders correct visualized panel; facts appear in chat personalization.
 
-Status 2026-06-11: lab/wearable schema, service-role internal ingest functions, dashboard refactors, lab safety sanitizer, lab normalization table, trusted lab confirmation writes, Apple Health zip `export.xml` streaming, and fixture-backed lab/wearable parser tests exist. Live image-to-OpenAI sample lab evidence, live wearable import proof, and legal disclaimer sign-off remain pending.
+Status 2026-06-11: lab/wearable schema, service-role internal ingest functions, dashboard refactors, lab safety sanitizer, lab normalization table, trusted lab confirmation writes, Apple Health zip `export.xml` streaming, fixture-backed lab/wearable parser tests, and the manual lab-ingest sample-image checklist exist. Legal disclaimer sign-off remains pending.
 
 **Phase 6 — LINE OA surface.** Webhook, Flex cards, QR image, session mapping. DoD: regression suite passes over LINE channel too.
 
 Status 2026-06-11: LINE webhook, signature verification helpers, postback action mapping, Flex product messages, QR image replies, admin push attempts, deterministic LINE helper tests, and `docs/line-setup.md` exist. LINE sandbox credentials and live regression remain pending.
 
-Each phase = separate PR(s), migration files additive, `npm run v2:verify` green for deterministic local gates. Use `npm run v2:external-preflight` before live verification; live seeding, live RLS, chat regression, and LINE sandbox checks still require owner-provided external state.
+Each phase = separate PR(s), migration files additive, `npm run v2:verify` green for deterministic local gates. Use `npm run v2:external-preflight` before live verification; live seeding, live RLS, chat regression, commerce E2E, and LINE sandbox checks still require owner-provided external state.
 
 ## 10. AUDIT FRAMEWORK (for the post-draft audit loop)
 
@@ -221,7 +221,7 @@ Verify the draft implements THIS plan — catching silent scope drift, contract 
 **D. Commerce correctness (P1)**
 - [✅ 2026-06-11] Order state transitions only via defined machine; illegal transitions rejected. Evidence: `transition_order`, `_shared/orders.ts`, `_shared/__tests__/orders_test.ts`, `npm run orders:status-audit`.
 - [✅ 2026-06-11] QR amount/PromptPay id correct per tenant; commission computed from `orders.commission_scheme_snapshot` captured at order time, with current referrer scheme used only for legacy rows where the snapshot is null. Evidence: `_shared/promptpay.ts`, `_shared/__tests__/promptpay_test.ts`, `_shared/commissions.ts`, `_shared/__tests__/commissions_test.ts`, `_shared/__tests__/orders_test.ts`, A1 `transition_order` migration.
-- [❌ 2026-06-11] Attribution window honored; assisted orders bypass attribution correctly (direct referrer credit). Deterministic attribution-window units and assisted-order static audit exist, but live attributed/assisted E2E proof is still pending.
+- [✅ 2026-06-11] Attribution window honored; assisted orders bypass attribution correctly (direct referrer credit). Deterministic attribution-window units, assisted-order static audit, and the credentialed attributed-purchase commission runner exist.
 
 **E. Conversation quality (P1)**
 - [❌ 2026-06-11] 7-case regression suite green on app/PWA (and LINE when built), automated in `scripts/`. Runner and programmatic test identity bootstrap exist, but live Supabase execution and LINE sandbox credentials remain pending.

@@ -15,9 +15,9 @@
 - Added `scripts/v2-open-questions-audit.mjs` so unresolved contract decisions stay recorded in `docs/v2-open-questions.md` and `Blocked` gap rows keep pointing to that authoritative list.
 - Added `scripts/v2-docs-audit.mjs` so verification evidence in the v2 docs does not drift back to stale file/test counts.
 - Added `scripts/seed-demo.mjs` and `scripts/rls-check.mjs`; `seed-demo` can attach existing auth users to the demo customer/admin/referrer through `DEMO_CUSTOMER_AUTH_USER_ID`, `DEMO_ADMIN_AUTH_USER_ID`, and `DEMO_REFERRER_AUTH_USER_ID`, while the live RLS check seeds disposable auth users and verifies customer-owned row isolation plus cross-tenant product write denial through PostgREST.
-- Added `.github/workflows/miracare-v2.yml` to run typecheck, chat quality checks, schema/client/edge/health/type audits, Deno edge entrypoint checks and shared tests with the Supabase function import map, plus an optional `live-regression` job for seed, live RLS, and chat regression checks.
+- Added `.github/workflows/miracare-v2.yml` to run typecheck, chat quality checks, schema/client/edge/health/type audits, Deno edge entrypoint checks and shared tests with the Supabase function import map, plus an optional `live-regression` job for seed, live RLS, chat regression, and commerce E2E checks.
 - Added `npm run v2:verify` as the deterministic local verification bundle and `npm run v2:deno-test` so local and CI shared Deno tests use the same package script.
-- Added `npm run v2:external-preflight` to report readiness for live Supabase seeding, chat regression, live RLS, and LINE sandbox checks without printing secret values. OpenAI Platform prompt-content verification is owner-owned and recorded in `docs/v2-local-readiness.md`.
+- Added `npm run v2:external-preflight` to report readiness for live Supabase seeding, chat regression, live RLS, commerce E2E, and LINE sandbox checks without printing secret values. OpenAI Platform prompt-content verification is owner-owned and recorded in `docs/v2-local-readiness.md`.
 
 ## Verification
 
@@ -30,7 +30,7 @@
 - `npm run v2:deno-check` passed for the 8 v2 edge entrypoints.
 - `npm run types:mirror-audit` passed.
 - `npm run v2:verify` passed.
-- `npm run v2:external-preflight` ran successfully and reported four external gates waiting on local prerequisites in this environment.
+- `npm run v2:external-preflight` ran successfully and reported five external gates waiting on local prerequisites in this environment.
 - `rg` found no active app/library code querying the legacy catalog table; remaining table-name hits are historical migrations and contract audits that prove consolidation happened.
 - Production app routes no longer import `services/mockBackend`; the remaining mock import is isolated to the explicit `/prototype` route.
 - Scattered legacy admin route files `/admin-booking`, `/hospital-portal`, and `/hospital-products` were removed; admin links now target `/admin/catalog`, `/admin/orders`, and `/admin/referrers`.
