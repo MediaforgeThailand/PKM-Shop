@@ -160,7 +160,6 @@ export type LabIngestResponse = {
 export type WearableIngestRequest = {
   customer_id: string;
   storage_path: string;
-  tenant_slug: string;
 };
 
 export type WearableIngestResponse = {

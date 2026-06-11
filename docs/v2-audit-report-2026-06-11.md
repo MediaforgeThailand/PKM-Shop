@@ -7,19 +7,19 @@ Scope: current worktree against `docs/miracare-codex-handoff.md`, `docs/miracare
 - PASS: `npm run typecheck`
 - PASS: `npm run v2:verify` (deterministic local verification bundle)
 - PASS: `npm run v2:external-preflight` (script ran; four external gates report WAIT in this environment)
-- PASS: `npm run v2:type-safety-audit` (104 TypeScript files scanned)
+- PASS: `npm run v2:type-safety-audit` (106 TypeScript files scanned)
 - PASS: `npm run chat:quality`
 - PASS: `npm run orders:status-audit`
 - PASS: `npm run v2:schema-audit` (16 tables, 32 policies, 30 indexes, 31 migrations checked)
-- PASS: `npm run v2:open-questions-audit` (23 unresolved-contract topics, 3 blocked rows checked)
-- PASS: `npm run v2:local-readiness-audit` (0 Missing rows, 19 decision blockers, 4 external gates checked)
+- PASS: `npm run v2:open-questions-audit` (20 unresolved-contract topics, 3 blocked rows checked)
+- PASS: `npm run v2:local-readiness-audit` (0 Missing rows, 18 decision blockers, 4 external gates checked)
 - PASS: `npm run v2:docs-audit` (11 docs checked)
 - PASS: `npm run v2:client-audit` (29 production files, 3 removed routes, 64 client files secret-scanned)
-- PASS: `npm run v2:edge-security-audit` (15 edge/shared/storage/template files scanned)
+- PASS: `npm run v2:edge-security-audit` (16 edge/shared/storage/template files scanned)
 - PASS: `npm run v2:health-safety-audit` (14 files scanned)
 - PASS: `npm run types:mirror-audit` (36 exported types checked)
 - PASS: `npm run v2:deno-check` (7 v2 edge entrypoints)
-- PASS: `npx.cmd -y deno@2.8.2 test --allow-env --allow-net --import-map=supabase/functions/import_map.json supabase/functions/_shared/__tests__/` (79 passed)
+- PASS: `npx.cmd -y deno@2.8.2 test --allow-env --allow-net --import-map=supabase/functions/import_map.json supabase/functions/_shared/__tests__/` (83 passed)
 - PASS: `git diff --check` (Windows line-ending warnings only)
 
 ## Findings
@@ -36,7 +36,7 @@ Scope: current worktree against `docs/miracare-codex-handoff.md`, `docs/miracare
 | Documentation evidence hygiene | PASS | P2 | `v2:docs-audit` checks v2 docs for stale verification counts and required command evidence | Keep this gate in CI so audit output stays tied to current verification. |
 | Schema contract and migration numbering | PASS | P0 | `v2:schema-audit` | Keep schema audit required in CI. |
 | Live RLS tenant isolation | PASS | P0 | `scripts/rls-check.mjs` creates disposable auth users, checks customer A cannot read customer B rows through PostgREST, denies cross-tenant product writes, and runs in the optional `live-regression` job | Run the secret-backed live job before release and preserve the local cleanup behavior. |
-| Service-role tenant filtering | FAIL | P0 | `v2:edge-security-audit` passes known invariants, but `fact-extractor`, `lab-ingest`, and wearable request-context contracts remain open | Do not tighten initial lookups until tenant-context contracts are approved in `docs/v2-open-questions.md`. |
+| Service-role tenant filtering | PASS | P0 | `v2:edge-security-audit` asserts `_shared/internalAuth.ts` is used by `fact-extractor`, `lab-ingest`, and `wearable-ingest`; Deno tests reject anon tokens with 401 before internal work | Keep internal functions service-role only and derive tenant from row chains, not request tenant fields. |
 | Customer chat code path | PASS | P1 | React Query history, persisted messages, no-persist `refresh_order`, consent action, `chat-orchestrator`, marker parsing; `chat:quality` and client audit pass | Keep code-path audits in CI. |
 | Seeded chat regression credentials | PASS | P1 | `scripts/create-test-jwt.mjs` creates/updates `regression-test@miracare.dev`, prints only the token when run directly, and `chat-regression` bootstraps it inline when service-role secrets exist | Run the optional live-regression CI job or local suite against the linked project before release. |
 | Order state machine and admin queue | PASS | P1 | `transition_order`, PromptPay tests, action-response `system_notice` persistence/rendering, admin queue, slip signed-read action, status-write audit | Keep deterministic tests/audits required in CI. |
@@ -46,7 +46,7 @@ Scope: current worktree against `docs/miracare-codex-handoff.md`, `docs/miracare
 | Referral production contracts and live E2E | FAIL | P1 | `ref_code` format/transport, default commission schemes, endpoint split, and live E2E proof remain open | Confirm contracts and run live attributed/assisted E2E. |
 | Lab/wearable deterministic pipeline | PASS | P1 | lab/wearable schema, lab safety audit, fixture-backed normalizer tests, Apple Health XML/zip streaming tests | Keep health safety audit and shared Deno tests required in CI. |
 | Lab confirmation, legal wording, and live sample evidence | FAIL | P1 | Confirmation write path, legal disclaimer approval, alias table, tenant resolution, and real image-to-OpenAI sample proof remain open | Resolve contracts and capture live sample evidence. |
-| Wearable production contracts | FAIL | P1 | Request context, bucket naming, wearable `source_ref`, and export-upload UX acceptance remain open | Resolve owner questions before production rollout. |
+| Wearable production contracts | FAIL | P1 | Bucket naming, wearable `source_ref`, and export-upload UX acceptance remain open | Resolve owner questions before production rollout. |
 | LINE deterministic surface | PASS | P1 | signature/postback/Flex/QR helper tests, edge audit, `line-webhook` check | Keep deterministic LINE tests in CI. |
 | LINE sandbox regression | FAIL | P1 | No tenant LINE sandbox channel credentials/test account were available | Provide LINE sandbox channel credentials and confirm `line-assets` bucket policy; then run sandbox regression. |
 | Client production surface | PASS | P2 | `v2:client-audit` blocks mock/prototype leakage; production health routes read live data | Confirm whether `/prototype` and mockup-only demo screens stay available for v2 release. |

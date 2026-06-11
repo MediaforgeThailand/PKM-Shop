@@ -1,5 +1,6 @@
-import { insertRow, resolveAuthUserId, selectOne, updateRows, upsertRow } from '../_shared/db.ts';
+import { insertRow, selectOne, updateRows, upsertRow } from '../_shared/db.ts';
 import { HttpError, handleOptions, json, toErrorResponse, validateJson, z } from '../_shared/http.ts';
+import { assertInternalServiceRoleAuthorization } from '../_shared/internalAuth.ts';
 import { hasLowConfidenceLabRows, normalizeLabRows } from '../_shared/lab.ts';
 import { callLabSummary, callLabVisionExtractor } from '../_shared/openai.ts';
 import { downloadStorageObject } from '../_shared/storage.ts';
@@ -17,7 +18,7 @@ const requestSchema = z.object({
 
 const factCodes = new Set(['FBS', 'HBA1C', 'CHOL']);
 
-async function assertCustomerAccess(customerId: string, authUserId: string) {
+async function loadCustomerForInternalIngest(customerId: string) {
   const customer = await selectOne<CustomerRow>('customers', {
     id: `eq.${customerId}`,
     select: 'id,tenant_id,auth_user_id,line_user_id,nickname,phone,referred_by,referred_at,created_at',
@@ -25,20 +26,6 @@ async function assertCustomerAccess(customerId: string, authUserId: string) {
 
   if (!customer) {
     throw new HttpError('VALIDATION', 'Customer not found.', 404);
-  }
-
-  if (customer.auth_user_id === authUserId) {
-    return customer;
-  }
-
-  const member = await selectOne<{ role: string }>('tenant_members', {
-    auth_user_id: `eq.${authUserId}`,
-    select: 'role',
-    tenant_id: `eq.${customer.tenant_id}`,
-  });
-
-  if (!member) {
-    throw new HttpError('VALIDATION', 'Not allowed for this customer.', 403);
   }
 
   return customer;
@@ -68,7 +55,7 @@ async function insertLabFacts(customer: CustomerRow, report: LabReportRow, rows:
   }
 }
 
-Deno.serve(async (req) => {
+export async function handleLabIngest(req: Request) {
   const optionsResponse = handleOptions(req);
 
   if (optionsResponse) {
@@ -82,9 +69,10 @@ Deno.serve(async (req) => {
   let report: LabReportRow | null = null;
 
   try {
+    assertInternalServiceRoleAuthorization(req.headers.get('authorization'));
+
     const body = await validateJson(req, requestSchema);
-    const authUserId = await resolveAuthUserId(req.headers.get('authorization'));
-    const customer = await assertCustomerAccess(body.customer_id, authUserId);
+    const customer = await loadCustomerForInternalIngest(body.customer_id);
 
     report = await insertRow<LabReportRow>('lab_reports', {
       collected_date: body.collected_date ?? null,
@@ -165,4 +153,8 @@ Deno.serve(async (req) => {
 
     return toErrorResponse(error);
   }
-});
+}
+
+if (!(globalThis as typeof globalThis & { __MIRACARE_SUPPRESS_SERVE__?: boolean }).__MIRACARE_SUPPRESS_SERVE__) {
+  Deno.serve(handleLabIngest);
+}

@@ -27,10 +27,10 @@
 - `npm run v2:edge-security-audit` passed and now asserts that `fact-extractor` remains service-role-only and that v2 edge entrypoints keep using the shared CORS/envelope helpers.
 - `npm run chat:regression` still requires live Supabase credentials, but no longer requires a human-managed `TEST_SUPABASE_JWT`; when `SUPABASE_SERVICE_ROLE_KEY` is present, it provisions the disposable regression auth user inline and keeps the token out of logs.
 - `git diff --check` passed.
-- `npx.cmd -y deno@2.8.2 test --allow-env --allow-net --import-map=supabase/functions/import_map.json supabase/functions/_shared/__tests__/` currently passes with 79 tests. Marker coverage includes the 8 spec cases, and fact normalizer coverage includes decimal kg parsing.
+- `npx.cmd -y deno@2.8.2 test --allow-env --allow-net --import-map=supabase/functions/import_map.json supabase/functions/_shared/__tests__/` currently passes with 83 tests. Marker coverage includes the 8 spec cases, and fact normalizer coverage includes decimal kg parsing.
 
 ## Boundaries
 
 - Reloaded history reconstructs text, system notices, and product carousels from persisted chat rows. Status-driven order-panel reload still needs seeded Phase 3 end-to-end proof with real orders.
 - Live chat regression remains optional and secret-backed; the required identity is now script-owned through `scripts/create-test-jwt.mjs`.
-- The initial `fact-extractor` message lookup still needs an owner decision on tenant context because the spec-defined internal payload contains only `message_id`.
+- `fact-extractor` now uses the B6 service-role internal contract and derives tenant context through `message -> session -> tenant`.

@@ -58,7 +58,6 @@ const decisionTopics = [
   'low-confidence lab rows',
   'medical liability wording',
   'defaultTenantSlug',
-  'wearable-ingest',
   'source_ref',
   'wearable-imports',
   'Apple Health export upload',

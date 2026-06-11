@@ -45,7 +45,7 @@ Deno.test('assertServiceRoleAuthorization rejects non-service tokens', () => {
     try {
       assertServiceRoleAuthorization('Bearer anon-token');
     } catch (error) {
-      if (error instanceof HttpError && error.status === 403) {
+      if (error instanceof HttpError && error.status === 401) {
         return;
       }
 

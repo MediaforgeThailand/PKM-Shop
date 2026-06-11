@@ -120,7 +120,7 @@ assert('edge function references published MiraCare prompt', edgeFunctionSource.
 assert('edge function sends OpenAI prompt variables', ['brand_name', 'user_nickname', 'personal_context', 'recent_chat', 'product_catalog'].every((key) => edgeFunctionSource.includes(key)));
 assert('edge function disables OpenAI response storage', edgeFunctionSource.includes('store: false'));
 assert('edge function parses product marker into product cards', edgeFunctionSource.includes('parseProductMarker') && edgeFunctionSource.includes('lookupProductsByCatalogKeys'));
-assert('fact extractor is service-role internal only', factExtractorSource.includes('assertServiceRoleAuthorization') && factExtractorSource.includes("req.headers.get('authorization')"));
+assert('fact extractor is service-role internal only', factExtractorSource.includes('assertInternalServiceRoleAuthorization') && factExtractorSource.includes("req.headers.get('authorization')"));
 assert('prototype fallback has no canned numbered compactTips', !prototypePanelSource.includes('compactTips'));
 assert('prototype fallback uses shared natural helper', prototypePanelSource.includes('createNaturalHealthFallbackAnswer') && !prototypePanelSource.includes('function createNaturalDemoText'));
 assert('chatbot renders backend UI cards', miraChatSource.includes('productsToUiCards(result.products)') && chatbotScreenSource.includes('ChatUiCardRenderer'));

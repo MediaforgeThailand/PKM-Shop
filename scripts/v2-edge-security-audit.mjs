@@ -9,6 +9,7 @@ const files = {
   db: 'supabase/functions/_shared/db.ts',
   factExtractor: 'supabase/functions/fact-extractor/index.ts',
   facts: 'supabase/functions/_shared/facts.ts',
+  internalAuth: 'supabase/functions/_shared/internalAuth.ts',
   labIngest: 'supabase/functions/lab-ingest/index.ts',
   line: 'supabase/functions/_shared/line.ts',
   lineWebhook: 'supabase/functions/line-webhook/index.ts',
@@ -93,9 +94,15 @@ for (const filePath of edgeFiles) {
 
 expect(
   'internal fact extractor auth',
-  sources.db.includes('assertServiceRoleAuthorization') &&
-    sources.factExtractor.includes("assertServiceRoleAuthorization(req.headers.get('authorization'))"),
-  'fact-extractor must require the shared service-role guard before reading chat messages',
+  sources.internalAuth.includes('constantTimeEqual') &&
+    sources.internalAuth.includes('Internal service-role authorization required.') &&
+    sources.factExtractor.includes("import { assertInternalServiceRoleAuthorization } from '../_shared/internalAuth.ts'") &&
+    sources.factExtractor.includes("assertInternalServiceRoleAuthorization(req.headers.get('authorization'))") &&
+    sources.labIngest.includes("import { assertInternalServiceRoleAuthorization } from '../_shared/internalAuth.ts'") &&
+    sources.labIngest.includes("assertInternalServiceRoleAuthorization(req.headers.get('authorization'))") &&
+    sources.wearableIngest.includes("import { assertInternalServiceRoleAuthorization } from '../_shared/internalAuth.ts'") &&
+    sources.wearableIngest.includes("assertInternalServiceRoleAuthorization(req.headers.get('authorization'))"),
+  'fact-extractor, lab-ingest, and wearable-ingest must require the shared constant-time service-role guard before internal work',
 );
 
 expect(
@@ -202,8 +209,10 @@ expect(
   'lab and wearable follow-up tenant filters',
   sources.labIngest.includes('tenant_id: `eq.${customer.tenant_id}`') &&
     sources.labIngest.includes('tenant_id: `eq.${report.tenant_id}`') &&
-    sources.wearableIngest.includes('tenant_id: `eq.${customer.tenant_id}`'),
-  'lab and wearable follow-up writes must include tenant filters where tenant context is available',
+    sources.wearableIngest.includes('tenant_id: `eq.${customer.tenant_id}`') &&
+    sources.wearableIngest.includes('tenant_id: customer.tenant_id') &&
+    !sources.wearableIngest.includes('tenant_slug'),
+  'lab and wearable internal functions must derive tenant context from customer/report rows and reject request tenant fields',
 );
 
 expect(

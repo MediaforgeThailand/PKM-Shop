@@ -1,7 +1,8 @@
 import { callFactExtractor } from '../_shared/openai.ts';
-import { assertServiceRoleAuthorization, selectOne } from '../_shared/db.ts';
+import { selectOne } from '../_shared/db.ts';
 import { insertFactsIdempotent, loadFactRegistry, normalizeFactCandidates, type ExtractedFactCandidate } from '../_shared/facts.ts';
 import { handleOptions, HttpError, json, toErrorResponse, validateJson, z } from '../_shared/http.ts';
+import { assertInternalServiceRoleAuthorization } from '../_shared/internalAuth.ts';
 import type { ChatMessageRow, ChatSessionRow, CustomerRow } from '../_shared/types.ts';
 
 declare const Deno: {
@@ -44,7 +45,7 @@ function parseFactPayload(value: unknown): ExtractedFactCandidate[] {
     .filter((fact): fact is ExtractedFactCandidate => Boolean(fact));
 }
 
-Deno.serve(async (req) => {
+export async function handleFactExtractor(req: Request) {
   const optionsResponse = handleOptions(req);
 
   if (optionsResponse) {
@@ -56,7 +57,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    assertServiceRoleAuthorization(req.headers.get('authorization'));
+    assertInternalServiceRoleAuthorization(req.headers.get('authorization'));
 
     const body = await validateJson(req, requestSchema);
     const message = await selectOne<ChatMessageRow>('chat_messages', {
@@ -116,4 +117,8 @@ Deno.serve(async (req) => {
 
     return toErrorResponse(error);
   }
-});
+}
+
+if (!(globalThis as typeof globalThis & { __MIRACARE_SUPPRESS_SERVE__?: boolean }).__MIRACARE_SUPPRESS_SERVE__) {
+  Deno.serve(handleFactExtractor);
+}

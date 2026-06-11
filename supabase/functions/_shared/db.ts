@@ -1,4 +1,5 @@
 import { HttpError } from './http.ts';
+export { assertInternalServiceRoleAuthorization as assertServiceRoleAuthorization } from './internalAuth.ts';
 import type { CustomerRow, TenantRow } from './types.ts';
 
 type RuntimeDeno = {
@@ -178,15 +179,6 @@ export async function resolveAuthUserId(authorization: string | null) {
   }
 
   return (payload as { id: string }).id;
-}
-
-export function assertServiceRoleAuthorization(authorization: string | null) {
-  const token = authorization?.replace(/^Bearer\s+/i, '').trim();
-  const { serviceRoleKey } = serviceConfig();
-
-  if (token !== serviceRoleKey) {
-    throw new HttpError('VALIDATION', 'Internal service-role authorization required.', 403);
-  }
 }
 
 export async function resolveOrCreateCustomer(tenantId: string, authUserId: string, nickname?: string | null) {

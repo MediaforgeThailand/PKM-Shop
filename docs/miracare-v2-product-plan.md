@@ -187,7 +187,7 @@ Status 2026-06-11: referrer tables, attribution route, assisted purchase functio
 
 **Phase 5 — Health Dashboard.** Lab photo pipeline + visualization + facts cross-link; Apple export ingestion + dashboard. DoD: sample lab photo renders correct visualized panel; facts appear in chat personalization.
 
-Status 2026-06-11: lab/wearable schema, ingest functions, dashboard refactors, lab safety sanitizer, lab normalization table, Apple Health zip `export.xml` streaming, and fixture-backed lab/wearable parser tests exist. Lab confirmation writes, wearable request context, customer dashboard tenant resolution, and live image-to-OpenAI sample lab evidence remain pending.
+Status 2026-06-11: lab/wearable schema, service-role internal ingest functions, dashboard refactors, lab safety sanitizer, lab normalization table, Apple Health zip `export.xml` streaming, and fixture-backed lab/wearable parser tests exist. Lab confirmation writes, wearable `source_ref`, wearable bucket/UX confirmation, customer dashboard tenant resolution, and live image-to-OpenAI sample lab evidence remain pending.
 
 **Phase 6 — LINE OA surface.** Webhook, Flex cards, QR image, session mapping. DoD: regression suite passes over LINE channel too.
 

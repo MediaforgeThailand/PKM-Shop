@@ -24,15 +24,15 @@
 - `npm run v2:schema-audit` passed and now covers the Phase 5 table contracts, RLS policies, and health-dashboard indexes.
 - `npm run v2:health-safety-audit` passed and now asserts the lab summary disclaimer/template path, the lab vision normalization table, the Phase 5 sample fixtures, Apple Health zip `export.xml` streaming, live dashboard table reads, no dashboard mock/model-call paths, and rule-based wearable trend windows.
 - `git diff --check` passed after Phase 5 implementation.
-- Shared Phase 5 tests were added in `supabase/functions/_shared/__tests__/lab_test.ts`, `wearable_test.ts`, and `supabase/functions/_shared/__tests__/fixtures/`; `npx.cmd -y deno@2.8.2 test --allow-env --allow-net --import-map=supabase/functions/import_map.json supabase/functions/_shared/__tests__/` currently passes locally with 79 tests and CI runs the same Deno workflow.
+- Shared Phase 5 tests were added in `supabase/functions/_shared/__tests__/lab_test.ts`, `wearable_test.ts`, and `supabase/functions/_shared/__tests__/fixtures/`; `npx.cmd -y deno@2.8.2 test --allow-env --allow-net --import-map=supabase/functions/import_map.json supabase/functions/_shared/__tests__/` currently passes locally with 83 tests and CI runs the same Deno workflow.
 - The dashboard route audit now covers `HealthInsightScreens.tsx`, `lib/health/v2HealthDashboard.ts`, `health-check-results.tsx`, `body-overview.tsx`, and `wearable-health.tsx` for live table reads and no mock/model-call leakage.
 - Browser smoke checks on `localhost:8081` render `/health-check-results`, `/body-overview`, `/wearable-health`, and `/ai-body-overview`. A web-only Expo Router `Link asChild` style-array crash was fixed by flattening the tab link style.
 
 ## Boundaries
 
-- The initial `lab-ingest` customer lookup still needs an owner decision on tenant context because the spec-defined payload contains `customer_id` but not `tenant_slug`.
+- `lab-ingest` and `wearable-ingest` now use the B6 service-role internal contract and derive tenant context from customer rows instead of request tenant fields.
 - Customer dashboard tenant resolution needs an owner decision because `lib/health/v2HealthDashboard.ts` currently resolves `tenants.slug` from the customer client, while Phase 1 tenant RLS is tenant-member-only. `docs/v2-open-questions.md` records whether to allow non-sensitive tenant reads, add a tenant-scoped customer RPC, or derive customer context without slug lookup.
 - The spec does not provide a production synonym/alias matrix for raw Thai/English lab names, so the embedded normalization table currently contains the exact 15 supported codes from the spec and broader aliases are logged as an open question.
-- The `wearable-ingest` request contract still needs an owner decision because the spec-defined payload contains only `storage_path`, while scoped metric/fact writes require tenant/customer context.
+- Wearable `source_ref`, bucket naming, and export-upload UX acceptance remain owner/product questions before production.
 - Low-confidence lab confirmation writes are not yet implemented because the spec does not define the trusted write path for user edits/confirmation and follow-up fact insertion; `docs/v2-open-questions.md` records the decision needed. Reports can enter `needs_confirmation`, rows store `confirmed=false`, and the dashboard now lists those rows for review.
 - The Phase 5 open questions document the lab fact-key and wearable bucket decisions made for this implementation.

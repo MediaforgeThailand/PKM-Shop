@@ -1,5 +1,6 @@
-import { assertTenant, insertRow, resolveAuthUserId, selectMany, selectOne, updateRows, upsertRow } from '../_shared/db.ts';
+import { insertRow, selectMany, selectOne, updateRows, upsertRow } from '../_shared/db.ts';
 import { HttpError, handleOptions, json, toErrorResponse, validateJson, z } from '../_shared/http.ts';
+import { assertInternalServiceRoleAuthorization } from '../_shared/internalAuth.ts';
 import { streamStorageObject } from '../_shared/storage.ts';
 import type { CustomerRow, UserFactRow, WearableIngestRequest, WearableMetricRow } from '../_shared/types.ts';
 import { AppleHealthParseError, parseAppleHealthExportStream, type LatestBodySample } from '../_shared/wearable.ts';
@@ -11,32 +12,16 @@ declare const Deno: {
 const requestSchema = z.object({
   customer_id: z.string().uuid(),
   storage_path: z.string().min(1),
-  tenant_slug: z.string().regex(/^[a-z0-9-]{2,32}$/),
 });
 
-async function assertCustomerAccess(customerId: string, tenantId: string, authUserId: string) {
+async function loadCustomerForInternalIngest(customerId: string) {
   const customer = await selectOne<CustomerRow>('customers', {
     id: `eq.${customerId}`,
     select: 'id,tenant_id,auth_user_id,line_user_id,nickname,phone,referred_by,referred_at,created_at',
-    tenant_id: `eq.${tenantId}`,
   });
 
   if (!customer) {
     throw new HttpError('VALIDATION', 'Customer not found.', 404);
-  }
-
-  if (customer.auth_user_id === authUserId) {
-    return customer;
-  }
-
-  const member = await selectOne<{ role: string }>('tenant_members', {
-    auth_user_id: `eq.${authUserId}`,
-    select: 'role',
-    tenant_id: `eq.${customer.tenant_id}`,
-  });
-
-  if (!member) {
-    throw new HttpError('VALIDATION', 'Not allowed for this customer.', 403);
   }
 
   return customer;
@@ -98,7 +83,7 @@ async function* streamChunks(stream: ReadableStream<Uint8Array>) {
   }
 }
 
-Deno.serve(async (req) => {
+export async function handleWearableIngest(req: Request) {
   const optionsResponse = handleOptions(req);
 
   if (optionsResponse) {
@@ -110,11 +95,10 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const body = await validateJson(req, requestSchema);
+    assertInternalServiceRoleAuthorization(req.headers.get('authorization'));
 
-    const tenant = await assertTenant(body.tenant_slug);
-    const authUserId = await resolveAuthUserId(req.headers.get('authorization'));
-    const customer = await assertCustomerAccess(body.customer_id, tenant.id, authUserId);
+    const body = await validateJson(req, requestSchema);
+    const customer = await loadCustomerForInternalIngest(body.customer_id);
     const object = await streamStorageObject('wearable-imports', body.storage_path);
     const parsed = await parseAppleHealthExportStream(streamChunks(object.stream), {
       contentType: object.contentType,
@@ -130,7 +114,7 @@ Deno.serve(async (req) => {
           day: metric.day,
           metric: metric.metric,
           source: 'apple_export',
-          tenant_id: tenant.id,
+          tenant_id: customer.tenant_id,
           value: metric.value,
         },
         'customer_id,metric,day,source',
@@ -156,4 +140,8 @@ Deno.serve(async (req) => {
 
     return toErrorResponse(error);
   }
-});
+}
+
+if (!(globalThis as typeof globalThis & { __MIRACARE_SUPPRESS_SERVE__?: boolean }).__MIRACARE_SUPPRESS_SERVE__) {
+  Deno.serve(handleWearableIngest);
+}

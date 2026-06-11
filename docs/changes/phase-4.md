@@ -23,7 +23,7 @@
 - `git diff --check` passed after Phase 4 implementation.
 - Direct status-write audit found only the `transition_order(...)` definitions in Phase 3 and Phase 4 migrations writing `public.orders.status`; prompt-status migrations are unrelated to orders.
 - SQL/helper sanity checks found the existing `is_tenant_member` and `is_tenant_admin` helpers used by the new policies.
-- `npx.cmd -y deno@2.8.2 test --allow-env --allow-net --import-map=supabase/functions/import_map.json supabase/functions/_shared/__tests__/` currently passes with 79 tests, including the Phase 4 commission calculation and referral attribution units.
+- `npx.cmd -y deno@2.8.2 test --allow-env --allow-net --import-map=supabase/functions/import_map.json supabase/functions/_shared/__tests__/` currently passes with 83 tests, including the Phase 4 commission calculation and referral attribution units.
 
 ## Boundaries
 
