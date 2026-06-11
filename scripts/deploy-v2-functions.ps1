@@ -34,11 +34,11 @@ if ([string]::IsNullOrWhiteSpace($supabaseUrl)) {
 
 $projectRef = ([Uri]$supabaseUrl).Host.Split('.')[0]
 
-Write-Output "Deploying MiraCare edge functions to Supabase project $projectRef"
+Write-Output "Deploying MiraCare v2 edge functions to Supabase project $projectRef"
 npx supabase functions deploy chat-orchestrator --project-ref $projectRef
 npx supabase functions deploy fact-extractor --project-ref $projectRef
 npx supabase functions deploy admin-order-action --project-ref $projectRef
 npx supabase functions deploy referrer-order --project-ref $projectRef
+npx supabase functions deploy line-webhook --project-ref $projectRef --no-verify-jwt
 npx supabase functions deploy lab-ingest --project-ref $projectRef
 npx supabase functions deploy wearable-ingest --project-ref $projectRef
-npx supabase functions deploy line-webhook --project-ref $projectRef

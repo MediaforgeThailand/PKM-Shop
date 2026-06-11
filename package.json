@@ -48,6 +48,7 @@
     "orders:status-audit": "node scripts/order-status-write-audit.mjs",
     "types:mirror-audit": "node scripts/type-mirror-audit.mjs",
     "templates:mirror-audit": "node scripts/templates-mirror-audit.mjs",
+    "v2:deploy-audit": "node scripts/v2-deploy-script-audit.mjs",
     "v2:type-safety-audit": "node scripts/v2-type-safety-audit.mjs",
     "v2:edge-security-audit": "node scripts/v2-edge-security-audit.mjs",
     "v2:deno-check": "npx -y deno@2.8.2 check --import-map=supabase/functions/import_map.json supabase/functions/chat-orchestrator/index.ts supabase/functions/fact-extractor/index.ts supabase/functions/admin-order-action/index.ts supabase/functions/referrer-order/index.ts supabase/functions/lab-ingest/index.ts supabase/functions/wearable-ingest/index.ts supabase/functions/line-webhook/index.ts",
@@ -59,7 +60,7 @@
     "v2:schema-audit": "node scripts/v2-schema-audit.mjs",
     "v2:health-safety-audit": "node scripts/v2-health-safety-audit.mjs",
     "v2:client-audit": "node scripts/v2-client-audit.mjs",
-    "v2:verify": "npm run typecheck && npm run v2:type-safety-audit && npm run chat:quality && npm run orders:status-audit && npm run v2:schema-audit && npm run v2:open-questions-audit && npm run v2:local-readiness-audit && npm run v2:docs-audit && npm run v2:client-audit && npm run v2:edge-security-audit && npm run v2:health-safety-audit && npm run types:mirror-audit && npm run templates:mirror-audit && npm run v2:deno-check && npm run v2:deno-test",
+    "v2:verify": "npm run typecheck && npm run v2:type-safety-audit && npm run chat:quality && npm run orders:status-audit && npm run v2:schema-audit && npm run v2:open-questions-audit && npm run v2:local-readiness-audit && npm run v2:docs-audit && npm run v2:client-audit && npm run v2:edge-security-audit && npm run v2:health-safety-audit && npm run types:mirror-audit && npm run templates:mirror-audit && npm run v2:deploy-audit && npm run v2:deno-check && npm run v2:deno-test",
     "typecheck": "tsc --noEmit"
   },
   "private": true

@@ -75,15 +75,15 @@ supabase functions deploy chat-orchestrator
 supabase functions deploy fact-extractor
 supabase functions deploy admin-order-action
 supabase functions deploy referrer-order
+supabase functions deploy line-webhook --no-verify-jwt
 supabase functions deploy lab-ingest
 supabase functions deploy wearable-ingest
-supabase functions deploy line-webhook --no-verify-jwt
 ```
 
 On Windows, you can also run the helper script. It reads `SUPABASE_ACCESS_TOKEN` from your shell or `.env.local` and derives the project ref from `EXPO_PUBLIC_SUPABASE_URL`.
 
 ```powershell
-.\scripts\deploy-mira-chat.ps1
+.\scripts\deploy-v2-functions.ps1
 ```
 
 `SUPABASE_ACCESS_TOKEN` is the Supabase account access token used by the CLI to deploy functions. It is different from `OPENAI_API_KEY`, which is the Edge Function secret used at runtime.

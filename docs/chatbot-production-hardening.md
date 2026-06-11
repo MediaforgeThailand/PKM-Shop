@@ -7,7 +7,7 @@ This note documents the production-oriented chatbot controls added around OpenAI
 ```text
 Expo app
 -> Supabase Auth session
--> mira-chat Edge Function
+-> chat-orchestrator Edge Function
 -> MiraCare prompt variables
 -> published OpenAI Platform prompt
 -> OpenAI Responses API
@@ -39,7 +39,7 @@ Chat-derived personal health facts are stored in the patient health data vault, 
 ## Verification Checklist
 
 - Run database migrations including `20260605000000_chatbot_production_hardening.sql` and `20260605100000_user_nickname_chat_prompt.sql`.
-- Deploy `mira-chat` with JWT verification enabled.
+- Deploy `chat-orchestrator` with JWT verification enabled.
 - Confirm publishable-key-only calls return `401`.
 - Confirm an authenticated call returns `text`, `requestId`, and `ragMatches`.
 - Confirm log rows are written to `ai_request_logs`, `rag_retrieval_logs`, and `api_process_logs`.

@@ -32,7 +32,7 @@ The mobile app does not call OpenAI directly and no longer sends client-built RA
 - RAG vector embedding migration: `supabase/migrations/20260605013000_rag_vector_embeddings.sql`
 - Edge Function: `supabase/functions/chat-orchestrator/index.ts`
 - RAG embedding Edge Function: `supabase/functions/rag-embed/index.ts`
-- Deploy helper: `scripts/deploy-mira-chat.ps1`
+- Deploy helper: `scripts/deploy-v2-functions.ps1`
 
 ## Required `.env.local`
 
@@ -80,7 +80,7 @@ The helper script reads `SUPABASE_ACCESS_TOKEN` and `EXPO_PUBLIC_SUPABASE_URL` f
 
 ```powershell
 cd D:\Work\mira-health-app
-.\scripts\deploy-mira-chat.ps1
+.\scripts\deploy-v2-functions.ps1
 ```
 
 Current behavior:
