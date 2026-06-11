@@ -73,15 +73,22 @@ export function requireLineChannelToken(tenantSlug: string) {
   return token;
 }
 
-function bytesToBase64(bytes: Uint8Array) {
-  let binary = '';
-  const chunkSize = 0x8000;
+function base64ToBytes(value: string) {
+  let binary: string;
 
-  for (let index = 0; index < bytes.length; index += chunkSize) {
-    binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
+  try {
+    binary = atob(value);
+  } catch {
+    throw new HttpError('VALIDATION', 'Invalid LINE signature.', 401);
   }
 
-  return btoa(binary);
+  const bytes = new Uint8Array(binary.length);
+
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+
+  return bytes;
 }
 
 export async function verifyLineSignature(body: string, signature: string | null, tenantSlug: string) {
@@ -99,12 +106,13 @@ export async function verifyLineSignature(body: string, signature: string | null
       name: 'HMAC',
     },
     false,
-    ['sign'],
+    ['verify'],
   );
-  const digest = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(body));
-  const expected = bytesToBase64(new Uint8Array(digest));
+  const bodyBytes = new TextEncoder().encode(body);
+  const signatureBytes = base64ToBytes(signature);
+  const valid = await crypto.subtle.verify('HMAC', key, signatureBytes, bodyBytes);
 
-  if (expected !== signature) {
+  if (!valid) {
     throw new HttpError('VALIDATION', 'Invalid LINE signature.', 401);
   }
 }

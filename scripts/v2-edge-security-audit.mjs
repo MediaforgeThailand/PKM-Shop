@@ -173,6 +173,15 @@ expect(
 );
 
 expect(
+  'line signature timing-safe verify',
+  sources.line.includes("crypto.subtle.verify('HMAC'") &&
+    sources.line.includes("['verify']") &&
+    sources.line.includes('base64ToBytes(signature)') &&
+    !sources.line.includes('expected !== signature'),
+  'LINE signature verification must use WebCrypto HMAC verify with decoded signature bytes, not string comparison',
+);
+
+expect(
   'assisted referrer direct credit',
   sources.referrerOrder.includes("channel: 'referrer'") &&
     sources.referrerOrder.includes('referrer_id: referrer.id') &&

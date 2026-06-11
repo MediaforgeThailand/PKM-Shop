@@ -6,7 +6,7 @@
 - Added an internal `orchestrateLine(...)` path that resolves customers by `line_user_id` and reuses the shared chat/order/product orchestration.
 - Added LINE Flex product carousel replies with `select_product:<catalog_key>` postbacks.
 - Added server-side PromptPay QR rendering via `qrcode`, upload to the public `line-assets` bucket, LINE image QR replies, and a separate payment Flex with `payment_done:<order_id>` postbacks.
-- Added `_shared/line.ts` for LINE signature verification, reply, push, postback action parsing, Flex product/payment builders, QR image message builders, and per-tenant channel-token lookup shared by the webhook and admin booking notifications.
+- Added `_shared/line.ts` for timing-safe LINE signature verification, reply, push, postback action parsing, Flex product/payment builders, QR image message builders, and per-tenant channel-token lookup shared by the webhook and admin booking notifications.
 - Added LINE push delivery attempts for admin confirmed/booked notices on `chat_line` orders.
 - Added public `line-assets` bucket creation and a shared storage upload helper.
 - Added `line-webhook` to the deployment helper.

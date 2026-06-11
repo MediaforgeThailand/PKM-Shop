@@ -221,9 +221,11 @@ Deno.test('verifyLineSignature accepts valid HMAC signature', async () => {
 Deno.test('verifyLineSignature rejects invalid signature', async () => {
   clearLineEnv();
   Deno.env.set('LINE_CHANNEL_SECRET__demo-hospital', 'line-secret');
+  const body = JSON.stringify({ events: [] });
+  const signature = await signBody(body, 'other-secret');
 
   try {
-    await verifyLineSignature(JSON.stringify({ events: [] }), 'invalid', 'demo-hospital');
+    await verifyLineSignature(body, signature, 'demo-hospital');
   } catch (error) {
     assert(error instanceof Error && error.message.includes('Invalid LINE signature'), 'expected invalid signature error');
     clearLineEnv();
@@ -232,4 +234,20 @@ Deno.test('verifyLineSignature rejects invalid signature', async () => {
 
   clearLineEnv();
   throw new Error('expected verifyLineSignature to reject invalid signature');
+});
+
+Deno.test('verifyLineSignature rejects malformed base64 signature header', async () => {
+  clearLineEnv();
+  Deno.env.set('LINE_CHANNEL_SECRET__demo-hospital', 'line-secret');
+
+  try {
+    await verifyLineSignature(JSON.stringify({ events: [] }), 'not base64@@', 'demo-hospital');
+  } catch (error) {
+    assert(error instanceof Error && error.message.includes('Invalid LINE signature'), 'expected malformed signature error');
+    clearLineEnv();
+    return;
+  }
+
+  clearLineEnv();
+  throw new Error('expected verifyLineSignature to reject malformed signature');
 });
