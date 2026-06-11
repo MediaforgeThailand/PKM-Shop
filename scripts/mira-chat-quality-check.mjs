@@ -5,18 +5,43 @@ import ts from 'typescript';
 
 const repoRoot = process.cwd();
 const policyPath = path.join(repoRoot, 'lib', 'ai', 'prototypeConversationPolicy.ts');
-const edgeFunctionPath = path.join(repoRoot, 'supabase', 'functions', 'mira-chat', 'index.ts');
+const edgeFunctionPath = path.join(repoRoot, 'supabase', 'functions', 'chat-orchestrator', 'index.ts');
+const orchestratePath = path.join(repoRoot, 'supabase', 'functions', '_shared', 'orchestrate.ts');
+const factExtractorPath = path.join(repoRoot, 'supabase', 'functions', 'fact-extractor', 'index.ts');
+const openAiPath = path.join(repoRoot, 'supabase', 'functions', '_shared', 'openai.ts');
+const markerPath = path.join(repoRoot, 'supabase', 'functions', '_shared', 'marker.ts');
 const prototypePanelPath = path.join(repoRoot, 'components', 'PrototypeChatPanel.tsx');
 const miraChatPath = path.join(repoRoot, 'lib', 'ai', 'miraChat.ts');
+const legacyMiraChatPath = path.join(repoRoot, 'supabase', 'functions', 'mira-chat', 'index.ts');
+const messageBubblePath = path.join(repoRoot, 'components', 'chat', 'MessageBubble.tsx');
+const productCarouselPath = path.join(repoRoot, 'components', 'chat', 'ProductCarousel.tsx');
 const openAiPlaybookPath = path.join(repoRoot, 'docs', 'openai-chat-setting-playbook.md');
 const chatbotScreenPath = path.join(repoRoot, 'app', '(tabs)', 'chatbot.tsx');
 const source = await fs.readFile(policyPath, 'utf8');
-const edgeFunctionSource = await fs.readFile(edgeFunctionPath, 'utf8');
+const edgeFunctionSource = [
+  await fs.readFile(edgeFunctionPath, 'utf8'),
+  await fs.readFile(orchestratePath, 'utf8'),
+  await fs.readFile(openAiPath, 'utf8'),
+  await fs.readFile(markerPath, 'utf8'),
+].join('\n');
 const prototypePanelSource = await fs.readFile(prototypePanelPath, 'utf8');
+const factExtractorSource = await fs.readFile(factExtractorPath, 'utf8');
 const miraChatSource = await fs.readFile(miraChatPath, 'utf8');
 const openAiPlaybookSource = await fs.readFile(openAiPlaybookPath, 'utf8');
 const chatbotScreenSource = await fs.readFile(chatbotScreenPath, 'utf8');
 const readmeSource = await fs.readFile(path.join(repoRoot, 'README.md'), 'utf8');
+const legacyMiraChatExists = await fs
+  .access(legacyMiraChatPath)
+  .then(() => true)
+  .catch(() => false);
+const messageBubbleExists = await fs
+  .access(messageBubblePath)
+  .then(() => true)
+  .catch(() => false);
+const productCarouselExists = await fs
+  .access(productCarouselPath)
+  .then(() => true)
+  .catch(() => false);
 const compiled = ts.transpileModule(source, {
   compilerOptions: {
     importsNotUsedAsValues: ts.ImportsNotUsedAsValues.Remove,
@@ -90,27 +115,32 @@ assert('result fallback asks for lab values without blocked style', resultFallba
 assert('prep fallback stays practical without numbered list', prepFallback.includes('งดอาหาร') && !/^\s*\d+[.)]/m.test(prepFallback), prepFallback);
 assert('generated text has no blocked style', !hasBlockedConversationStyle([firstAnswer, secondAnswer, cleanedStyle, cleanedFormStyle, cleanedDisplayStyle, emergencyFallback, resultFallback, prepFallback].join('\n')));
 
-const contextShortcutIndex = edgeFunctionSource.indexOf("finish_reason: 'context_question_shortcut'");
-const openAiSecretCheckIndex = edgeFunctionSource.indexOf("if (!openaiApiKey)");
-
-assert('backend has context question shortcut', contextShortcutIndex > -1);
-assert('backend asks context before OpenAI call path', contextShortcutIndex > -1 && openAiSecretCheckIndex > -1 && contextShortcutIndex < openAiSecretCheckIndex);
+assert('backend has chat orchestrator', edgeFunctionSource.includes('orchestrateChat'));
 assert('edge function references published MiraCare prompt', edgeFunctionSource.includes('pmpt_6a29c7e353b88196a6e648b24c54849e0f6204e24d65c021'));
 assert('edge function sends OpenAI prompt variables', ['brand_name', 'user_nickname', 'personal_context', 'recent_chat', 'product_catalog'].every((key) => edgeFunctionSource.includes(key)));
 assert('edge function disables OpenAI response storage', edgeFunctionSource.includes('store: false'));
-assert('edge function parses product marker into UI cards', edgeFunctionSource.includes('parseProductMarker') && edgeFunctionSource.includes('buildProductUiCardsFromMarker'));
+assert('edge function parses product marker into product cards', edgeFunctionSource.includes('parseProductMarker') && edgeFunctionSource.includes('lookupProductsByCatalogKeys'));
+assert('fact extractor is service-role internal only', factExtractorSource.includes('assertServiceRoleAuthorization') && factExtractorSource.includes("req.headers.get('authorization')"));
 assert('prototype fallback has no canned numbered compactTips', !prototypePanelSource.includes('compactTips'));
 assert('prototype fallback uses shared natural helper', prototypePanelSource.includes('createNaturalHealthFallbackAnswer') && !prototypePanelSource.includes('function createNaturalDemoText'));
-assert('chatbot renders backend UI cards', miraChatSource.includes('uiCards: parseUiCards(data?.uiCards)') && chatbotScreenSource.includes('ChatUiCardRenderer'));
+assert('chatbot renders backend UI cards', miraChatSource.includes('productsToUiCards(result.products)') && chatbotScreenSource.includes('ChatUiCardRenderer'));
 assert('chatbot small-talk shortcut is offline only', chatbotScreenSource.includes('smallTalkAnswer && !canUseAi'));
 assert('offline fallback has no numbered RAG list template', !miraChatSource.includes('ragMatches.slice(0, 2).map'));
 assert('offline fallback avoids repeated latest-checkup prompt', !miraChatSource.includes('ตรวจล่าสุดเมื่อไหร่คะ ถ้าจำไม่ได้ตอบคร่าวๆ ได้เลย'));
 assert('edge function does not compose local instructions', !edgeFunctionSource.includes('instructions:') && !edgeFunctionSource.includes('createSystemInstruction'));
 assert('edge function does not read local prompt_versions', !edgeFunctionSource.includes('prompt_versions?select='));
 assert('client does not send system prompt override', !miraChatSource.includes('systemPromptOverride') && !chatbotScreenSource.includes('Prompt editor'));
+assert(
+  'customer chat screen does not read local prompt_versions',
+  !chatbotScreenSource.includes('loadActivePromptVersion') &&
+    !chatbotScreenSource.includes('saveActivePromptVersion') &&
+    !chatbotScreenSource.includes('prompt_versions'),
+);
 assert('OpenAI chat setting playbook exists with developer message', openAiPlaybookSource.includes('## Developer Message') && openAiPlaybookSource.includes('## Test Prompts'));
 assert('OpenAI playbook includes no-repeat acceptance criteria', openAiPlaybookSource.includes('does not ask the same intake question twice'));
-assert('client calls mira-chat edge function', /supabase\.functions\.invoke\(\s*['"]mira-chat['"]/.test(miraChatSource));
+assert('client calls chat-orchestrator edge function', miraChatSource.includes("'chat-orchestrator'") || miraChatSource.includes('"chat-orchestrator"'));
 assert('client no longer calls legacy edge function name', !/supabase\.functions\.invoke\(\s*['"]gemini-chat['"]/.test(miraChatSource));
+assert('legacy mira-chat edge function is deleted', !legacyMiraChatExists);
+assert('chat components include MessageBubble and ProductCarousel', messageBubbleExists && productCarouselExists);
 assert('prototype imports renamed miraChat client', prototypePanelSource.includes("@/lib/ai/miraChat") && !prototypePanelSource.includes("@/lib/ai/gemini"));
 assert('README describes OpenAI Platform prompt path', readmeSource.includes('published MiraCare prompt in OpenAI Platform') && readmeSource.includes('active hospital product catalog'));

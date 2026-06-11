@@ -1,0 +1,101 @@
+name: MiraCare v2 verification
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/miracare-v2.yml'
+      - 'app/**'
+      - 'components/**'
+      - 'lib/**'
+      - 'scripts/**'
+      - 'supabase/functions/**'
+      - 'supabase/migrations/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig.json'
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      CHAT_REGRESSION_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+      CHAT_REGRESSION_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      CHAT_REGRESSION_TEST_SUPABASE_JWT: ${{ secrets.TEST_SUPABASE_JWT }}
+      RLS_SHADOW_DB_URL: ${{ secrets.SUPABASE_SHADOW_DB_URL }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          cache: npm
+          node-version: 24
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Set up Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: TypeScript check
+        run: npm run typecheck
+
+      - name: Type safety audit
+        run: npm run v2:type-safety-audit
+
+      - name: Chat quality checks
+        run: npm run chat:quality
+
+      - name: Order status write audit
+        run: npm run orders:status-audit
+
+      - name: Schema contract audit
+        run: npm run v2:schema-audit
+
+      - name: Open question audit
+        run: npm run v2:open-questions-audit
+
+      - name: Local readiness audit
+        run: npm run v2:local-readiness-audit
+
+      - name: Documentation evidence audit
+        run: npm run v2:docs-audit
+
+      - name: Client v2 route audit
+        run: npm run v2:client-audit
+
+      - name: Edge security audit
+        run: npm run v2:edge-security-audit
+
+      - name: Health safety audit
+        run: npm run v2:health-safety-audit
+
+      - name: Type mirror audit
+        run: npm run types:mirror-audit
+
+      - name: Deno edge entrypoint check
+        run: npm run v2:deno-check
+
+      - name: Deno shared unit tests
+        run: npm run v2:deno-test
+
+      - name: Chat regression suite
+        if: ${{ env.CHAT_REGRESSION_SUPABASE_URL != '' && env.CHAT_REGRESSION_SUPABASE_ANON_KEY != '' && env.CHAT_REGRESSION_TEST_SUPABASE_JWT != '' }}
+        env:
+          SUPABASE_ANON_KEY: ${{ env.CHAT_REGRESSION_SUPABASE_ANON_KEY }}
+          SUPABASE_URL: ${{ env.CHAT_REGRESSION_SUPABASE_URL }}
+          TEST_SUPABASE_JWT: ${{ env.CHAT_REGRESSION_TEST_SUPABASE_JWT }}
+        run: npm run chat:regression
+
+      - name: Install psql
+        if: ${{ env.RLS_SHADOW_DB_URL != '' }}
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: RLS shadow database check
+        if: ${{ env.RLS_SHADOW_DB_URL != '' }}
+        env:
+          PGSSLMODE: require
+        run: psql "$RLS_SHADOW_DB_URL" -v ON_ERROR_STOP=1 -f scripts/rls-check.sql
