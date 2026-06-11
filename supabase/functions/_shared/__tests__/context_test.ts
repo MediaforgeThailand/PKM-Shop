@@ -78,9 +78,9 @@ Deno.test('renderRecentChatRows drops oldest rows over budget', () => {
 Deno.test('renderPersonalContextRows returns empty fallback when nothing exists and consent is already present', () => {
   const rendered = renderPersonalContextRows({
     activeFacts: [],
-    activeOrder: null,
     candidateFacts: [],
     hasConsent: true,
+    orderContext: null,
     registry: factRegistry,
   });
 
@@ -90,9 +90,9 @@ Deno.test('renderPersonalContextRows returns empty fallback when nothing exists 
 Deno.test('renderPersonalContextRows renders facts, candidate facts, order, then missing consent in order', () => {
   const rendered = renderPersonalContextRows({
     activeFacts: [fact({ key: 'age', value_num: 35 })],
-    activeOrder: 'ORDER_CONTEXT',
     candidateFacts: [fact({ confidence: 0.55, id: 'candidate', key: 'nickname', status: 'candidate', value_num: null, value_text: 'Boss' })],
     hasConsent: false,
+    orderContext: 'ORDER_CONTEXT',
     registry: factRegistry,
   });
   const lines = rendered.split('\n');

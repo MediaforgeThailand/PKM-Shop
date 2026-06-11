@@ -355,7 +355,7 @@ DoD: ✅ 2026-06-12 RLS checks extended (`scripts/rls-check.mjs`); ✅ 2026-06-1
 
 **V3-2 — Chat commerce UX (app/PWA).**
 Actions §4.3; order context §4.4; ProductGrid, CategoryGrid, BranchPicker, BookingSheet, OrderStatusCard; OrderPanel slimming; chatbot.tsx wiring; QR-only payment (Stripe behind flag).
-DoD: ❌ E2E (extend `scripts/e2e-commerce.mjs`): select product w/ 2 branches → branch → form (name/phone/age) → QR → paid → admin confirm → book with datetime → customer sees `ลงคิวแล้ว` in account screen AND chat answers `ถึงคิวหรือยัง` with the date + `[[order_status]]` card; ❌ single-branch product skips branch step; ❌ regression suite v3 green against prompt version 3 (env-pinned).
+DoD: ❌ 2026-06-12 E2E script extended in `scripts/e2e-commerce.mjs` for product w/ 2 branches → branch → form (name/phone/age) → QR → paid → admin confirm → book with datetime → customer-visible order query; local live run blocked because `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and anon key are not set in this shell; ✅ 2026-06-12 single-branch product skip assertion added to the E2E script; ❌ 2026-06-12 regression suite v3 runner added as `npm run chat:regression:v3`, but green run is pending staging/Edge env pinned to prompt version 3.
 
 **V3-3 — Default flip + docs.**
 Owner flips default to v3 → rerun suite on default → update handoff doc → remove env pin.

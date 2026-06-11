@@ -106,13 +106,24 @@ export type ChatCard =
       type: 'order_status';
     };
 
+export type OrderPanelBranch = {
+  address: string | null;
+  district: string | null;
+  id: string;
+  name: string;
+};
+
 export type OrderPanelState = {
   amount_baht: number;
+  booking_at: string | null;
+  branch_name: string | null;
+  branches?: OrderPanelBranch[];
   id: string;
   missing_fields: string[];
   product_name: string;
   qr_payload?: string;
   show_form?: boolean;
+  step: 'branch' | 'cancelled' | 'form' | 'qr' | 'tracking';
   status: OrderStatus;
 } | null;
 
@@ -135,6 +146,12 @@ export type ChatAction =
       type: 'select_product';
     }
   | {
+      branch_id: string;
+      order_id: string;
+      type: 'select_branch';
+    }
+  | {
+      buyer_age: number;
       buyer_name: string;
       buyer_phone: string;
       order_id: string;
@@ -153,6 +170,18 @@ export type ChatAction =
     }
   | {
       type: 'refresh_order';
+    }
+  | {
+      type: 'browse_categories';
+    }
+  | {
+      category: string;
+      limit?: number;
+      offset?: number;
+      type: 'browse_category';
+    }
+  | {
+      type: 'get_order_status';
     };
 
 export type ChatOrchestratorRequest = {
@@ -435,6 +464,17 @@ export type WearableMetricRow = {
 };
 
 export type OrderWithProductRow = OrderRow & {
+  branches?: {
+    address: string | null;
+    district: string | null;
+    id: string;
+    name: string;
+  } | {
+    address: string | null;
+    district: string | null;
+    id: string;
+    name: string;
+  }[] | null;
   products?: {
     catalog_key: string;
     category: string;

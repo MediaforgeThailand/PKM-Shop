@@ -30,6 +30,7 @@ import { createNaturalHealthFallbackAnswer } from './prototypeConversationPolicy
 export type ChatRole = 'user' | 'assistant' | 'system_notice';
 
 export type ChatMessage = {
+  cards?: ChatCard[];
   id: string;
   role: ChatRole;
   content: string;
@@ -62,6 +63,7 @@ export type AskAiResult = {
   searchSources: ChatSearchSource[];
   sessionId?: string | null;
   responseRole?: ChatRole;
+  cards: ChatCard[];
   text: string;
   order?: OrderPanelState;
   uiCards: ChatUiCard[];
@@ -318,6 +320,7 @@ async function callSupabaseOrchestrator({
     searchSources: [],
     sessionId: result.session_id,
     responseRole: action?.type === 'order_form_submit' || action?.type === 'payment_done' ? 'system_notice' : 'assistant',
+    cards: result.cards,
     text,
     uiCards,
   };
@@ -431,6 +434,7 @@ async function callProxy({
     requestId: typeof data?.requestId === 'string' ? data.requestId : undefined,
     routerMeta: parseRouterMeta(data?.routerMeta),
     searchSources: parseSearchSources(data?.searchSources),
+    cards: [],
     text,
     uiCards: parseUiCards(data?.uiCards),
   };
@@ -455,9 +459,10 @@ async function rowsToChatMessages(rows: ChatMessageRow[]): Promise<ChatMessage[]
     return {
       content: row.content,
       createdAt: row.created_at,
+      cards: Array.isArray(row.cards) ? row.cards : [],
       id: row.id,
       role: row.role,
-      uiCards: row.role === 'assistant' ? apiCardsToUiCards(row.cards, legacyUiCards) : [],
+      uiCards: row.role !== 'user' ? apiCardsToUiCards(row.cards, legacyUiCards) : [],
     };
   });
 }

@@ -9,7 +9,7 @@ export const ORDER_INFO_COMPLETE_NOTICE_TH =
 
 const DEFAULT_PRODUCT_NAME_TH = 'แพ็กเกจ';
 
-function formatBangkokDateTime(isoDateTime: string | null) {
+export function formatBangkokDateTime(isoDateTime: string | null) {
   if (!isoDateTime) {
     return '';
   }

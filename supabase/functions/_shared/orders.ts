@@ -1,7 +1,17 @@
-﻿import { rpc, selectOne, updateRows } from './db.ts';
+import { rpc, selectMany, selectOne, updateRows } from './db.ts';
 import { HttpError } from './http.ts';
 import { buildPromptPayPayload } from './promptpay.ts';
-import type { OrderPanelState, OrderRow, OrderStatus, OrderWithProductRow, ReferrerRow, TenantRow } from './types.ts';
+import { formatBangkokDateTime } from './templates.ts';
+import type {
+  ChatChannel,
+  OrderPanelBranch,
+  OrderPanelState,
+  OrderRow,
+  OrderStatus,
+  OrderWithProductRow,
+  ReferrerRow,
+  TenantRow,
+} from './types.ts';
 
 export type Actor = 'ai' | 'customer' | `admin:${string}` | `referrer:${string}` | 'system';
 
@@ -15,6 +25,9 @@ export const orderStatuses: OrderStatus[] = [
   'done',
   'cancelled',
 ];
+
+export const ORDER_WITH_PRODUCT_SELECT =
+  'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,channel,referrer_id,commission_scheme_snapshot,status,slip_url,booking_at,branch_id,buyer_age,admin_note,created_at,updated_at,products(name,catalog_key,category,price_baht),branches(id,name,address,district)';
 
 function hasBuyerInfo(order: Pick<OrderRow, 'buyer_age' | 'buyer_name' | 'buyer_phone'>) {
   return Boolean(order.buyer_name?.trim() && order.buyer_phone?.trim() && order.buyer_age);
@@ -86,6 +99,14 @@ function productFromJoin(order: OrderWithProductRow) {
   }
 
   return order.products ?? null;
+}
+
+function branchFromJoin(order: OrderWithProductRow) {
+  if (Array.isArray(order.branches)) {
+    return order.branches[0] ?? null;
+  }
+
+  return order.branches ?? null;
 }
 
 export function missingOrderFields(order: Pick<OrderRow, 'buyer_age' | 'buyer_name' | 'buyer_phone'>) {
@@ -167,54 +188,150 @@ export function assertPaymentSlipPathForOrder({
   return normalizedPath;
 }
 
-export function toOrderPanel(order: OrderWithProductRow | null, tenant: Pick<TenantRow, 'promptpay_id'>): OrderPanelState {
+function orderStepForStatus(status: OrderStatus): NonNullable<OrderPanelState>['step'] {
+  if (status === 'selecting_branch') {
+    return 'branch';
+  }
+
+  if (status === 'collecting_info') {
+    return 'form';
+  }
+
+  if (status === 'awaiting_payment') {
+    return 'qr';
+  }
+
+  if (status === 'cancelled') {
+    return 'cancelled';
+  }
+
+  return 'tracking';
+}
+
+function activeStepLabel(status: OrderStatus) {
+  if (status === 'selecting_branch') {
+    return 'เลือกสาขา';
+  }
+
+  if (status === 'collecting_info') {
+    return 'กรอกข้อมูล';
+  }
+
+  if (status === 'awaiting_payment') {
+    return 'รอชำระเงิน';
+  }
+
+  return null;
+}
+
+function recentOrderStatusText(order: Pick<OrderRow, 'booking_at' | 'status'>) {
+  if (order.status === 'submitted') {
+    return 'รอโรงพยาบาลตรวจสอบการชำระเงิน';
+  }
+
+  if (order.status === 'confirmed') {
+    return 'ชำระแล้ว รอเจ้าหน้าที่โทรนัดวันเวลา';
+  }
+
+  if (order.status === 'booked') {
+    const when = formatBangkokDateTime(order.booking_at);
+
+    return when ? `ลงคิวแล้ว ${when} น.` : 'ลงคิวแล้ว';
+  }
+
+  if (order.status === 'done') {
+    return 'ใช้บริการเรียบร้อยแล้ว';
+  }
+
+  if (order.status === 'cancelled') {
+    return 'ยกเลิกแล้ว';
+  }
+
+  return null;
+}
+
+export function toOrderPanel(
+  order: OrderWithProductRow | null,
+  tenant: Pick<TenantRow, 'promptpay_id'>,
+  branches: OrderPanelBranch[] = [],
+): OrderPanelState {
   if (!order) {
     return null;
   }
 
   const product = productFromJoin(order);
+  const branch = branchFromJoin(order);
   const missingFields = missingOrderFields(order);
+  const step = orderStepForStatus(order.status);
   const base = {
     amount_baht: order.amount_baht,
+    booking_at: order.booking_at,
+    branch_name: branch?.name ?? order.preferred_branch ?? null,
+    ...(step === 'branch' && branches.length > 0 ? { branches } : {}),
     id: order.id,
     missing_fields: missingFields,
     product_name: product?.name ?? 'แพ็กเกจ',
+    show_form: step === 'form',
+    step,
     status: order.status,
   };
 
-  if (order.status === 'awaiting_payment' && tenant.promptpay_id) {
+  if (step === 'qr' && tenant.promptpay_id) {
     return {
       ...base,
       qr_payload: buildPromptPayPayload(tenant.promptpay_id, order.amount_baht),
     };
   }
 
-  if (order.status === 'collecting_info' && missingFields.length > 0) {
-    return {
-      ...base,
-      show_form: true,
-    };
-  }
-
   return base;
 }
 
-export function formatActiveOrderContext(order: OrderWithProductRow | null) {
-  if (!order || order.status !== 'collecting_info') {
+export function formatActiveOrderContext(order: OrderWithProductRow | null, channel: ChatChannel = 'line') {
+  if (!order || !['selecting_branch', 'collecting_info', 'awaiting_payment'].includes(order.status)) {
     return null;
   }
 
   const product = productFromJoin(order);
-  const missing = missingOrderFields(order);
 
-  return `กำลังสั่งซื้อ: ${product?.name ?? 'แพ็กเกจ'} จำนวน ${order.qty} / ข้อมูลที่ยังขาด: ${missing.join(', ') || 'ไม่มี'}`;
+  if (channel === 'line' && order.status === 'collecting_info') {
+    const missing = missingOrderFields(order);
+
+    return `กำลังสั่งซื้อ: ${product?.name ?? 'แพ็กเกจ'} จำนวน ${order.qty} / ข้อมูลที่ยังขาด: ${missing.join(', ') || 'ไม่มี'}`;
+  }
+
+  const step = activeStepLabel(order.status);
+
+  return step ? `กำลังสั่งซื้อ: ${product?.name ?? 'แพ็กเกจ'} ขั้นตอนปัจจุบัน: ${step}` : null;
+}
+
+export async function formatOrderContextLines(customerId: string, sessionId: string, tenantId: string, channel: ChatChannel = 'app') {
+  const activeOrder = await loadActiveOrder(sessionId, tenantId);
+  const activeLine = formatActiveOrderContext(activeOrder, channel);
+  const recentOrders = await selectMany<OrderWithProductRow>('orders', {
+    customer_id: `eq.${customerId}`,
+    limit: '2',
+    order: 'created_at.desc',
+    select: ORDER_WITH_PRODUCT_SELECT,
+    status: 'in.(submitted,confirmed,booked,done,cancelled)',
+    tenant_id: `eq.${tenantId}`,
+  });
+  const recentLines = recentOrders
+    .map((order) => {
+      const product = productFromJoin(order);
+      const statusText = recentOrderStatusText(order);
+
+      return statusText ? `คำสั่งซื้อ: ${product?.name ?? 'แพ็กเกจ'} สถานะ: ${statusText}` : null;
+    })
+    .filter((line): line is string => Boolean(line));
+  const lines = [activeLine, ...recentLines].filter((line): line is string => Boolean(line)).slice(0, 3);
+
+  return lines.length > 0 ? lines.join('\n') : null;
 }
 
 export async function loadActiveOrder(sessionId: string, tenantId: string) {
   return selectOne<OrderWithProductRow>('orders', {
     order: 'created_at.desc',
-    select:
-      'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,channel,referrer_id,commission_scheme_snapshot,status,slip_url,booking_at,branch_id,buyer_age,admin_note,created_at,updated_at,products(name,catalog_key,category,price_baht)',
+    select: ORDER_WITH_PRODUCT_SELECT,
     session_id: `eq.${sessionId}`,
     status: 'in.(selecting_branch,collecting_info,awaiting_payment,submitted,confirmed,booked)',
     tenant_id: `eq.${tenantId}`,
@@ -224,8 +341,7 @@ export async function loadActiveOrder(sessionId: string, tenantId: string) {
 export async function loadOrderForPanel(orderId: string, tenantId: string) {
   return selectOne<OrderWithProductRow>('orders', {
     id: `eq.${orderId}`,
-    select:
-      'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,channel,referrer_id,commission_scheme_snapshot,status,slip_url,booking_at,branch_id,buyer_age,admin_note,created_at,updated_at,products(name,catalog_key,category,price_baht)',
+    select: ORDER_WITH_PRODUCT_SELECT,
     tenant_id: `eq.${tenantId}`,
   });
 }

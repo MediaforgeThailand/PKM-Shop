@@ -158,10 +158,13 @@ Deno.test('orderQrLineImageMessage builds LINE image payload', () => {
 Deno.test('orderPaymentLineFlexMessage builds payment postback button', () => {
   const order: NonNullable<OrderPanelState> = {
     amount_baht: 3499,
+    booking_at: null,
+    branch_name: 'Demo Branch',
     id: 'order-123',
     missing_fields: [],
     product_name: 'Advanced Checkup',
     qr_payload: '000201010212',
+    step: 'qr',
     status: 'awaiting_payment',
   };
 

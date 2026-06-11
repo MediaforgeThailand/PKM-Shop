@@ -167,14 +167,15 @@ expect(
 
 expect(
   'chat action response persistence',
-  sources.orchestrate.includes('async function completeActionResponseTurn') &&
+    sources.orchestrate.includes('async function completeActionResponseTurn') &&
     sources.orchestrate.includes('ORDER_INFO_COMPLETE_NOTICE_TH') &&
     sources.templates.includes('ORDER_INFO_COMPLETE_NOTICE_TH') &&
+    sources.orchestrate.includes('if (message.trim())') &&
     sources.orchestrate.includes('await persistUserMessage(session.id, clientMsgId, message)') &&
-    sources.orchestrate.includes('await persistSystemNotice(session.id, actionResult.response.text)') &&
+    sources.orchestrate.includes('await persistSystemNotice(session.id, actionResult.response.text, actionResult.response.cards)') &&
     sources.orchestrate.includes('await updateSessionAfterAssistant(session.id, tenant.id, actionResult.response.text)') &&
     !sources.orchestrate.includes('systemNoticePersisted'),
-  'chat action responses that skip the model must persist the user turn and exactly one TypeScript system notice',
+  'chat action responses that skip the model must persist non-empty user turns and exactly one TypeScript system notice with cards',
 );
 
 expect(
