@@ -44,23 +44,7 @@ for (const snippet of requiredReadinessSnippets) {
 }
 
 const decisionTopics = [
-  'canonical catalog',
-  'legacy consent mapping',
-  'PDPA export/delete',
-  'prototype/mockup',
-  'client_msg_id',
-  'manual staff verification',
-  '6-character base32',
-  'ref_code',
-  'default commission',
-  'lab fact keys',
-  'synonym/alias matrix',
-  'medical liability wording',
-  'defaultTenantSlug',
-  'source_ref',
-  'wearable-imports',
-  'Apple Health export upload',
-  'line-assets',
+  'OWNER-REVIEW',
 ];
 
 for (const topic of decisionTopics) {
@@ -113,7 +97,7 @@ if (violations.length > 0) {
 }
 
 console.log(
-  `v2-local-readiness-audit: PASS (${missingRows.length} Missing rows, ${decisionTopics.length} decision blockers, ${externalGateNames.length} external gates checked)`,
+  `v2-local-readiness-audit: PASS (${missingRows.length} Missing rows, ${decisionTopics.length} decision blocker${decisionTopics.length === 1 ? '' : 's'}, ${externalGateNames.length} external gates checked)`,
 );
 
 async function read(relativePath) {

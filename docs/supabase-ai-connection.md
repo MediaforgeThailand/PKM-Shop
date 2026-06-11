@@ -89,7 +89,7 @@ Current behavior:
 - The app must have a Supabase Auth session before calling `chat-orchestrator`.
 - The published MiraCare prompt in OpenAI Platform is the source of truth.
 - The Edge Function supplies `brand_name`, `user_nickname`, `personal_context`, `recent_chat`, and `product_catalog` on every OpenAI request.
-- Product cards are rendered by stripping the final `[[products: ...]]` marker and resolving IDs against active hospital products.
+- Product cards are rendered by stripping the final `[[products: ...]]` marker and resolving IDs against active canonical `products`.
 - Per-user rate limiting is handled by `increment_ai_rate_limit`.
 - AI and API process events are written to persistent log tables.
 
@@ -126,7 +126,7 @@ The production hardening migration creates `app_user_roles`, `prompt_versions`, 
 
 The user nickname prompt migration archives older active chatbot prompts and activates `mira-health-chatbot-v5-user-nickname`, which addresses the default user as `คุณบอส` and avoids self-references like AI, chatbot, Mira, or doctor in normal answers.
 
-The MiraCare v2 catalog migration consolidates legacy hospital product data into the canonical `products` table. Tenant admins manage products from `/admin/catalog`, product images are stored in `product-images`, and active products feed chat, marketplace, and referrer flows directly.
+The MiraCare v2 catalog migration consolidates legacy catalog data into the canonical `products` table. Tenant admins manage products from `/admin/catalog`, product images are stored in `product-images`, and active products feed chat, marketplace, and referrer flows directly.
 
 The vector embedding migration enables `pgvector`, adds `rag_chunks.embedding`, and creates:
 

@@ -3,7 +3,7 @@
 ## What Changed
 
 - Added the MiraCare v2 Phase 1 migration for `tenants`, `customers`, `tenant_members`, canonical `products`, `fact_keys`, `user_facts`, customer-scoped `consents`, storage buckets, catalog-key generation, and v2 RLS policies.
-- Migrated legacy `hospital_products` rows into canonical `products` and removed the legacy table in the new migration.
+- Migrated legacy catalog rows into canonical `products` and removed the legacy table in the new migration.
 - Replaced the prototype product+RAG client helper with a v2 catalog helper backed by `products`.
 - Replaced the separate hospital product routes with the shared `/admin/catalog` catalog CRUD screen that checks `tenant_members`, creates, edits, archives, and restores v2 products while keeping `catalog_key` read-only.
 - Added admin product image upload to the public `product-images` bucket; uploaded public URLs are saved to `products.image_url`, and manual image URLs remain supported.
@@ -31,7 +31,7 @@
 - `npm run types:mirror-audit` passed.
 - `npm run v2:verify` passed.
 - `npm run v2:external-preflight` ran successfully and reported four external gates waiting on local prerequisites in this environment.
-- `rg` found no active app/library code querying `hospital_products`; remaining hits are old migrations/docs and the Phase 2 legacy chat function boundary.
+- `rg` found no active app/library code querying the legacy catalog table; remaining table-name hits are historical migrations and contract audits that prove consolidation happened.
 - Production app routes no longer import `services/mockBackend`; the remaining mock import is isolated to the explicit `/prototype` route.
 - Scattered legacy admin route files `/admin-booking`, `/hospital-portal`, and `/hospital-products` were removed; admin links now target `/admin/catalog`, `/admin/orders`, and `/admin/referrers`.
 - `/admin/catalog` now fails closed for non-members and leaves tenant_staff users read-only; product writes and image uploads require tenant_admin or superadmin.

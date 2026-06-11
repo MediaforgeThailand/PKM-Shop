@@ -183,11 +183,11 @@ Status 2026-06-11: order tables, `transition_order`, PromptPay helpers, chat ord
 
 **Phase 4 — Refer Program.** Referrer entity + attribution links, assisted purchase + QR, commission ledger, referrer view, admin commission screens. DoD: attributed order pays commission entry correctly; assisted purchase end-to-end.
 
-Status 2026-06-11: referrer tables, attribution route, assisted purchase function/screen, commission ledger, and admin referrer screens exist. Transport details and live assisted-purchase E2E remain pending.
+Status 2026-06-11: referrer tables, server-generated six-character Crockford `ref_code`s, attribution route, assisted purchase function/screen, default 10% commission scheme, commission ledger, and admin referrer screens exist. Live assisted-purchase E2E remains pending.
 
 **Phase 5 — Health Dashboard.** Lab photo pipeline + visualization + facts cross-link; Apple export ingestion + dashboard. DoD: sample lab photo renders correct visualized panel; facts appear in chat personalization.
 
-Status 2026-06-11: lab/wearable schema, service-role internal ingest functions, dashboard refactors, lab safety sanitizer, lab normalization table, trusted lab confirmation writes, Apple Health zip `export.xml` streaming, and fixture-backed lab/wearable parser tests exist. Wearable `source_ref`, wearable bucket/UX confirmation, customer dashboard tenant resolution, and live image-to-OpenAI sample lab evidence remain pending.
+Status 2026-06-11: lab/wearable schema, service-role internal ingest functions, dashboard refactors, lab safety sanitizer, lab normalization table, trusted lab confirmation writes, Apple Health zip `export.xml` streaming, and fixture-backed lab/wearable parser tests exist. Live image-to-OpenAI sample lab evidence, live wearable import proof, and legal disclaimer sign-off remain pending.
 
 **Phase 6 — LINE OA surface.** Webhook, Flex cards, QR image, session mapping. DoD: regression suite passes over LINE channel too.
 
@@ -210,7 +210,7 @@ Verify the draft implements THIS plan — catching silent scope drift, contract 
 
 **B. Multi-tenancy & security (P0)**
 - [✅ 2026-06-11] Every business table: tenant_id + RLS; cross-tenant read/write attempts fail in tests. Schema/RLS exists and `scripts/rls-check.mjs` verifies linked-project customer isolation and cross-tenant product write denial through PostgREST when Supabase secrets are present.
-- [✅ 2026-06-11] Storage buckets private; slips/labs via signed URLs; service-role keys only in edge functions. Labs/slips are private, payment-slip upload/read signing runs through edge functions, and LINE QR bucket policy remains tracked separately.
+- [✅ 2026-06-11] Storage buckets private where required; slips/labs use signed URLs; service-role keys only in edge functions. Labs/slips are private, payment-slip upload/read signing runs through edge functions, and LINE QR images use the public `line-assets` bucket.
 - [✅ 2026-06-11] Roles enforced (staff can't edit catalog/commissions). Evidence: `tenant_members` RLS helpers, admin client guards, referrer/commission admin policies.
 
 **C. Data/profile integrity (P1)**
@@ -243,12 +243,8 @@ Verify the draft implements THIS plan — catching silent scope drift, contract 
 
 ## 11. Risks & open questions (owner to resolve — Codex must NOT guess)
 
-1. **Payment confirmation** is manual (staff verifies slip). Acceptable for v2? Auto-verification (bank API/PSP) deliberately deferred.
-2. **Medical liability wording** for lab summaries — needs tenant/legal review of the fixed disclaimer text.
-3. **LINE OA**: which tenant LINE channel do we pilot with? Credentials needed before Phase 6.
-4. **Commission schemes**: percent vs flat per category — confirm the default scheme with the first client.
-5. **HealthKit native sync** intentionally out of v2 (entitlements + review time); confirm export-upload UX is acceptable interim.
-6. **Existing prototype screens** (`prototype.tsx`, mockup screens): keep as demo route or remove in Phase 1 cleanup?
+1. **Medical liability wording** for lab summaries — `LAB_SUMMARY_DISCLAIMER_TH` is the v2 default, but final tenant/legal sign-off is required before the first client launch.
+2. **LINE OA**: tenant LINE sandbox channel credentials and test account are needed before the sandbox regression can run.
 
 ## 12. Out of scope for v2 (do not build)
 Self-serve tenant signup/billing, PSP integration, automated commission payouts, multi-level referral, Android Health Connect, real-time wearable streaming, model fine-tuning, multi-language (Thai only).

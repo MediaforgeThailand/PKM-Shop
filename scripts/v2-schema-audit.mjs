@@ -9,6 +9,7 @@ const files = {
   phase3: 'supabase/migrations/20260611030000_miracare_v2_phase3_orders.sql',
   phase4: 'supabase/migrations/20260611040000_miracare_v2_phase4_referrals.sql',
   phase5: 'supabase/migrations/20260611050000_miracare_v2_phase5_health_dashboard.sql',
+  b8: 'supabase/migrations/20260611062000_b8_referrer_contract.sql',
 };
 
 async function read(relativePath) {
@@ -94,7 +95,7 @@ const tableContracts = [
   {
     file: 'phase4',
     table: 'referrers',
-    snippets: ['tenant_id uuid not null references public.tenants (id)', 'ref_code text not null unique', "type text not null check (type in ('doctor', 'nurse', 'creator', 'staff'))", 'commission_scheme jsonb not null default', 'created_at timestamptz not null default now()'],
+    snippets: ['tenant_id uuid not null references public.tenants (id)', 'ref_code text not null', "type text not null check (type in ('doctor', 'nurse', 'creator', 'staff'))", 'commission_scheme jsonb not null default', 'created_at timestamptz not null default now()'],
   },
   {
     file: 'phase4',
@@ -185,6 +186,7 @@ const indexSnippets = [
   ['phase3', 'order_events_v2_order_created_idx'],
   ['phase4', 'referrers_v2_tenant_active_idx'],
   ['phase4', 'referrers_v2_auth_user_idx'],
+  ['b8', 'referrers_tenant_ref_code_key'],
   ['phase4', 'commission_entries_v2_tenant_status_idx'],
   ['phase4', 'commission_entries_v2_referrer_created_idx'],
   ['phase4', 'customers_v2_referred_by_idx'],
@@ -243,6 +245,18 @@ expect(
   'referral foreign keys',
   sources.phase4.includes('customers_referred_by_fkey') && sources.phase4.includes('orders_referrer_fkey'),
   'Phase 4 must attach referral foreign keys to customers and orders',
+);
+
+expect(
+  'referrer code B8 contract',
+  sources.b8.includes("v_alphabet constant text := '0123456789ABCDEFGHJKMNPQRSTVWXYZ'") &&
+    sources.b8.includes("ref_code ~ '^[0-9A-HJKMNP-TV-Z]{6}$'") &&
+    sources.b8.includes('create unique index if not exists referrers_tenant_ref_code_key') &&
+    sources.b8.includes('miracare_referrer_ref_code_guard') &&
+    sources.b8.includes("raise exception 'ref_code is immutable'") &&
+    sources.b8.includes('commission_scheme set default') &&
+    sources.b8.includes('{"mode":"percent","default":10,"by_category":{}}'),
+  'B8 must enforce generated immutable 6-character Crockford ref codes and the percent/10 default commission scheme',
 );
 
 if (violations.length > 0) {

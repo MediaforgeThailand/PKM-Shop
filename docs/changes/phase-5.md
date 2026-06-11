@@ -33,6 +33,6 @@
 - `lab-ingest` and `wearable-ingest` now use the B6 service-role internal contract and derive tenant context from customer rows instead of request tenant fields.
 - Customer dashboard tenant resolution needs an owner decision because `lib/health/v2HealthDashboard.ts` currently resolves `tenants.slug` from the customer client, while Phase 1 tenant RLS is tenant-member-only. `docs/v2-open-questions.md` records whether to allow non-sensitive tenant reads, add a tenant-scoped customer RPC, or derive customer context without slug lookup.
 - The spec does not provide a production synonym/alias matrix for raw Thai/English lab names, so the embedded normalization table currently contains the exact 15 supported codes from the spec and broader aliases are logged as an open question.
-- Wearable `source_ref`, bucket naming, and export-upload UX acceptance remain owner/product questions before production.
+- Wearable ingestion keeps the accepted `wearable-imports` storage path and nullable wearable fact `source_ref`; live export-upload proof remains pending.
 - Low-confidence lab confirmation writes use the authenticated `lab-confirm` edge function. It validates customer-owned `needs_confirmation` reports, updates only report-owned rows, marks confirmed rows, moves the report to `ready` when no low-confidence row remains unconfirmed, and inserts supported lab facts through the shared helper also used by `lab-ingest`.
-- The Phase 5 open questions document the lab fact-key and wearable bucket decisions made for this implementation.
+- B8 accepts the lab fact-key and wearable bucket decisions made for this implementation.

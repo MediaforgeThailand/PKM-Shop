@@ -3,42 +3,13 @@
 ## Triage Summary
 
 - Local-only implementation status: no unblocked `Missing` rows remain in `docs/v2-gap-analysis.md`; new local work should be added as tests, audits, or docs unless an owner contract is required.
-- Owner decision blockers: canonical catalog, legacy consent mapping, PDPA export/delete, prototype/mockup release policy, `client_msg_id` idempotency sequencing, manual staff verification, 6-character base32 referral codes, `ref_code` transport, referrer payment endpoint split, default commission scheme, lab fact keys, synonym/alias matrix, medical liability wording, `defaultTenantSlug` tenant resolution, wearable `source_ref`, `wearable-imports` bucket naming, Apple Health export upload UX, and `line-assets` bucket policy.
-- External setup blockers: seed-demo service role setup and LINE sandbox setup.
+- Owner decision blockers: `OWNER-REVIEW` legal disclaimer sign-off before the first client launch.
+- External setup blockers: LINE sandbox channel credentials and test account.
 
-## Phase 1
+## Owner Review
 
-- The current `docs/miracare-codex-handoff.md` product catalog section shows the product object contract, but not a canonical seven-product catalog. `scripts/seed-demo.mjs` seeds seven deterministic demo rows so tests can run; replace those rows if the owner has a specific canonical catalog.
-- The repo already had a prototype `consents` table shaped around `user_id`, `purpose`, and `status`. Phase 1 introduces the spec's customer-scoped `consents` table. The migration preserves the old table as `legacy_consents` when needed, but there is no spec-defined mapping from old consent purposes to tenant/customer consent rows.
-- The product plan mentions PDPA export/delete paths for `user_facts`, but the technical spec does not define endpoint names, payloads, authorization rules, or cascade scope. Confirm whether these are in v2 technical scope and, if so, provide the write contract before implementation.
-- The product plan leaves existing prototype/mockup screens as an owner decision. Current production route audits keep `/prototype` isolated and production health routes on live v2 data; confirm whether prototype-only demo screens should remain available or be removed before v2 release.
+- `OWNER-REVIEW`: The current `LAB_SUMMARY_DISCLAIMER_TH` wording in `supabase/functions/_shared/templates.ts` is the MiraCare v2 default and is mirrored in `lib/templates.ts`. Final tenant/legal sign-off is still required before the first client launch.
 
-## Phase 2
+## LINE Credentials
 
-- The §3.2 handler sequence says to run `handleAction(action)` before persisting the user message idempotently on `client_msg_id`, but §0.1 requires retriable DB writes to carry an idempotency guard. Current `select_product` and `consent_granted` side effects can run before the duplicate `client_msg_id` check. Confirm whether the orchestrator may persist/check `client_msg_id` before action side effects, add action-specific idempotency keys, or keep the written sequence as authoritative.
-## Phase 3
-
-- The product plan says payment confirmation is manual staff verification for v2, with bank/PSP auto-verification deferred. Confirm this manual verification model is acceptable for the first v2 release before adding any automated payment verification path.
-
-## Phase 4
-
-- The technical spec describes `ref_code` as a generated immutable 6-character base32 code, but the current schema/client validation accepts 3-32 uppercase alphanumeric characters plus hyphens. Confirm the exact alphabet and normalization rules before tightening the migration check constraint, referral landing route, and `chat-orchestrator` request schema.
-
-- The spec says `/r/{ref_code}` stores a local `mira_ref` value, but the §3.1 `chat-orchestrator` request example has no referral field and edge functions cannot read client localStorage. The current implementation adds an optional `ref_code` request field so the client can transmit the stored code on first chat; confirm whether this should instead be a header/cookie contract for web/PWA.
-- The spec names `POST /functions/v1/referrer-order` for creating assisted-purchase orders, then says the referrer QR screen has a "customer paid" button, but does not name the submit endpoint. The current implementation reuses `referrer-order` with `action: "payment_done"`; confirm whether this should be split into a dedicated function before production.
-- The product plan asks the first client to confirm default commission schemes. Current demo data and unit coverage support percent, flat, and category overrides, but production seed defaults should not be guessed. Confirm the initial tenant default scheme and category overrides before seeding production data.
-
-## Phase 5
-
-- The spec says ready lab rows with codes such as `FBS`, `HBA1C`, and `CHOL` should be inserted into `user_facts`, but the Phase 1 fact registry did not define those keys. The current migration adds numeric fact keys with the same uppercase names; confirm whether product wants different canonical fact keys.
-- The spec requires a lab vision normalization table for the 15 supported `test_code`s but does not define a production synonym/alias matrix for Thai/English raw lab names. The current code embeds the exact 15-code table from the spec and maps unsupported/uncertain rows to `null`/`UNMAPPED_*`; confirm the canonical alias table before broadening automatic mappings.
-- The product plan flags medical liability wording for tenant/legal review. Current lab summaries use the fixed disclaimer in `supabase/functions/_shared/templates.ts` with `lib/templates.ts` as an app-side mirror; confirm the final approved Thai wording before release.
-- The health dashboard client needs a tenant context for `defaultTenantSlug`, but the Phase 1 `tenants` RLS policy is tenant-member-only while customer reads are scoped through `customers.auth_user_id`. Current code attempts to resolve `tenants.slug` from the customer client before loading the customer-owned dashboard rows. Confirm whether customers may read non-sensitive tenant rows, whether a tenant-scoped customer RPC should resolve the customer context, or whether the app should derive the active customer without a tenant slug in v2.
-- The product plan says every fact should have a `source_ref`, but the technical spec does not define a wearable import/report table to reference when `wearable-ingest` inserts latest weight/height samples as `user_facts(source:'wearable')`. Current wearable facts use `source_ref: null`; confirm whether to add a wearable import entity or accept nullable `source_ref` for wearable facts.
-- The spec names `storage_path` for wearable imports but not a bucket. The current implementation uses a private `wearable-imports` bucket; confirm this bucket name before production.
-- The product plan intentionally leaves native HealthKit sync out of v2 and uses Apple Health export upload as the interim flow. Confirm this export-upload UX is acceptable for the pilot before designing entitlement/native sync work.
-
-## Phase 6
-
-- The spec requires LINE QR images to be rendered server-side and uploaded to storage, but does not name a bucket. The current implementation uses a public `line-assets` bucket for generated QR PNGs; confirm this bucket/public URL policy before production.
-- The Phase 6 DoD requires regression over a LINE sandbox, but no tenant LINE sandbox channel, credentials, or test account are defined in repo config. Confirm the pilot tenant/channel and provide sandbox credentials before the LINE regression suite can be made non-optional.
+- The Phase 6 sandbox regression still requires a tenant LINE sandbox channel, channel secret, channel token, and test account.

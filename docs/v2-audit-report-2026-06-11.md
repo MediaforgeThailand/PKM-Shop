@@ -10,9 +10,9 @@ Scope: current worktree against `docs/miracare-codex-handoff.md`, `docs/miracare
 - PASS: `npm run v2:type-safety-audit` (109 TypeScript files scanned)
 - PASS: `npm run chat:quality`
 - PASS: `npm run orders:status-audit`
-- PASS: `npm run v2:schema-audit` (16 tables, 32 policies, 30 indexes, 31 migrations checked)
-- PASS: `npm run v2:open-questions-audit` (19 unresolved-contract topics, 3 blocked rows checked)
-- PASS: `npm run v2:local-readiness-audit` (0 Missing rows, 17 decision blockers, 4 external gates checked)
+- PASS: `npm run v2:schema-audit` (16 tables, 32 policies, 31 indexes, 32 migrations checked)
+- PASS: `npm run v2:open-questions-audit` (2 unresolved-contract topics, 1 blocked row checked)
+- PASS: `npm run v2:local-readiness-audit` (0 Missing rows, 1 decision blocker, 4 external gates checked)
 - PASS: `npm run v2:docs-audit` (11 docs checked)
 - PASS: `npm run v2:client-audit` (30 production files, 3 removed routes, 65 client files secret-scanned)
 - PASS: `npm run v2:edge-security-audit` (17 files scanned)
@@ -31,7 +31,7 @@ Scope: current worktree against `docs/miracare-codex-handoff.md`, `docs/miracare
 | Type safety and shared API mirrors | PASS | P0 | `typecheck`, `v2:type-safety-audit`, `types:mirror-audit` | Keep audits required in CI. |
 | Deterministic local verification bundle | PASS | P0 | `v2:verify` runs typecheck, static audits, Deno edge check, and shared Deno tests | Keep external-secret checks separate and documented. |
 | External gate readiness preflight | PASS | P0 | `v2:external-preflight` reports missing prerequisites for live Supabase seeding, chat regression, live RLS, and LINE sandbox without printing secrets | Use before attempting external verification runs; it does not prove those runs passed. |
-| Open-question contract hygiene | PASS | P0 | `v2:open-questions-audit` checks required unresolved-contract topics and blocked gap rows | Keep this gate in CI so implementation does not silently drift from the "log questions, do not guess" rule. |
+| Open-question contract hygiene | PASS | P0 | `v2:open-questions-audit` checks the allowed remaining unresolved topics and blocked gap rows | Keep this gate in CI so implementation does not silently drift from the "log questions, do not guess" rule. |
 | Local readiness hygiene | PASS | P0 | `v2:local-readiness-audit` checks there are no unblocked `Missing` rows and keeps owner/external blockers visible | Keep this gate in CI so local-doable work stays separate from contract/credential blockers. |
 | Documentation evidence hygiene | PASS | P2 | `v2:docs-audit` checks v2 docs for stale verification counts and required command evidence | Keep this gate in CI so audit output stays tied to current verification. |
 | Schema contract and migration numbering | PASS | P0 | `v2:schema-audit` | Keep schema audit required in CI. |
@@ -43,12 +43,12 @@ Scope: current worktree against `docs/miracare-codex-handoff.md`, `docs/miracare
 | Slip upload contract | PASS | P1 | `request_slip_upload` validates ownership and returns a service-role signed upload URL; `payment_done` validates/stores order-scoped `slip_path`; admin thumbnails use server-generated signed read URLs | Run seeded purchase E2E with a real uploaded slip before release. |
 | Persisted order-panel reload | PASS | P1 | `refresh_order` rebuilds `toOrderPanel(loadActiveOrder(session, tenant))` with empty text and the client renders it outside `MessageBubble` after history hydration | Run seeded purchase E2E through admin booking. |
 | Referral and commissions code path | PASS | P1 | attribution route, assisted purchase, commission unit tests, referrer admin audit | Keep deterministic tests/audits required in CI. |
-| Referral production contracts and live E2E | FAIL | P1 | `ref_code` format/transport, default commission schemes, endpoint split, and live E2E proof remain open | Confirm contracts and run live attributed/assisted E2E. |
+| Referral production contracts and live E2E | FAIL | P1 | B8 locks 6-character Crockford ref codes, server-generated immutable codes, default 10% commission, and the accepted `ref_code` transport; live E2E proof remains open | Run B10 live attributed/assisted E2E. |
 | Lab/wearable deterministic pipeline | PASS | P1 | lab/wearable schema, lab safety audit, fixture-backed normalizer tests, Apple Health XML/zip streaming tests | Keep health safety audit and shared Deno tests required in CI. |
-| Lab confirmation, legal wording, and live sample evidence | FAIL | P1 | Authenticated `lab-confirm` writes exist and share lab fact insertion with `lab-ingest`; legal disclaimer approval, alias table, tenant resolution, and real image-to-OpenAI sample proof remain open | Resolve remaining contracts and capture live sample evidence. |
-| Wearable production contracts | FAIL | P1 | Bucket naming, wearable `source_ref`, and export-upload UX acceptance remain open | Resolve owner questions before production rollout. |
+| Lab confirmation, legal wording, and live sample evidence | FAIL | P1 | Authenticated `lab-confirm` writes exist and share lab fact insertion with `lab-ingest`; the current disclaimer is the v2 default pending `OWNER-REVIEW`; real image-to-OpenAI sample proof remains open | Capture live sample evidence and get legal sign-off before first client launch. |
+| Wearable production evidence | FAIL | P1 | Wearable deterministic ingestion exists for `wearable-imports`; live export-upload proof remains open | Capture live wearable import proof before release. |
 | LINE deterministic surface | PASS | P1 | signature/postback/Flex/QR helper tests, edge audit, `line-webhook` check | Keep deterministic LINE tests in CI. |
-| LINE sandbox regression | FAIL | P1 | No tenant LINE sandbox channel credentials/test account were available | Provide LINE sandbox channel credentials and confirm `line-assets` bucket policy; then run sandbox regression. |
+| LINE sandbox regression | FAIL | P1 | No tenant LINE sandbox channel credentials/test account were available | Provide LINE sandbox channel credentials; then run sandbox regression. |
 | Client production surface | PASS | P2 | `v2:client-audit` blocks mock/prototype leakage; production health routes read live data | Confirm whether `/prototype` and mockup-only demo screens stay available for v2 release. |
 
 ## Blockers

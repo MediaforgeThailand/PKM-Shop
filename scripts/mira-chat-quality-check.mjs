@@ -143,4 +143,4 @@ assert('client no longer calls legacy edge function name', !/supabase\.functions
 assert('legacy mira-chat edge function is deleted', !legacyMiraChatExists);
 assert('chat components include MessageBubble and ProductCarousel', messageBubbleExists && productCarouselExists);
 assert('prototype imports renamed miraChat client', prototypePanelSource.includes("@/lib/ai/miraChat") && !prototypePanelSource.includes("@/lib/ai/gemini"));
-assert('README describes OpenAI Platform prompt path', readmeSource.includes('published MiraCare prompt in OpenAI Platform') && readmeSource.includes('active hospital product catalog'));
+assert('README describes OpenAI Platform prompt path', readmeSource.includes('published MiraCare prompt in OpenAI Platform') && readmeSource.includes('active MiraCare product catalog'));

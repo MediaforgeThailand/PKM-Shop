@@ -15,27 +15,10 @@ const [auditReport, gapAnalysis, openQuestions] = await Promise.all(
 const violations = [];
 const openQuestionsLower = normalize(openQuestions);
 
-const requiredSections = ['Phase 1', 'Phase 2', 'Phase 3', 'Phase 4', 'Phase 5', 'Phase 6'];
+const requiredSections = ['Owner Review', 'LINE Credentials'];
 const requiredTopics = [
-  ['canonical catalog', ['canonical seven-product catalog']],
-  ['legacy consent mapping', ['legacy_consents']],
-  ['PDPA export/delete contract', ['pdpa export/delete']],
-  ['prototype release policy', ['prototype/mockup']],
-  ['action idempotency sequencing', ['client_msg_id']],
-  ['manual payment verification', ['manual staff verification']],
-  ['referral code format', ['6-character base32']],
-  ['referral code transport', ['optional `ref_code` request field']],
-  ['referrer payment endpoint split', ['action: "payment_done"']],
-  ['commission default scheme', ['default commission schemes']],
-  ['lab fact keys', ['`fbs`']],
-  ['lab alias matrix', ['synonym/alias matrix']],
-  ['legal lab wording', ['medical liability wording']],
-  ['dashboard tenant resolution', ['defaulttenantslug']],
-  ['wearable source ref', ['source_ref']],
-  ['wearable bucket naming', ['wearable-imports']],
-  ['Apple Health upload UX', ['apple health export upload']],
-  ['LINE assets bucket policy', ['line-assets']],
-  ['LINE sandbox credentials', ['line sandbox channel']],
+  ['legal lab wording owner review', ['owner-review', 'lab_summary_disclaimer_th']],
+  ['LINE sandbox credentials', ['line sandbox channel', 'channel secret', 'channel token']],
 ];
 
 for (const section of requiredSections) {
@@ -86,7 +69,7 @@ if (violations.length > 0) {
 }
 
 console.log(
-  `v2-open-questions-audit: PASS (${requiredTopics.length} topics, ${blockedRows.length} blocked rows checked)`,
+  `v2-open-questions-audit: PASS (${requiredTopics.length} topics, ${blockedRows.length} blocked row${blockedRows.length === 1 ? '' : 's'} checked)`,
 );
 
 async function read(relativePath) {

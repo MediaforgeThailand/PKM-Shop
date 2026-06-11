@@ -77,7 +77,7 @@ export const chatRequestSchema = z.object({
   channel: z.enum(['app', 'pwa', 'line']),
   client_msg_id: z.string().uuid(),
   message: z.string().trim(),
-  ref_code: z.string().regex(/^[A-Z0-9-]{3,32}$/).optional(),
+  ref_code: z.string().regex(/^[0-9A-HJKMNP-TV-Z]{6}$/).optional(),
   session_id: z.string().uuid().nullable(),
   tenant_slug: z.string().regex(/^[a-z0-9-]{2,32}$/),
 });

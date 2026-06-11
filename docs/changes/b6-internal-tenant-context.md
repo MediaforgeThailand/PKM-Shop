@@ -14,4 +14,4 @@
 
 ## Boundaries
 
-- Wearable fact `source_ref`, wearable bucket naming, and Apple Health export-upload UX remain owner/product questions until their decided sections land.
+- Wearable ingestion keeps the accepted `wearable-imports` storage path and nullable wearable fact `source_ref`; live export-upload proof remains pending.

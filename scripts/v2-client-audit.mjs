@@ -379,8 +379,13 @@ const requiredSnippets = [
   },
   {
     relativePath: 'components/admin/ReferrersAdmin.tsx',
-    snippet: 'disabled={Boolean(editingId)} label="Ref Code"',
-    message: 'referrer admin must keep ref_code read-only when editing existing referrers',
+    snippet: "value={editingId ? draft.refCode : 'Generated on save'}",
+    message: 'referrer admin must show generated server-side ref codes as read-only',
+  },
+  {
+    relativePath: 'components/admin/ReferrersAdmin.tsx',
+    snippet: ": supabase.from('referrers').insert(payload)",
+    message: 'referrer admin must let the database generate ref_code on create',
   },
   {
     relativePath: 'components/admin/ReferrersAdmin.tsx',
@@ -433,6 +438,19 @@ const referrersAdminSource = fileSources.get('components/admin/ReferrersAdmin.ts
 
 if (referrersAdminSource.includes("'partner'")) {
   violations.push('components/admin/ReferrersAdmin.tsx: referrer type fallback must not use non-spec value "partner"');
+}
+
+const saveReferrerStart = referrersAdminSource.indexOf('async function saveReferrer()');
+const saveReferrerEnd = referrersAdminSource.indexOf('async function updateCommissionStatus', saveReferrerStart);
+
+if (saveReferrerStart < 0 || saveReferrerEnd < 0) {
+  violations.push('components/admin/ReferrersAdmin.tsx: unable to locate saveReferrer for ref_code audit');
+} else {
+  const saveReferrerSource = referrersAdminSource.slice(saveReferrerStart, saveReferrerEnd);
+
+  if (saveReferrerSource.includes('ref_code')) {
+    violations.push('components/admin/ReferrersAdmin.tsx: referrer create/update payloads must not write ref_code; the database trigger owns generation and immutability');
+  }
 }
 
 const ordersQueueSource = fileSources.get('components/admin/OrdersQueue.tsx') ?? '';

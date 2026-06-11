@@ -279,12 +279,12 @@ async function maybeSeedReferrer(tenantId) {
       },
       name: 'Demo Referrer',
       phone: '0899999999',
-      ref_code: 'DEMO01',
+      ref_code: 'DMR001',
       tenant_id: tenantId,
       type: 'staff',
     },
     {
-      onConflict: 'ref_code',
+      onConflict: 'tenant_id,ref_code',
     },
   );
 

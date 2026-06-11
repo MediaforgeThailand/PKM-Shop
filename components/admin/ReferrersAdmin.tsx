@@ -71,10 +71,6 @@ function formatMoney(amount: number) {
   return `${amount.toLocaleString('th-TH')} THB`;
 }
 
-function normalizeRefCode(value: string) {
-  return value.trim().toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 32);
-}
-
 function parseByCategory(value: string) {
   const parsed = JSON.parse(value || '{}') as unknown;
 
@@ -108,8 +104,7 @@ export function ReferrersAdmin({ title = 'Referrers And Commissions' }: { title?
   const canSave =
     canEdit &&
     draft.name.trim().length > 1 &&
-    allowedReferrerTypes.includes(draft.type) &&
-    (Boolean(editingId) || /^[A-Z0-9-]{3,32}$/.test(normalizeRefCode(draft.refCode)));
+    allowedReferrerTypes.includes(draft.type);
   const selectedCommissions = useMemo(
     () => commissions.filter((entry) => selectedCommissionIds.has(entry.id)),
     [commissions, selectedCommissionIds],
@@ -267,7 +262,7 @@ export function ReferrersAdmin({ title = 'Referrers And Commissions' }: { title?
       };
       const query = editingId
         ? supabase.from('referrers').update(payload).eq('id', editingId).eq('tenant_id', tenant.id)
-        : supabase.from('referrers').insert({ ...payload, ref_code: normalizeRefCode(draft.refCode) });
+        : supabase.from('referrers').insert(payload);
       const { error: saveError } = await query;
 
       if (saveError) {
@@ -429,7 +424,7 @@ export function ReferrersAdmin({ title = 'Referrers And Commissions' }: { title?
 
             <Field label="Name" onChangeText={(value) => setDraft((current) => ({ ...current, name: value }))} value={draft.name} />
             <View style={styles.twoColumn}>
-              <Field disabled={Boolean(editingId)} label="Ref Code" onChangeText={(value) => setDraft((current) => ({ ...current, refCode: normalizeRefCode(value) }))} value={draft.refCode} />
+              <Field disabled label="Ref Code" onChangeText={() => null} value={editingId ? draft.refCode : 'Generated on save'} />
               <View style={styles.field}>
                 <Text style={styles.fieldLabel}>Type</Text>
                 <View style={styles.typeGrid}>

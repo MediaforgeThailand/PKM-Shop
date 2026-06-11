@@ -1,5 +1,6 @@
 const REFERRAL_STORAGE_KEY = 'mira_ref';
 const REFERRAL_DAYS = 30;
+const REF_CODE_PATTERN = /^[0-9A-HJKMNP-TV-Z]{6}$/;
 
 type StoredReferral = {
   expires_at: string;
@@ -15,13 +16,13 @@ function documentCookie() {
 }
 
 export function normalizeRefCode(value: string) {
-  return value.trim().toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 32);
+  return value.trim().toUpperCase().replace(/[^0-9A-HJKMNP-TV-Z]/g, '').slice(0, 6);
 }
 
 export function storeReferralCode(rawCode: string) {
   const refCode = normalizeRefCode(rawCode);
 
-  if (!/^[A-Z0-9-]{3,32}$/.test(refCode)) {
+  if (!REF_CODE_PATTERN.test(refCode)) {
     return null;
   }
 
@@ -57,7 +58,14 @@ export function readStoredReferralCode() {
       return null;
     }
 
-    return normalizeRefCode(payload.ref_code);
+    const refCode = normalizeRefCode(payload.ref_code);
+
+    if (!REF_CODE_PATTERN.test(refCode)) {
+      storage()?.removeItem(REFERRAL_STORAGE_KEY);
+      return null;
+    }
+
+    return refCode;
   } catch {
     storage()?.removeItem(REFERRAL_STORAGE_KEY);
     return null;
