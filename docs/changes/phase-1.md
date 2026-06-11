@@ -17,7 +17,7 @@
 - Added `scripts/seed-demo.mjs` and `scripts/rls-check.sql`; `seed-demo` can attach existing auth users to the demo customer/admin/referrer through `DEMO_CUSTOMER_AUTH_USER_ID`, `DEMO_ADMIN_AUTH_USER_ID`, and `DEMO_REFERRER_AUTH_USER_ID`, while the RLS check seeds test auth users and covers customer/catalog isolation, fact key read visibility, `user_facts`, append-only `consents`, tenant-member/staff/admin boundaries, and customer/staff/admin isolation for chat, orders/events, referrals/commissions, labs, and wearable metrics.
 - Added `.github/workflows/miracare-v2.yml` to run typecheck, chat quality checks, schema/client/edge/health/type audits, Deno edge entrypoint checks and shared tests with the Supabase function import map, optional chat regression, and optional shadow-db RLS checks on relevant pull requests.
 - Added `npm run v2:verify` as the deterministic local verification bundle and `npm run v2:deno-test` so local and CI shared Deno tests use the same package script.
-- Added `npm run v2:external-preflight` to report readiness for live Supabase seeding, chat regression, shadow RLS, OpenAI prompt-content review, and LINE sandbox checks without printing secret values.
+- Added `npm run v2:external-preflight` to report readiness for live Supabase seeding, chat regression, shadow RLS, and LINE sandbox checks without printing secret values. OpenAI Platform prompt-content verification is owner-owned and recorded in `docs/v2-local-readiness.md`.
 
 ## Verification
 

@@ -4,7 +4,7 @@
 
 - Local-only implementation status: no unblocked `Missing` rows remain in `docs/v2-gap-analysis.md`; new local work should be added as tests, audits, or docs unless an owner contract is required.
 - Owner decision blockers: canonical catalog, legacy consent mapping, PDPA export/delete, prototype/mockup release policy, `client_msg_id` idempotency sequencing, fact-extractor tenant context, payment slip upload, persisted order-panel reload, manual staff verification, 6-character base32 referral codes, `ref_code` transport, referrer payment endpoint split, default commission scheme, lab fact keys, synonym/alias matrix, `lab-ingest` tenant context, low-confidence lab rows confirmation, medical liability wording, `defaultTenantSlug` tenant resolution, `wearable-ingest` request context, wearable `source_ref`, `wearable-imports` bucket naming, Apple Health export upload UX, and `line-assets` bucket policy.
-- External setup blockers: seed-demo service role setup, seeded chat regression setup, shadow RLS database setup, OpenAI prompt verification setup, and LINE sandbox setup.
+- External setup blockers: seed-demo service role setup, seeded chat regression setup, shadow RLS database setup, and LINE sandbox setup.
 
 ## Phase 1
 

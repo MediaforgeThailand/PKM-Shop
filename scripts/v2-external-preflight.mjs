@@ -29,11 +29,6 @@ const checks = [
     tools: ['psql'],
   },
   {
-    detail: 'Env readiness only; actual prompt-content verification still needs owner review in OpenAI Platform.',
-    name: 'OpenAI prompt verification setup',
-    required: [['OPENAI_API_KEY'], ['MIRACARE_PROMPT_ID']],
-  },
-  {
     detail: `Needed before LINE sandbox regression for tenant "${tenantSlug}".`,
     name: 'LINE sandbox setup',
     required: [

@@ -11,6 +11,7 @@ This file separates work that can be hardened locally from work that needs an ow
 - GitHub Actions now runs the same local readiness audit on v2 pull requests.
 - Additional shared Deno tests cover local-only helper behavior for LINE tenant env fallback, LINE empty-product handling, referral attribution boundaries, and Apple Health XML streaming/body-unit normalization.
 - `npm run v2:external-preflight` remains the safe way to check external prerequisites without printing secrets; it does not prove seeded/live regressions passed.
+- OpenAI Platform prompt verification is owner-owned: the published prompt `pmpt_6a29c7e353b88196a6e648b24c54849e0f6204e24d65c021` v2 default was authored and behavior-tested in the Platform playground by the owner's agent on 2026-06-10/11, and the owner reports the live 7-case regression passes against it. Codex must not fetch or verify prompt content from code.
 
 ## No Unblocked Missing Rows
 
@@ -29,10 +30,9 @@ Local work that is still safe without external setup should be added as a concre
 
 ## Still Blocked By External Setup
 
-These are the five external preflight gates that can be checked locally but cannot be completed without outside credentials/state:
+These are the four external preflight gates that can be checked locally but cannot be completed without outside credentials/state:
 
 - seed-demo service role setup
 - seeded chat regression setup
 - shadow RLS database setup
-- OpenAI prompt verification setup
 - LINE sandbox setup

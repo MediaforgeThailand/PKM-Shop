@@ -79,7 +79,6 @@ const externalGateNames = [
   'seed-demo service role setup',
   'seeded chat regression setup',
   'shadow RLS database setup',
-  'OpenAI prompt verification setup',
   'LINE sandbox setup',
 ];
 
@@ -100,7 +99,7 @@ expect(
 expect(
   'external preflight caveat',
   localReadiness.includes('does not prove seeded/live regressions passed') &&
-    gapAnalysis.includes('reports five external gates waiting'),
+    gapAnalysis.includes('reports four external gates waiting'),
   'local readiness must distinguish external readiness preflight from external proof',
 );
 
