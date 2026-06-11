@@ -23,7 +23,7 @@ Local work that is still safe without external setup should be added as a concre
 
 - Phase 1: canonical catalog, legacy consent mapping, PDPA export/delete scope, prototype/mockup release policy.
 - Phase 2: `client_msg_id` action idempotency sequencing and fact-extractor tenant context.
-- Phase 3: persisted order-panel QR reload contract and manual staff verification acceptance.
+- Phase 3: manual staff verification acceptance.
 - Phase 4: 6-character base32 referral code alphabet/normalization, `ref_code` transport, referrer payment endpoint split, and default commission scheme.
 - Phase 5: lab fact keys, synonym/alias matrix, `lab-ingest` tenant context, low-confidence lab rows confirmation write path, medical liability wording, `defaultTenantSlug` dashboard tenant resolution, `wearable-ingest` request context, wearable `source_ref`, `wearable-imports` bucket naming, and Apple Health export upload UX acceptance.
 - Phase 6: `line-assets` bucket/public URL policy.

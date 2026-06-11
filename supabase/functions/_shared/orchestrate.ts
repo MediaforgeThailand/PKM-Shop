@@ -67,6 +67,9 @@ const actionSchema = z.discriminatedUnion('type', [
     order_id: z.string().uuid(),
     type: z.literal('request_slip_upload'),
   }),
+  z.object({
+    type: z.literal('refresh_order'),
+  }),
 ]);
 
 export const chatRequestSchema = z.object({
@@ -251,6 +254,17 @@ async function createSlipUpload({
   return {
     storage_path: storagePath,
     upload_url: uploadUrl,
+  };
+}
+
+async function refreshActiveOrder(session: ChatSessionRow, tenant: TenantRow): Promise<ChatOrchestratorResponse> {
+  const order = await loadActiveOrder(session.id, tenant.id);
+
+  return {
+    order: toOrderPanel(order, tenant),
+    products: [],
+    session_id: session.id,
+    text: '',
   };
 }
 
@@ -682,7 +696,7 @@ export async function orchestrateChat(
   request: ChatOrchestratorRequest,
   authorization: string | null,
 ): Promise<ChatOrchestratorResponse | ChatSlipUploadResponse> {
-  if (request.action?.type !== 'request_slip_upload' && request.message.length === 0) {
+  if (!['refresh_order', 'request_slip_upload'].includes(request.action?.type ?? '') && request.message.length === 0) {
     throw new HttpError('VALIDATION', 'Message is required.', 400);
   }
 
@@ -704,6 +718,10 @@ export async function orchestrateChat(
       sessionId: session.id,
       tenant,
     });
+  }
+
+  if (request.action?.type === 'refresh_order') {
+    return refreshActiveOrder(session, tenant);
   }
 
   const actionResult = await handleAction({

@@ -12,6 +12,7 @@
 - The chat action-response path now persists the user action message and exactly one templated `system_notice` before returning without a model call.
 - The order form-complete and payment-submitted action responses now both come from `supabase/functions/_shared/templates.ts` so non-model system notices stay centralized inside the edge boundary.
 - The typed chat client now marks `order_form_submit` and `payment_done` responses as `system_notice`, so the live chat append and persisted reload render those action notices consistently.
+- Added the B5 persisted order-panel reload flow: `refresh_order` rebuilds the active order panel from deterministic order state and PromptPay payload generation, returns empty text, and the chat screen renders the restored order panel outside chat bubbles after history hydration.
 - Added the B4 payment-slip upload flow: `request_slip_upload` signs an order-scoped `payment-slips` upload URL through the edge service role, the client uploads the selected JPG/PNG directly, `payment_done` validates/stores `slip_path`, and admin thumbnails use `admin-order-action` to mint 60-minute signed read URLs.
 - Added Deno unit tests for PromptPay fixtures and the order state machine, including every legal transition plus representative illegal transitions.
 - Hardened order writes so chat order-form/payment actions validate the current tenant, session, and customer before writing, and admin actions load orders through the authenticated staff member's tenant allow-list.
@@ -30,4 +31,3 @@
 ## Boundaries
 
 - Referrer display and commission side effects are implemented in Phase 4.
-- Persisted chat reload reconstructs text, system notices, and product cards, but persisted order-panel reload is intentionally not guessed because `chat_messages` has no order reference/payload and `qr_payload` is not persisted on `orders`; this contract question is logged in `docs/v2-open-questions.md`.

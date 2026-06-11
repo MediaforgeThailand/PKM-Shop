@@ -77,6 +77,9 @@ export type ChatAction =
       content_type: 'image/jpeg' | 'image/png';
       order_id: string;
       type: 'request_slip_upload';
+    }
+  | {
+      type: 'refresh_order';
     };
 
 export type ChatOrchestratorRequest = {

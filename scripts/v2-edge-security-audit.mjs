@@ -142,6 +142,16 @@ expect(
 );
 
 expect(
+  'chat active order refresh contract',
+  sources.orchestrate.includes("type: z.literal('refresh_order')") &&
+    sources.orchestrate.includes('async function refreshActiveOrder') &&
+    sources.orchestrate.includes('loadActiveOrder(session.id, tenant.id)') &&
+    sources.orchestrate.includes("text: ''") &&
+    sources.orchestrate.includes("request.action?.type === 'refresh_order'"),
+  'refresh_order must rebuild the deterministic order panel without persisting a message or calling the model',
+);
+
+expect(
   'chat action response persistence',
   sources.orchestrate.includes('async function completeActionResponseTurn') &&
     sources.orchestrate.includes('ORDER_INFO_COMPLETE_NOTICE_TH') &&

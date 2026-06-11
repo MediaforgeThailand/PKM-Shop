@@ -218,6 +218,26 @@ const requiredSnippets = [
   },
   {
     relativePath: 'lib/ai/miraChat.ts',
+    snippet: 'export async function refreshActiveOrderPanel',
+    message: 'typed chat client must expose the no-message active order refresh action',
+  },
+  {
+    relativePath: 'lib/ai/miraChat.ts',
+    snippet: "type: 'refresh_order'",
+    message: 'typed chat client must call chat-orchestrator refresh_order for persisted order-panel reload',
+  },
+  {
+    relativePath: 'app/(tabs)/chatbot.tsx',
+    snippet: 'refreshActiveOrderPanel(page.sessionId)',
+    message: 'chat screen must refresh the active order panel after latest history hydration',
+  },
+  {
+    relativePath: 'app/(tabs)/chatbot.tsx',
+    snippet: 'shouldRenderRestoredOrder && restoredOrder',
+    message: 'chat screen must render refreshed order panels outside persisted chat bubbles',
+  },
+  {
+    relativePath: 'lib/ai/miraChat.ts',
     snippet: 'export async function requestPaymentSlipUpload',
     message: 'typed chat client must expose the service-role signed payment-slip upload request',
   },

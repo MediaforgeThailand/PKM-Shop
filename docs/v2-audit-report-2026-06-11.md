@@ -11,8 +11,8 @@ Scope: current worktree against `docs/miracare-codex-handoff.md`, `docs/miracare
 - PASS: `npm run chat:quality`
 - PASS: `npm run orders:status-audit`
 - PASS: `npm run v2:schema-audit` (16 tables, 32 policies, 30 indexes, 31 migrations checked)
-- PASS: `npm run v2:open-questions-audit` (24 unresolved-contract topics, 3 blocked rows checked)
-- PASS: `npm run v2:local-readiness-audit` (0 Missing rows, 20 decision blockers, 4 external gates checked)
+- PASS: `npm run v2:open-questions-audit` (23 unresolved-contract topics, 3 blocked rows checked)
+- PASS: `npm run v2:local-readiness-audit` (0 Missing rows, 19 decision blockers, 4 external gates checked)
 - PASS: `npm run v2:docs-audit` (11 docs checked)
 - PASS: `npm run v2:client-audit` (29 production files, 3 removed routes, 64 client files secret-scanned)
 - PASS: `npm run v2:edge-security-audit` (15 edge/shared/storage/template files scanned)
@@ -37,11 +37,11 @@ Scope: current worktree against `docs/miracare-codex-handoff.md`, `docs/miracare
 | Schema contract and migration numbering | PASS | P0 | `v2:schema-audit` | Keep schema audit required in CI. |
 | Live RLS tenant isolation | PASS | P0 | `scripts/rls-check.mjs` creates disposable auth users, checks customer A cannot read customer B rows through PostgREST, denies cross-tenant product writes, and runs in the optional `live-regression` job | Run the secret-backed live job before release and preserve the local cleanup behavior. |
 | Service-role tenant filtering | FAIL | P0 | `v2:edge-security-audit` passes known invariants, but `fact-extractor`, `lab-ingest`, and wearable request-context contracts remain open | Do not tighten initial lookups until tenant-context contracts are approved in `docs/v2-open-questions.md`. |
-| Customer chat code path | PASS | P1 | React Query history, persisted messages, consent action, `chat-orchestrator`, marker parsing; `chat:quality` and client audit pass | Keep code-path audits in CI. |
+| Customer chat code path | PASS | P1 | React Query history, persisted messages, no-persist `refresh_order`, consent action, `chat-orchestrator`, marker parsing; `chat:quality` and client audit pass | Keep code-path audits in CI. |
 | Seeded chat regression credentials | PASS | P1 | `scripts/create-test-jwt.mjs` creates/updates `regression-test@miracare.dev`, prints only the token when run directly, and `chat-regression` bootstraps it inline when service-role secrets exist | Run the optional live-regression CI job or local suite against the linked project before release. |
 | Order state machine and admin queue | PASS | P1 | `transition_order`, PromptPay tests, action-response `system_notice` persistence/rendering, admin queue, slip signed-read action, status-write audit | Keep deterministic tests/audits required in CI. |
 | Slip upload contract | PASS | P1 | `request_slip_upload` validates ownership and returns a service-role signed upload URL; `payment_done` validates/stores order-scoped `slip_path`; admin thumbnails use server-generated signed read URLs | Run seeded purchase E2E with a real uploaded slip before release. |
-| Persisted order-panel reload | FAIL | P1 | Current implementation still stops before guessing the QR reload contract | Resolve the order-panel payload contract in `docs/v2-open-questions.md`; then run seeded purchase E2E through admin booking. |
+| Persisted order-panel reload | PASS | P1 | `refresh_order` rebuilds `toOrderPanel(loadActiveOrder(session, tenant))` with empty text and the client renders it outside `MessageBubble` after history hydration | Run seeded purchase E2E through admin booking. |
 | Referral and commissions code path | PASS | P1 | attribution route, assisted purchase, commission unit tests, referrer admin audit | Keep deterministic tests/audits required in CI. |
 | Referral production contracts and live E2E | FAIL | P1 | `ref_code` format/transport, default commission schemes, endpoint split, and live E2E proof remain open | Confirm contracts and run live attributed/assisted E2E. |
 | Lab/wearable deterministic pipeline | PASS | P1 | lab/wearable schema, lab safety audit, fixture-backed normalizer tests, Apple Health XML/zip streaming tests | Keep health safety audit and shared Deno tests required in CI. |

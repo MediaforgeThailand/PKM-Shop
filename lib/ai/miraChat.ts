@@ -248,6 +248,24 @@ export async function loadHealthDataConsent(): Promise<HealthDataConsentState> {
   };
 }
 
+export async function refreshActiveOrderPanel(sessionId?: string | null): Promise<ChatOrchestratorResponse> {
+  const result = await invokeFunction<ChatOrchestratorRequest, ChatOrchestratorResponse>('chat-orchestrator', {
+    action: {
+      type: 'refresh_order',
+    },
+    channel: 'app',
+    client_msg_id: crypto.randomUUID(),
+    message: '',
+    ref_code: readStoredReferralCode() ?? undefined,
+    session_id: sessionId ?? orchestratorSessionId,
+    tenant_slug: defaultTenantSlug,
+  });
+
+  orchestratorSessionId = result.session_id;
+
+  return result;
+}
+
 async function callSupabaseOrchestrator({
   action,
   question,

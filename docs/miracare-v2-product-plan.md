@@ -179,7 +179,7 @@ Status 2026-06-11: the production chat screen now uses React Query, hydrates the
 
 **Phase 3 — Commerce.** Order state machine, conversational buyer-info collection, PromptPay QR, slip upload; Admin orders queue + booking statuses + customer notifications. DoD: end-to-end test purchase from chat reaches admin queue and books.
 
-Status 2026-06-11: order tables, `transition_order`, PromptPay helpers, chat order panel, slip upload, action-response `system_notice` persistence/rendering, and admin order queue exist; Deno state-machine/PromptPay/slip-path tests and `orders:status-audit` pass. Seeded purchase E2E is still unresolved.
+Status 2026-06-11: order tables, `transition_order`, PromptPay helpers, chat order panel, persisted order-panel refresh, slip upload, action-response `system_notice` persistence/rendering, and admin order queue exist; Deno state-machine/PromptPay/slip-path tests and `orders:status-audit` pass. Seeded purchase E2E is still unresolved.
 
 **Phase 4 — Refer Program.** Referrer entity + attribution links, assisted purchase + QR, commission ledger, referrer view, admin commission screens. DoD: attributed order pays commission entry correctly; assisted purchase end-to-end.
 

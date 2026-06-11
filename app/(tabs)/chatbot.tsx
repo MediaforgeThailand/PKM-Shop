@@ -25,6 +25,7 @@ import {
   loadChatHistoryPage,
   loadHealthDataConsent,
   loadLatestChatHistoryPage,
+  refreshActiveOrderPanel,
   requestPaymentSlipUpload,
   setCurrentChatSessionId,
   uploadPaymentSlipFile,
@@ -201,6 +202,7 @@ function formatLogTime(value: string) {
 export default function ChatbotScreen() {
   const scrollRef = useRef<ScrollView>(null);
   const historyHydrationKeyRef = useRef<string | null>(null);
+  const orderRefreshKeyRef = useRef<string | null>(null);
   const queryClient = useQueryClient();
   const { width } = useWindowDimensions();
   const auth = useAuthSession();
@@ -209,6 +211,7 @@ export default function ChatbotScreen() {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [historyCursor, setHistoryCursor] = useState<string | null>(null);
   const [hasMoreHistory, setHasMoreHistory] = useState(false);
+  const [restoredOrder, setRestoredOrder] = useState<ChatMessage['order']>(null);
   const [ragChunks, setRagChunks] = useState<RagChunk[]>(localHealthKnowledge);
   const [activeLogTab, setActiveLogTab] = useState<LogCategory>('ai');
   const [appRole, setAppRole] = useState<AppRole>('user');
@@ -240,6 +243,10 @@ export default function ChatbotScreen() {
     : 'Login required';
 
   const activeLogs = useMemo(() => opsLogs.filter((log) => log.category === activeLogTab), [activeLogTab, opsLogs]);
+  const shouldRenderRestoredOrder = useMemo(
+    () => Boolean(restoredOrder && !messages.some((message) => message.order?.id === restoredOrder.id)),
+    [messages, restoredOrder],
+  );
   const logCounts = useMemo(
     () =>
       logTabs.reduce(
@@ -277,6 +284,8 @@ export default function ChatbotScreen() {
     setCurrentChatSessionId(null);
     setHasMoreHistory(false);
     setHistoryCursor(null);
+    setRestoredOrder(null);
+    orderRefreshKeyRef.current = null;
     historyHydrationKeyRef.current = null;
     setMessages(initialMessages);
   }, [canUsePersistedChat]);
@@ -302,6 +311,43 @@ export default function ChatbotScreen() {
     setMessages(page.messages.length ? page.messages : initialMessages);
 
     if (page.sessionId) {
+      const orderRefreshKey = hydrationKey;
+
+      orderRefreshKeyRef.current = orderRefreshKey;
+      void refreshActiveOrderPanel(page.sessionId)
+        .then((result) => {
+          if (orderRefreshKeyRef.current !== orderRefreshKey) {
+            return;
+          }
+
+          setActiveSessionId(result.session_id);
+          setCurrentChatSessionId(result.session_id);
+          setRestoredOrder(result.order ?? null);
+
+          if (result.order) {
+            appendLog({
+              category: 'api',
+              detail: 'Restored the active order panel for the latest persisted chat session.',
+              meta: [{ label: 'status', value: result.order.status }],
+              status: 'success',
+              title: 'Order panel refreshed',
+            });
+          }
+        })
+        .catch((refreshError) => {
+          if (orderRefreshKeyRef.current !== orderRefreshKey) {
+            return;
+          }
+
+          setRestoredOrder(null);
+          appendLog({
+            category: 'api',
+            detail: refreshError instanceof Error ? refreshError.message : 'Unable to refresh active order.',
+            status: 'warning',
+            title: 'Order panel refresh failed',
+          });
+        });
+
       appendLog({
         category: 'api',
         detail: 'Loaded the latest persisted chat session from Supabase.',
@@ -312,6 +358,9 @@ export default function ChatbotScreen() {
         status: 'success',
         title: 'Chat history loaded',
       });
+    } else {
+      setRestoredOrder(null);
+      orderRefreshKeyRef.current = null;
     }
   }, [appendLog, canUsePersistedChat, chatHistoryQuery.data, isSending]);
 
@@ -555,6 +604,7 @@ export default function ChatbotScreen() {
         }
         answer = result.text;
         answerOrder = result.order ?? null;
+        setRestoredOrder(answerOrder);
         answerRole = result.responseRole ?? 'assistant';
         answerSources = result.ragMatches;
         answerUiCards = result.uiCards;
@@ -939,6 +989,18 @@ export default function ChatbotScreen() {
               ) : null}
             </MessageBubble>
           ))}
+
+          {shouldRenderRestoredOrder && restoredOrder ? (
+            <View style={styles.restoredOrderPanel}>
+              <OrderPanel
+                disabled={isSending || isUploadingSlip || !canUseOrderActions}
+                onPaymentDone={handlePaymentDone}
+                onSlipSelected={(payload) => void handleSlipSelected(payload)}
+                onSubmitForm={handleOrderFormSubmit}
+                order={restoredOrder}
+              />
+            </View>
+          ) : null}
 
           {isSending ? (
             <View style={[styles.loadingBubble, messageBubbleStyles.loadingBubble]}>
@@ -1356,6 +1418,11 @@ const styles = StyleSheet.create({
     color: '#587069',
     fontSize: 12,
     fontWeight: '800',
+  },
+  restoredOrderPanel: {
+    alignSelf: 'flex-start',
+    maxWidth: '92%',
+    width: '100%',
   },
   loadHistoryButton: {
     alignItems: 'center',

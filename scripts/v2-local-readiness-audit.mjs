@@ -49,7 +49,6 @@ const decisionTopics = [
   'PDPA export/delete',
   'prototype/mockup',
   'client_msg_id',
-  'persisted order-panel',
   'manual staff verification',
   '6-character base32',
   'ref_code',
