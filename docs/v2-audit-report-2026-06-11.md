@@ -13,7 +13,7 @@ Scope: current worktree against `docs/miracare-codex-handoff.md`, `docs/miracare
 - PASS: `npm run v2:schema-audit` (16 tables, 32 policies, 31 indexes, 32 migrations checked)
 - PASS: `npm run v2:open-questions-audit` (2 unresolved-contract topics, 1 blocked row checked)
 - PASS: `npm run v2:local-readiness-audit` (0 Missing rows, 1 decision blocker, 4 external gates checked)
-- PASS: `npm run v2:docs-audit` (11 docs checked)
+- PASS: `npm run v2:docs-audit` (12 docs checked)
 - PASS: `npm run v2:client-audit` (30 production files, 3 removed routes, 65 client files secret-scanned)
 - PASS: `npm run v2:edge-security-audit` (17 files scanned)
 - PASS: `npm run v2:health-safety-audit` (14 files scanned)
@@ -48,7 +48,7 @@ Scope: current worktree against `docs/miracare-codex-handoff.md`, `docs/miracare
 | Lab confirmation, legal wording, and live sample evidence | FAIL | P1 | Authenticated `lab-confirm` writes exist and share lab fact insertion with `lab-ingest`; the current disclaimer is the v2 default pending `OWNER-REVIEW`; real image-to-OpenAI sample proof remains open | Capture live sample evidence and get legal sign-off before first client launch. |
 | Wearable production evidence | FAIL | P1 | Wearable deterministic ingestion exists for `wearable-imports`; live export-upload proof remains open | Capture live wearable import proof before release. |
 | LINE deterministic surface | PASS | P1 | signature/postback/Flex/QR helper tests, edge audit, `line-webhook` check | Keep deterministic LINE tests in CI. |
-| LINE sandbox regression | FAIL | P1 | No tenant LINE sandbox channel credentials/test account were available | Provide LINE sandbox channel credentials; then run sandbox regression. |
+| LINE sandbox regression | FAIL | P1 | No tenant LINE sandbox channel credentials/test account were available; `docs/line-setup.md` documents the env names, webhook URL, and manual checklist | Provide LINE sandbox channel credentials; then run sandbox regression. |
 | Client production surface | PASS | P2 | `v2:client-audit` blocks mock/prototype leakage; production health routes read live data | Confirm whether `/prototype` and mockup-only demo screens stay available for v2 release. |
 
 ## Blockers

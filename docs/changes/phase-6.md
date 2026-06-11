@@ -25,5 +25,5 @@
 ## Boundaries
 
 - LINE config is environment-based: `LINE_CHANNEL_SECRET__<tenant_slug>`, `LINE_CHANNEL_TOKEN__<tenant_slug>`, and optional `MIRA_DEFAULT_TENANT_SLUG`; underscore-normalized tenant variants are also accepted. `LINE_CHANNEL_ACCESS_TOKEN__<tenant_slug>` and generic `LINE_CHANNEL_ACCESS_TOKEN` remain supported as compatibility fallbacks.
-- `docs/v2-open-questions.md` records the generated QR bucket/public URL policy for confirmation.
+- `docs/line-setup.md` records the LINE sandbox setup steps, webhook URL shape, env names, and manual test checklist for the owner-run credentialed regression.
 - LINE push delivery is attempted after the order transition commits; failures are logged and returned as `line_push` metadata so the admin status change is not hidden by an external LINE outage.

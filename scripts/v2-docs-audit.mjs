@@ -9,6 +9,7 @@ const docs = [
   'docs/changes/phase-3.md',
   'docs/changes/phase-5.md',
   'docs/changes/phase-6.md',
+  'docs/line-setup.md',
   'docs/miracare-v2-product-plan.md',
   'docs/v2-audit-report-2026-06-11.md',
   'docs/v2-gap-analysis.md',
@@ -34,6 +35,7 @@ const stalePatterns = [
   [/17 decision blockers/i, 'local-readiness audit now tracks 1 decision blocker'],
   [/31 numbered migrations/i, 'schema audit now checks 32 migrations'],
   [/30 indexes/i, 'schema audit now checks 31 indexes'],
+  [/11 docs checked/i, 'docs audit now checks 12 docs including LINE setup'],
   [/11 health\/lab/i, 'health safety audit now scans 14 health/lab/wearable files'],
   [/79 shared tests/i, 'shared Deno suite now has 83 tests'],
   [/75 shared tests/i, 'shared Deno suite now has 83 tests'],
@@ -64,6 +66,10 @@ const requiredSnippets = [
   ['docs/v2-audit-report-2026-06-11.md', '`npm run v2:docs-audit`'],
   ['docs/v2-audit-report-2026-06-11.md', '`npm run v2:local-readiness-audit`'],
   ['docs/changes/phase-6.md', 'passed with 83 shared tests'],
+  ['docs/line-setup.md', 'LINE_CHANNEL_SECRET__<tenant_slug>'],
+  ['docs/line-setup.md', 'LINE_CHANNEL_TOKEN__<tenant_slug>'],
+  ['docs/line-setup.md', '/functions/v1/line-webhook?tenant=<slug>'],
+  ['docs/line-setup.md', '## Manual Sandbox Checklist'],
 ];
 
 const violations = [];

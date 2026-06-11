@@ -30,4 +30,4 @@ These are the four external preflight gates that can be checked locally but cann
 - seed-demo service role setup
 - seeded chat regression setup (uses programmatic `regression-test@miracare.dev` JWT bootstrap; no human-managed `TEST_SUPABASE_JWT`)
 - live RLS project setup
-- LINE sandbox setup
+- LINE sandbox setup, documented in `docs/line-setup.md`

@@ -22,7 +22,7 @@ Status legend:
 - `npm run v2:schema-audit`: passing, 16 tables, 32 policies, 31 indexes, 32 migrations checked.
 - `npm run v2:open-questions-audit`: passing, 2 unresolved-contract topics and 1 blocked row checked.
 - `npm run v2:local-readiness-audit`: passing, 0 Missing rows, 1 decision blocker, and 4 external gates checked.
-- `npm run v2:docs-audit`: passing, 11 docs checked for stale verification evidence.
+- `npm run v2:docs-audit`: passing, 12 docs checked for stale verification evidence.
 - `npm run v2:client-audit`: passing, 30 production files scanned.
 - `npm run v2:edge-security-audit`: passing, 17 files scanned.
 - `npm run v2:health-safety-audit`: passing, 14 health/lab/wearable files scanned.
@@ -108,7 +108,7 @@ Status legend:
 | LINE text/follow/postback mapped to shared orchestrator | Exists | `line-webhook/index.ts`, `_shared/orchestrate.ts`, `_shared/__tests__/line_test.ts` | Deterministic tests cover `select_product`, `payment_done`, and bounded unknown postback mapping; sandbox regression pending. |
 | Flex product carousel and QR image replies | Exists | `line-webhook/index.ts`, `_shared/line.ts`, `_shared/__tests__/line_test.ts`, `npm run v2:edge-security-audit` | Deterministic helper tests now cover carousel slicing, product postbacks, LINE `image` QR payloads, and `payment_done` postbacks; edge audit asserts QR PNG render/upload plus image-message reply wiring through the public `line-assets` bucket. |
 | Admin confirmed/booked LINE push attempts | Exists | `admin-order-action/index.ts`, `_shared/line.ts` | Needs real LINE channel test. |
-| Regression suite over LINE sandbox | Blocked | `docs/v2-open-questions.md` LINE Credentials | Requires tenant LINE channel credentials and test account. |
+| Regression suite over LINE sandbox | Blocked | `docs/v2-open-questions.md` LINE Credentials, `docs/line-setup.md` | Requires tenant LINE channel credentials and test account; setup and manual regression steps are documented. |
 
 ## Cross-Cutting Requirements
 

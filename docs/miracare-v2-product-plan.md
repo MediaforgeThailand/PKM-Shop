@@ -191,7 +191,7 @@ Status 2026-06-11: lab/wearable schema, service-role internal ingest functions, 
 
 **Phase 6 — LINE OA surface.** Webhook, Flex cards, QR image, session mapping. DoD: regression suite passes over LINE channel too.
 
-Status 2026-06-11: LINE webhook, signature verification helpers, postback action mapping, Flex product messages, QR image replies, admin push attempts, and deterministic LINE helper tests exist. LINE sandbox credentials and live regression remain pending.
+Status 2026-06-11: LINE webhook, signature verification helpers, postback action mapping, Flex product messages, QR image replies, admin push attempts, deterministic LINE helper tests, and `docs/line-setup.md` exist. LINE sandbox credentials and live regression remain pending.
 
 Each phase = separate PR(s), migration files additive, `npm run v2:verify` green for deterministic local gates. Use `npm run v2:external-preflight` before live verification; live seeding, live RLS, chat regression, and LINE sandbox checks still require owner-provided external state.
 
@@ -244,7 +244,7 @@ Verify the draft implements THIS plan — catching silent scope drift, contract 
 ## 11. Risks & open questions (owner to resolve — Codex must NOT guess)
 
 1. **Medical liability wording** for lab summaries — `LAB_SUMMARY_DISCLAIMER_TH` is the v2 default, but final tenant/legal sign-off is required before the first client launch.
-2. **LINE OA**: tenant LINE sandbox channel credentials and test account are needed before the sandbox regression can run.
+2. **LINE OA**: tenant LINE sandbox channel credentials and test account are needed before the sandbox regression in `docs/line-setup.md` can run.
 
 ## 12. Out of scope for v2 (do not build)
 Self-serve tenant signup/billing, PSP integration, automated commission payouts, multi-level referral, Android Health Connect, real-time wearable streaming, model fine-tuning, multi-language (Thai only).

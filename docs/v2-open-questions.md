@@ -12,4 +12,4 @@
 
 ## LINE Credentials
 
-- The Phase 6 sandbox regression still requires a tenant LINE sandbox channel, channel secret, channel token, and test account.
+- The Phase 6 sandbox regression still requires a tenant LINE sandbox channel, channel secret, channel token, and test account. Follow `docs/line-setup.md` once credentials exist.
