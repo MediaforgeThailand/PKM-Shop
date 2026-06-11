@@ -19,11 +19,14 @@ const service = createClient(supabaseUrl, serviceRoleKey, {
 });
 const created = {
   authUserIds: [],
+  branchIds: [],
   chatMessageIds: [],
   chatSessionIds: [],
   customerIds: [],
   labReportIds: [],
   orderIds: [],
+  productBranchLinks: [],
+  productCategoryFilters: [],
   productFilters: [],
   tenantIds: [],
   userFactIds: [],
@@ -118,6 +121,12 @@ async function run() {
   await expectZero('customer A cannot read customer B lab report row', customerAClient.from('lab_reports').select('id').eq('id', fixtures.labReportB.id));
 
   await expectCrossTenantProductWriteDenied(customerAClient, otherTenant.id);
+  await runV3CommerceChecks({
+    customerAClient,
+    otherTenant,
+    product,
+    tenant,
+  });
 
   console.log('rls-check: PASS (customer isolation and cross-tenant product write denial checked)');
 }
@@ -310,7 +319,225 @@ async function expectCrossTenantProductWriteDenied(customerClient, tenantId) {
   }
 }
 
+async function runV3CommerceChecks({ customerAClient, otherTenant, product, tenant }) {
+  if (!(await hasV3CommerceTables())) {
+    console.warn('rls-check: SKIP v3 branch/category/product_branch checks because the additive V3-1 migration is not applied yet.');
+    return;
+  }
+
+  try {
+    const suffix = randomUUID().slice(0, 8);
+    const [branchA, inactiveBranchA, otherBranch] = await Promise.all([
+    mustSingle(
+      service
+        .from('branches')
+        .insert({
+          active: true,
+          address: 'RLS visible branch address',
+          district: 'RLS',
+          name: `RLS Branch ${suffix}`,
+          sort: 900,
+          tenant_id: tenant.id,
+        })
+        .select('id,tenant_id')
+        .single(),
+      'Unable to seed V3 active branch.',
+    ),
+    mustSingle(
+      service
+        .from('branches')
+        .insert({
+          active: false,
+          name: `RLS Inactive Branch ${suffix}`,
+          sort: 901,
+          tenant_id: tenant.id,
+        })
+        .select('id,tenant_id')
+        .single(),
+      'Unable to seed V3 inactive branch.',
+    ),
+    mustSingle(
+      service
+        .from('branches')
+        .insert({
+          active: true,
+          name: `RLS Other Tenant Branch ${suffix}`,
+          sort: 902,
+          tenant_id: otherTenant.id,
+        })
+        .select('id,tenant_id')
+        .single(),
+      'Unable to seed V3 other-tenant branch.',
+    ),
+  ]);
+  created.branchIds.push(branchA.id, inactiveBranchA.id, otherBranch.id);
+
+  const categoryKey = `rls-cat-${suffix}`;
+  const inactiveCategoryKey = `rls-inactive-${suffix}`;
+  const otherCategoryKey = `rls-other-${suffix}`;
+
+  await Promise.all([
+    mustSingle(
+      service
+        .from('product_categories')
+        .insert({
+          active: true,
+          key: categoryKey,
+          label_th: 'RLS Category',
+          sort: 900,
+          tenant_id: tenant.id,
+        })
+        .select('tenant_id,key')
+        .single(),
+      'Unable to seed V3 active category.',
+    ),
+    mustSingle(
+      service
+        .from('product_categories')
+        .insert({
+          active: false,
+          key: inactiveCategoryKey,
+          label_th: 'RLS Inactive Category',
+          sort: 901,
+          tenant_id: tenant.id,
+        })
+        .select('tenant_id,key')
+        .single(),
+      'Unable to seed V3 inactive category.',
+    ),
+    mustSingle(
+      service
+        .from('product_categories')
+        .insert({
+          active: true,
+          key: otherCategoryKey,
+          label_th: 'RLS Other Category',
+          sort: 902,
+          tenant_id: otherTenant.id,
+        })
+        .select('tenant_id,key')
+        .single(),
+      'Unable to seed V3 other-tenant category.',
+    ),
+  ]);
+  created.productCategoryFilters.push(
+    { key: categoryKey, tenantId: tenant.id },
+    { key: inactiveCategoryKey, tenantId: tenant.id },
+    { key: otherCategoryKey, tenantId: otherTenant.id },
+  );
+
+  await mustSingle(
+    service.from('product_branches').insert({ branch_id: branchA.id, product_id: product.id }).select('branch_id,product_id').single(),
+    'Unable to seed V3 product branch link.',
+  );
+  created.productBranchLinks.push({
+    branchId: branchA.id,
+    productId: product.id,
+  });
+
+  await expectOne('customer A can read active branch in own tenant', customerAClient.from('branches').select('id').eq('id', branchA.id));
+  await expectZero('customer A cannot read inactive branch in own tenant', customerAClient.from('branches').select('id').eq('id', inactiveBranchA.id));
+  await expectZero('customer A cannot read active branch in another tenant', customerAClient.from('branches').select('id').eq('id', otherBranch.id));
+  await expectOne(
+    'customer A can read active category in own tenant',
+    customerAClient.from('product_categories').select('key').eq('tenant_id', tenant.id).eq('key', categoryKey),
+  );
+  await expectZero(
+    'customer A cannot read inactive category in own tenant',
+    customerAClient.from('product_categories').select('key').eq('tenant_id', tenant.id).eq('key', inactiveCategoryKey),
+  );
+  await expectZero(
+    'customer A cannot read active category in another tenant',
+    customerAClient.from('product_categories').select('key').eq('tenant_id', otherTenant.id).eq('key', otherCategoryKey),
+  );
+  await expectOne(
+    'customer A can read active product branch link in own tenant',
+    customerAClient.from('product_branches').select('product_id,branch_id').eq('product_id', product.id).eq('branch_id', branchA.id),
+  );
+
+  await expectWriteDenied(
+    'customer A cannot insert branches',
+    customerAClient
+      .from('branches')
+      .insert({
+        active: true,
+        name: `Forbidden Branch ${suffix}`,
+        tenant_id: tenant.id,
+      })
+      .select('id'),
+  );
+  await expectWriteDenied(
+    'customer A cannot insert product_categories',
+    customerAClient
+      .from('product_categories')
+      .insert({
+        active: true,
+        key: `forbidden-${suffix}`,
+        label_th: 'Forbidden',
+        tenant_id: tenant.id,
+      })
+      .select('key'),
+  );
+  await expectWriteDenied(
+    'customer A cannot insert product_branches',
+    customerAClient.from('product_branches').insert({ branch_id: otherBranch.id, product_id: product.id }).select('branch_id,product_id'),
+  );
+
+    console.log('rls-check: PASS (v3 branch/category/product_branch checks)');
+  } catch (error) {
+    if (isMissingRelation(error)) {
+      console.warn('rls-check: SKIP v3 branch/category/product_branch checks because the additive V3-1 migration is not visible in the REST schema cache yet.');
+      return;
+    }
+
+    throw error;
+  }
+}
+
+async function hasV3CommerceTables() {
+  const probes = [
+    ['branches', 'id'],
+    ['product_categories', 'tenant_id'],
+    ['product_branches', 'product_id'],
+  ];
+
+  for (const [table, column] of probes) {
+    const { error } = await service.from(table).select(column, { count: 'exact', head: true }).limit(1);
+
+    if (error) {
+      if (isMissingRelation(error)) {
+        return false;
+      }
+
+      throw new Error(`Unable to probe ${table}: ${error.message}`);
+    }
+  }
+
+  return true;
+}
+
+function isMissingRelation(error) {
+  return error.code === '42P01' || error.code === 'PGRST205' || /could not find|does not exist|schema cache/i.test(error.message ?? '');
+}
+
+async function expectWriteDenied(label, query) {
+  const { data, error } = await query;
+
+  if (!error) {
+    throw new Error(`${label}: write unexpectedly succeeded (${JSON.stringify(data ?? [])}).`);
+  }
+}
+
 async function cleanup() {
+  for (const link of created.productBranchLinks) {
+    await service.from('product_branches').delete().eq('product_id', link.productId).eq('branch_id', link.branchId);
+  }
+
+  for (const filter of created.productCategoryFilters) {
+    await service.from('product_categories').delete().eq('tenant_id', filter.tenantId).eq('key', filter.key);
+  }
+
+  await deleteByIds('branches', created.branchIds);
   await deleteByIds('lab_reports', created.labReportIds);
   await deleteByIds('orders', created.orderIds);
   await deleteByIds('chat_messages', created.chatMessageIds);

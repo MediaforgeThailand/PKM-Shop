@@ -28,7 +28,14 @@ type ReferrerJoin = {
   ref_code: string;
 };
 
+type BranchJoin = {
+  address: string | null;
+  district: string | null;
+  name: string;
+};
+
 type OrderQueueRow = OrderRow & {
+  branches?: BranchJoin | BranchJoin[] | null;
   customers?: CustomerJoin | CustomerJoin[] | null;
   products?: ProductJoin | ProductJoin[] | null;
   referrers?: ReferrerJoin | ReferrerJoin[] | null;
@@ -41,7 +48,8 @@ type TenantContext = TenantSummary & {
 type TranscriptRow = Pick<ChatMessageRow, 'content' | 'created_at' | 'id' | 'role'>;
 type OrderMutationAction = Extract<AdminOrderActionRequest, { action: 'book' | 'cancel' | 'confirm' | 'done' }>['action'];
 
-const activeStatuses: OrderStatus[] = ['collecting_info', 'awaiting_payment', 'submitted', 'confirmed', 'booked'];
+const activeStatuses: OrderStatus[] = ['selecting_branch', 'collecting_info', 'awaiting_payment', 'submitted', 'confirmed', 'booked'];
+const notePresets = ['โทรแล้ว-ไม่รับ', 'โทรแล้ว-เลื่อน'] as const;
 
 function fromJoin<T>(value: T | T[] | null | undefined) {
   return Array.isArray(value) ? value[0] ?? null : value ?? null;
@@ -63,6 +71,68 @@ function formatDateTime(value: string | null) {
     month: 'short',
     year: 'numeric',
   });
+}
+
+function bangkokDateTimeParts(value: string | null) {
+  if (!value) {
+    return {
+      date: '',
+      time: '',
+    };
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return {
+      date: '',
+      time: '',
+    };
+  }
+
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    day: '2-digit',
+    hour: '2-digit',
+    hourCycle: 'h23',
+    minute: '2-digit',
+    month: '2-digit',
+    timeZone: 'Asia/Bangkok',
+    year: 'numeric',
+  }).formatToParts(date);
+  const byType = new Map(parts.map((part) => [part.type, part.value]));
+
+  return {
+    date: `${byType.get('year')}-${byType.get('month')}-${byType.get('day')}`,
+    time: `${byType.get('hour')}:${byType.get('minute')}`,
+  };
+}
+
+function composeBangkokIso(dateValue: string, timeValue: string) {
+  const date = dateValue.trim();
+  const time = timeValue.trim();
+  const dateMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  const timeMatch = /^(\d{1,2}):(\d{2})$/.exec(time);
+
+  if (!dateMatch || !timeMatch) {
+    return null;
+  }
+
+  const hour = Number(timeMatch[1]);
+  const minute = Number(timeMatch[2]);
+
+  if (hour > 23 || minute > 59) {
+    return null;
+  }
+
+  const normalizedTime = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+  const iso = `${date}T${normalizedTime}:00+07:00`;
+  const parsed = new Date(iso);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return iso;
 }
 
 function statusTone(status: OrderStatus): 'amber' | 'blue' | 'danger' | 'mint' {
@@ -105,12 +175,14 @@ export function OrdersQueue({ title = 'Orders Queue' }: { title?: string }) {
   const [signedSlipUrls, setSignedSlipUrls] = useState<Record<string, string>>({});
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [transcript, setTranscript] = useState<TranscriptRow[]>([]);
-  const [bookingAt, setBookingAt] = useState('');
+  const [bookingDate, setBookingDate] = useState('');
+  const [bookingTime, setBookingTime] = useState('');
   const [note, setNote] = useState('');
   const [query, setQuery] = useState('');
   const [showActiveOnly, setShowActiveOnly] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
   const [busyAction, setBusyAction] = useState<OrderMutationAction | null>(null);
+  const [isSavingNote, setIsSavingNote] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const isWide = width >= 1080;
@@ -124,10 +196,12 @@ export function OrdersQueue({ title = 'Orders Queue' }: { title?: string }) {
       const product = fromJoin(order.products);
       const customer = fromJoin(order.customers);
       const referrer = fromJoin(order.referrers);
+      const branch = fromJoin(order.branches);
       const haystack = [
         order.id,
         order.buyer_name,
         order.buyer_phone,
+        order.buyer_age,
         order.channel,
         order.status,
         product?.catalog_key,
@@ -136,6 +210,9 @@ export function OrdersQueue({ title = 'Orders Queue' }: { title?: string }) {
         customer?.phone,
         referrer?.name,
         referrer?.ref_code,
+        branch?.name,
+        branch?.address,
+        branch?.district,
       ]
         .filter(Boolean)
         .join(' ')
@@ -213,9 +290,12 @@ export function OrdersQueue({ title = 'Orders Queue' }: { title?: string }) {
             'status',
             'slip_url',
             'booking_at',
+            'branch_id',
+            'buyer_age',
             'admin_note',
             'created_at',
             'updated_at',
+            'branches(name,address,district)',
             'products(name,catalog_key,category,price_baht,image_url)',
             'customers(nickname,phone)',
             'referrers(name,ref_code)',
@@ -353,13 +433,29 @@ export function OrdersQueue({ title = 'Orders Queue' }: { title?: string }) {
     };
   }, [selectedOrder?.session_id]);
 
+  useEffect(() => {
+    if (!selectedOrder) {
+      setBookingDate('');
+      setBookingTime('');
+      setNote('');
+      return;
+    }
+
+    const nextBooking = bangkokDateTimeParts(selectedOrder.booking_at);
+    setBookingDate(nextBooking.date);
+    setBookingTime(nextBooking.time);
+    setNote(selectedOrder.admin_note ?? '');
+  }, [selectedOrder?.id]);
+
   async function runAction(action: OrderMutationAction) {
     if (!selectedOrder || busyAction || !canAct(selectedOrder, action)) {
       return;
     }
 
-    if (action === 'book' && !bookingAt.trim()) {
-      setError('booking_at is required before booking an order.');
+    const bookingAt = action === 'book' ? composeBangkokIso(bookingDate, bookingTime) : undefined;
+
+    if (action === 'book' && !bookingAt) {
+      setError('Booking date and time must be valid Bangkok time.');
       return;
     }
 
@@ -369,7 +465,7 @@ export function OrdersQueue({ title = 'Orders Queue' }: { title?: string }) {
       setMessage(null);
       const result = await invokeFunction<AdminOrderActionRequest, { order: OrderRow }>('admin-order-action', {
         action,
-        booking_at: action === 'book' ? bookingAt.trim() : undefined,
+        booking_at: bookingAt ?? undefined,
         note: note.trim() || undefined,
         order_id: selectedOrder.id,
       });
@@ -379,6 +475,36 @@ export function OrdersQueue({ title = 'Orders Queue' }: { title?: string }) {
       setError(actionError instanceof Error ? actionError.message : 'Unable to update order.');
     } finally {
       setBusyAction(null);
+    }
+  }
+
+  async function saveNote(nextNote = note) {
+    if (!selectedOrder || isSavingNote) {
+      return;
+    }
+
+    const trimmedNote = nextNote.trim();
+
+    if (!trimmedNote) {
+      setError('Internal note is required before saving.');
+      return;
+    }
+
+    try {
+      setIsSavingNote(true);
+      setError(null);
+      setMessage(null);
+      const result = await invokeFunction<AdminOrderActionRequest, { order: OrderRow }>('admin-order-action', {
+        action: 'note',
+        note: trimmedNote,
+        order_id: selectedOrder.id,
+      });
+      setMessage('Saved internal note.');
+      await refreshOrders(result.order.tenant_id);
+    } catch (noteError) {
+      setError(noteError instanceof Error ? noteError.message : 'Unable to save note.');
+    } finally {
+      setIsSavingNote(false);
     }
   }
 
@@ -433,7 +559,7 @@ export function OrdersQueue({ title = 'Orders Queue' }: { title?: string }) {
         <View style={styles.filters}>
           <TextInput
             onChangeText={setQuery}
-            placeholder="Search order, buyer, phone, product"
+            placeholder="Search order, buyer, phone, product, branch"
             placeholderTextColor={MiraDesign.color.muted}
             style={styles.searchInput}
             value={query}
@@ -459,8 +585,10 @@ export function OrdersQueue({ title = 'Orders Queue' }: { title?: string }) {
                   order={order}
                   selected={selectedOrder?.id === order.id}
                   onSelect={() => {
+                    const nextBooking = bangkokDateTimeParts(order.booking_at);
                     setSelectedId(order.id);
-                    setBookingAt(order.booking_at ?? '');
+                    setBookingDate(nextBooking.date);
+                    setBookingTime(nextBooking.time);
                     setNote(order.admin_note ?? '');
                   }}
                 />
@@ -471,12 +599,16 @@ export function OrdersQueue({ title = 'Orders Queue' }: { title?: string }) {
           <View style={styles.detailPane}>
             {selectedOrder ? (
               <OrderDetail
-                bookingAt={bookingAt}
+                bookingDate={bookingDate}
+                bookingTime={bookingTime}
                 busyAction={busyAction}
+                isSavingNote={isSavingNote}
                 note={note}
                 onAction={(action) => void runAction(action)}
-                onBookingAtChange={setBookingAt}
+                onBookingDateChange={setBookingDate}
+                onBookingTimeChange={setBookingTime}
                 onNoteChange={setNote}
+                onSaveNote={(nextNote) => void saveNote(nextNote)}
                 order={selectedOrder}
                 signedSlipUrl={signedSlipUrls[selectedOrder.id]}
                 transcript={transcript}
@@ -512,6 +644,7 @@ function Metric({ label, value }: { label: string; value: string }) {
 }
 
 function OrderRowCard({ onSelect, order, selected }: { onSelect: () => void; order: OrderQueueRow; selected: boolean }) {
+  const branch = fromJoin(order.branches);
   const product = fromJoin(order.products);
   const customer = fromJoin(order.customers);
   const referrer = fromJoin(order.referrers);
@@ -531,7 +664,9 @@ function OrderRowCard({ onSelect, order, selected }: { onSelect: () => void; ord
       </View>
       <View style={styles.orderMetaGrid}>
         <Meta label="Buyer" value={buyerName} />
+        <Meta label="Age" value={order.buyer_age ? `${order.buyer_age}` : '-'} />
         <Meta label="Phone" value={phone} />
+        <Meta label="Branch" value={branch?.name ?? 'ไม่ระบุสาขา'} />
         <Meta label="Channel" value={order.channel} />
         <Meta label="Referrer" value={referrer ? `${referrer.name} (${referrer.ref_code})` : '-'} />
         <Meta label="Amount" value={formatMoney(order.amount_baht)} />
@@ -541,26 +676,35 @@ function OrderRowCard({ onSelect, order, selected }: { onSelect: () => void; ord
 }
 
 function OrderDetail({
-  bookingAt,
+  bookingDate,
+  bookingTime,
   busyAction,
+  isSavingNote,
   note,
   onAction,
-  onBookingAtChange,
+  onBookingDateChange,
+  onBookingTimeChange,
   onNoteChange,
+  onSaveNote,
   order,
   signedSlipUrl,
   transcript,
 }: {
-  bookingAt: string;
+  bookingDate: string;
+  bookingTime: string;
   busyAction: OrderMutationAction | null;
+  isSavingNote: boolean;
   note: string;
   onAction: (action: OrderMutationAction) => void;
-  onBookingAtChange: (value: string) => void;
+  onBookingDateChange: (value: string) => void;
+  onBookingTimeChange: (value: string) => void;
   onNoteChange: (value: string) => void;
+  onSaveNote: (nextNote?: string) => void;
   order: OrderQueueRow;
   signedSlipUrl?: string;
   transcript: TranscriptRow[];
 }) {
+  const branch = fromJoin(order.branches);
   const product = fromJoin(order.products);
   const customer = fromJoin(order.customers);
   const referrer = fromJoin(order.referrers);
@@ -579,7 +723,10 @@ function OrderDetail({
       <View style={styles.detailGrid}>
         <Meta label="Created" value={formatDateTime(order.created_at)} />
         <Meta label="Buyer" value={order.buyer_name || customer?.nickname || '-'} />
+        <Meta label="Age" value={order.buyer_age ? `${order.buyer_age}` : '-'} />
         <Meta label="Phone" value={order.buyer_phone || customer?.phone || '-'} />
+        <Meta label="Branch" value={branch?.name ?? 'ไม่ระบุสาขา'} />
+        <Meta label="Channel" value={order.channel} />
         <Meta label="Amount" value={formatMoney(order.amount_baht)} />
         <Meta label="Referrer" value={referrer ? `${referrer.name} (${referrer.ref_code})` : '-'} />
         <Meta label="Preferred date" value={order.preferred_date ?? '-'} />
@@ -600,13 +747,28 @@ function OrderDetail({
 
       <View style={styles.formBlock}>
         <Text style={styles.sectionTitle}>Booking</Text>
-        <TextInput
-          onChangeText={onBookingAtChange}
-          placeholder="2026-06-20T10:00:00+07:00"
-          placeholderTextColor={MiraDesign.color.muted}
-          style={styles.input}
-          value={bookingAt}
-        />
+        <View style={styles.dateTimeRow}>
+          <View style={styles.dateTimeField}>
+            <Text style={styles.formLabel}>Date</Text>
+            <TextInput
+              onChangeText={onBookingDateChange}
+              placeholder="YYYY-MM-DD"
+              placeholderTextColor={MiraDesign.color.muted}
+              style={styles.input}
+              value={bookingDate}
+            />
+          </View>
+          <View style={styles.dateTimeField}>
+            <Text style={styles.formLabel}>Time</Text>
+            <TextInput
+              onChangeText={onBookingTimeChange}
+              placeholder="HH:mm"
+              placeholderTextColor={MiraDesign.color.muted}
+              style={styles.input}
+              value={bookingTime}
+            />
+          </View>
+        </View>
         <TextInput
           multiline
           onChangeText={onNoteChange}
@@ -615,6 +777,24 @@ function OrderDetail({
           style={[styles.input, styles.noteInput]}
           value={note}
         />
+        <View style={styles.notePresetRow}>
+          {notePresets.map((preset) => (
+            <Pressable
+              key={preset}
+              disabled={isSavingNote}
+              onPress={() => {
+                onNoteChange(preset);
+                onSaveNote(preset);
+              }}
+              style={[styles.notePresetButton, isSavingNote ? styles.disabled : null]}
+            >
+              <Text style={styles.notePresetText}>{preset}</Text>
+            </Pressable>
+          ))}
+          <Pressable disabled={isSavingNote} onPress={() => onSaveNote()} style={[styles.noteSaveButton, isSavingNote ? styles.disabled : null]}>
+            <Text style={styles.noteSaveText}>{isSavingNote ? 'Saving' : 'Save Note'}</Text>
+          </Pressable>
+        </View>
       </View>
 
       <View style={styles.actions}>
@@ -1008,6 +1188,20 @@ const styles = StyleSheet.create({
   formBlock: {
     gap: 8,
   },
+  dateTimeRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  dateTimeField: {
+    flex: 1,
+    gap: 5,
+  },
+  formLabel: {
+    color: MiraDesign.color.inkSoft,
+    fontSize: 11,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+  },
   input: {
     backgroundColor: '#F7FBFA',
     borderColor: MiraDesign.color.line,
@@ -1022,6 +1216,37 @@ const styles = StyleSheet.create({
     minHeight: 84,
     paddingTop: 10,
     textAlignVertical: 'top',
+  },
+  notePresetRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  notePresetButton: {
+    alignItems: 'center',
+    backgroundColor: MiraDesign.color.surfaceSoft,
+    borderRadius: 8,
+    justifyContent: 'center',
+    minHeight: 36,
+    paddingHorizontal: 10,
+  },
+  notePresetText: {
+    color: MiraDesign.color.primaryDeep,
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  noteSaveButton: {
+    alignItems: 'center',
+    backgroundColor: MiraDesign.color.primaryDeep,
+    borderRadius: 8,
+    justifyContent: 'center',
+    minHeight: 36,
+    paddingHorizontal: 12,
+  },
+  noteSaveText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '900',
   },
   actions: {
     flexDirection: 'row',

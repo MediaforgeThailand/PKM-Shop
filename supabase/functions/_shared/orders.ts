@@ -1,4 +1,4 @@
-import { rpc, selectOne, updateRows } from './db.ts';
+﻿import { rpc, selectOne, updateRows } from './db.ts';
 import { HttpError } from './http.ts';
 import { buildPromptPayPayload } from './promptpay.ts';
 import type { OrderPanelState, OrderRow, OrderStatus, OrderWithProductRow, ReferrerRow, TenantRow } from './types.ts';
@@ -6,6 +6,7 @@ import type { OrderPanelState, OrderRow, OrderStatus, OrderWithProductRow, Refer
 export type Actor = 'ai' | 'customer' | `admin:${string}` | `referrer:${string}` | 'system';
 
 export const orderStatuses: OrderStatus[] = [
+  'selecting_branch',
   'collecting_info',
   'awaiting_payment',
   'submitted',
@@ -15,19 +16,23 @@ export const orderStatuses: OrderStatus[] = [
   'cancelled',
 ];
 
-function hasBuyerInfo(order: Pick<OrderRow, 'buyer_name' | 'buyer_phone'>) {
-  return Boolean(order.buyer_name?.trim() && order.buyer_phone?.trim());
+function hasBuyerInfo(order: Pick<OrderRow, 'buyer_age' | 'buyer_name' | 'buyer_phone'>) {
+  return Boolean(order.buyer_name?.trim() && order.buyer_phone?.trim() && order.buyer_age);
 }
 
 function adminOnly(actor: string) {
   return actor.startsWith('admin:');
 }
 
-export function canTransition(order: Pick<OrderRow, 'booking_at' | 'buyer_name' | 'buyer_phone' | 'status'>, to: OrderStatus, actor: string) {
+export function canTransition(order: Pick<OrderRow, 'booking_at' | 'buyer_age' | 'buyer_name' | 'buyer_phone' | 'status'>, to: OrderStatus, actor: string) {
   const from = order.status;
 
   if (from === to) {
     return true;
+  }
+
+  if (from === 'selecting_branch') {
+    return actor === 'customer' && (to === 'collecting_info' || to === 'cancelled');
   }
 
   if (from === 'collecting_info') {
@@ -83,7 +88,7 @@ function productFromJoin(order: OrderWithProductRow) {
   return order.products ?? null;
 }
 
-export function missingOrderFields(order: Pick<OrderRow, 'buyer_name' | 'buyer_phone'>) {
+export function missingOrderFields(order: Pick<OrderRow, 'buyer_age' | 'buyer_name' | 'buyer_phone'>) {
   const missing: string[] = [];
 
   if (!order.buyer_name?.trim()) {
@@ -92,6 +97,10 @@ export function missingOrderFields(order: Pick<OrderRow, 'buyer_name' | 'buyer_p
 
   if (!order.buyer_phone?.trim()) {
     missing.push('buyer_phone');
+  }
+
+  if (!order.buyer_age) {
+    missing.push('buyer_age');
   }
 
   return missing;
@@ -205,9 +214,9 @@ export async function loadActiveOrder(sessionId: string, tenantId: string) {
   return selectOne<OrderWithProductRow>('orders', {
     order: 'created_at.desc',
     select:
-      'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,channel,referrer_id,commission_scheme_snapshot,status,slip_url,booking_at,admin_note,created_at,updated_at,products(name,catalog_key,category,price_baht)',
+      'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,channel,referrer_id,commission_scheme_snapshot,status,slip_url,booking_at,branch_id,buyer_age,admin_note,created_at,updated_at,products(name,catalog_key,category,price_baht)',
     session_id: `eq.${sessionId}`,
-    status: 'in.(collecting_info,awaiting_payment,submitted,confirmed,booked)',
+    status: 'in.(selecting_branch,collecting_info,awaiting_payment,submitted,confirmed,booked)',
     tenant_id: `eq.${tenantId}`,
   });
 }
@@ -216,7 +225,7 @@ export async function loadOrderForPanel(orderId: string, tenantId: string) {
   return selectOne<OrderWithProductRow>('orders', {
     id: `eq.${orderId}`,
     select:
-      'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,channel,referrer_id,commission_scheme_snapshot,status,slip_url,booking_at,admin_note,created_at,updated_at,products(name,catalog_key,category,price_baht)',
+      'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,channel,referrer_id,commission_scheme_snapshot,status,slip_url,booking_at,branch_id,buyer_age,admin_note,created_at,updated_at,products(name,catalog_key,category,price_baht)',
     tenant_id: `eq.${tenantId}`,
   });
 }
@@ -228,7 +237,7 @@ export async function updateOrderFields(
     sessionId?: string;
     tenantId: string;
   },
-  fields: Partial<Pick<OrderRow, 'buyer_name' | 'buyer_phone' | 'preferred_date'>>,
+  fields: Partial<Pick<OrderRow, 'buyer_age' | 'buyer_name' | 'buyer_phone' | 'preferred_date'>>,
 ) {
   const patch: Record<string, unknown> = {
     updated_at: new Date().toISOString(),
@@ -242,6 +251,10 @@ export async function updateOrderFields(
     patch.buyer_phone = fields.buyer_phone;
   }
 
+  if (fields.buyer_age !== undefined) {
+    patch.buyer_age = fields.buyer_age;
+  }
+
   if (fields.preferred_date !== undefined) {
     patch.preferred_date = fields.preferred_date;
   }
@@ -250,7 +263,7 @@ export async function updateOrderFields(
     ...(scope.customerId ? { customer_id: `eq.${scope.customerId}` } : {}),
     id: `eq.${orderId}`,
     select:
-      'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,channel,referrer_id,commission_scheme_snapshot,status,slip_url,booking_at,admin_note,created_at,updated_at',
+      'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,channel,referrer_id,commission_scheme_snapshot,status,slip_url,booking_at,branch_id,buyer_age,admin_note,created_at,updated_at',
     ...(scope.sessionId ? { session_id: `eq.${scope.sessionId}` } : {}),
     tenant_id: `eq.${scope.tenantId}`,
   });

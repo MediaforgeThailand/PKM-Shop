@@ -9,6 +9,7 @@ type Order = NonNullable<OrderPanelState>;
 type SlipUploadFile = Blob & { name?: string; type?: string };
 
 const fieldLabels: Record<string, string> = {
+  buyer_age: 'อายุ',
   buyer_name: 'ชื่อ-นามสกุล',
   buyer_phone: 'เบอร์โทร',
   preferred_date: 'วันที่สะดวก',
@@ -21,6 +22,7 @@ const statusLabels: Record<Order['status'], string> = {
   collecting_info: 'รอข้อมูลผู้ซื้อ',
   confirmed: 'ยืนยันคำสั่งซื้อ',
   done: 'เสร็จสิ้น',
+  selecting_branch: 'เลือกสาขา',
   submitted: 'รอตรวจสอบ',
 };
 

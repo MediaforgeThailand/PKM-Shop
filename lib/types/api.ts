@@ -13,7 +13,7 @@ export type ApiEnvelope<TData> =
       ok: false;
     };
 
-export type CatalogCategory = 'checkup' | 'general' | 'vaccine';
+export type CatalogCategory = string;
 
 export type ChatChannel = 'app' | 'line' | 'pwa';
 
@@ -48,6 +48,35 @@ export type ChatCategory = {
   key: string;
   label_th: string;
   product_count: number;
+};
+
+export type BranchRow = {
+  active: boolean;
+  address: string | null;
+  created_at: string;
+  district: string | null;
+  id: string;
+  image_url: string | null;
+  map_url: string | null;
+  name: string;
+  phone: string | null;
+  sort: number;
+  tenant_id: string;
+};
+
+export type ProductBranchRow = {
+  branch_id: string;
+  product_id: string;
+};
+
+export type ProductCategoryRow = {
+  active: boolean;
+  icon: string | null;
+  image_url: string | null;
+  key: string;
+  label_th: string;
+  sort: number;
+  tenant_id: string;
 };
 
 export type OrderStatusInfo = {
@@ -87,7 +116,15 @@ export type OrderPanelState = {
   status: OrderStatus;
 } | null;
 
-export type OrderStatus = 'awaiting_payment' | 'booked' | 'cancelled' | 'collecting_info' | 'confirmed' | 'done' | 'submitted';
+export type OrderStatus =
+  | 'awaiting_payment'
+  | 'booked'
+  | 'cancelled'
+  | 'collecting_info'
+  | 'confirmed'
+  | 'done'
+  | 'selecting_branch'
+  | 'submitted';
 
 export type ChatAction =
   | {
@@ -165,6 +202,11 @@ export type AdminOrderActionRequest =
       order_id: string;
     }
   | {
+      action: 'note';
+      note: string;
+      order_id: string;
+    }
+  | {
       action: 'slip_url';
       order_id: string;
     };
@@ -234,6 +276,8 @@ export type OrderRow = {
   admin_note: string | null;
   amount_baht: number;
   booking_at: string | null;
+  branch_id: string | null;
+  buyer_age: number | null;
   buyer_name: string | null;
   buyer_phone: string | null;
   channel: 'chat_app' | 'chat_line' | 'chat_pwa' | 'referrer';

@@ -38,16 +38,22 @@ export function orderConfirmedNoticeTh(productName: string | null | undefined) {
   return `โรงพยาบาลยืนยันคำสั่งซื้อ ${productName || DEFAULT_PRODUCT_NAME_TH} แล้วค่ะ`;
 }
 
-export function orderBookedNoticeTh(productName: string | null | undefined, bookingAt: string | null | undefined) {
+export function orderBookedNoticeTh(
+  productName: string | null | undefined,
+  bookingAt: string | null | undefined,
+  branchName?: string | null | undefined,
+) {
   const when = formatBangkokDateTime(bookingAt ?? null);
+  const branch = branchName ? ` สาขา ${branchName}` : '';
 
-  return `ยืนยันการจอง ${productName || DEFAULT_PRODUCT_NAME_TH}${when ? ` วันที่ ${when}` : ''} เรียบร้อยค่ะ`;
+  return `ยืนยันการจอง ${productName || DEFAULT_PRODUCT_NAME_TH}${branch}${when ? ` วันที่ ${when}` : ''} เรียบร้อยค่ะ`;
 }
 
 export function orderSystemNoticeForStatus(
-  status: 'awaiting_payment' | 'booked' | 'cancelled' | 'collecting_info' | 'confirmed' | 'done' | 'submitted',
+  status: 'awaiting_payment' | 'booked' | 'cancelled' | 'collecting_info' | 'confirmed' | 'done' | 'selecting_branch' | 'submitted',
   productName: string | null | undefined,
   bookingAt: string | null | undefined,
+  branchName?: string | null | undefined,
 ) {
   if (status === 'submitted') {
     return ORDER_PAYMENT_SUBMITTED_NOTICE_TH;
@@ -58,7 +64,7 @@ export function orderSystemNoticeForStatus(
   }
 
   if (status === 'booked') {
-    return orderBookedNoticeTh(productName, bookingAt);
+    return orderBookedNoticeTh(productName, bookingAt, branchName);
   }
 
   return null;

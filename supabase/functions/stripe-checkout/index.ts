@@ -1,4 +1,4 @@
-import { assertTenant, resolveAuthUserId, resolveOrCreateCustomer, selectOne, updateRows } from '../_shared/db.ts';
+﻿import { assertTenant, resolveAuthUserId, resolveOrCreateCustomer, selectOne, updateRows } from '../_shared/db.ts';
 import { handleOptions, HttpError, json, toErrorResponse, validateJson, z } from '../_shared/http.ts';
 import { missingOrderFields, toOrderPanel } from '../_shared/orders.ts';
 import { createStripeCheckoutSession, stripeCheckoutBaseUrl } from '../_shared/stripe.ts';
@@ -60,7 +60,7 @@ async function loadOrderForCheckout({
     customer_id: `eq.${customerId}`,
     id: `eq.${orderId}`,
     select:
-      'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,channel,referrer_id,commission_scheme_snapshot,status,slip_url,booking_at,admin_note,created_at,updated_at,payment_provider,stripe_checkout_session_id,stripe_payment_intent_id,stripe_payment_status,paid_at,products(name,catalog_key,category,description,price_baht,image_url,active,stripe_price_id)',
+      'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,channel,referrer_id,commission_scheme_snapshot,status,slip_url,booking_at,branch_id,buyer_age,admin_note,created_at,updated_at,payment_provider,stripe_checkout_session_id,stripe_payment_intent_id,stripe_payment_status,paid_at,products(name,catalog_key,category,description,price_baht,image_url,active,stripe_price_id)',
     ...(sessionId ? { session_id: `eq.${sessionId}` } : {}),
     tenant_id: `eq.${tenantId}`,
   });
@@ -147,7 +147,7 @@ Deno.serve(async (req) => {
         customer_id: `eq.${customer.id}`,
         id: `eq.${order.id}`,
         select:
-          'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,channel,referrer_id,commission_scheme_snapshot,status,slip_url,booking_at,admin_note,created_at,updated_at,payment_provider,stripe_checkout_session_id,stripe_payment_intent_id,stripe_payment_status,paid_at,products(name,catalog_key,category,price_baht)',
+          'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,channel,referrer_id,commission_scheme_snapshot,status,slip_url,booking_at,branch_id,buyer_age,admin_note,created_at,updated_at,payment_provider,stripe_checkout_session_id,stripe_payment_intent_id,stripe_payment_status,paid_at,products(name,catalog_key,category,price_baht)',
         tenant_id: `eq.${tenant.id}`,
       },
     );
