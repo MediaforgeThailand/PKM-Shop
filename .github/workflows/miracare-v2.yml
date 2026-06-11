@@ -122,6 +122,21 @@ jobs:
             echo "commerce_ready=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Live regression skipped
+        if: ${{ steps.gate.outputs.ready != 'true' }}
+        shell: bash
+        run: |
+          {
+            echo "### Live regression skipped"
+            echo ""
+            echo "This CI run did not execute seeded/live checks. Configure these GitHub Actions secrets to enable them:"
+            echo ""
+            echo "- SUPABASE_URL"
+            echo "- SUPABASE_ANON_KEY"
+            echo "- SUPABASE_SERVICE_ROLE_KEY"
+            echo "- MIRA_DEMO_PROMPTPAY_ID"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Check out repository
         if: ${{ steps.gate.outputs.ready == 'true' }}
         uses: actions/checkout@v4

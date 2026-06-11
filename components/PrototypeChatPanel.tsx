@@ -29,7 +29,6 @@ import {
   type ChatProductCard,
   type ChatUiCard,
 } from '@/lib/ai/healthChatTypes';
-import { transcribeAudio } from '@/lib/ai/openaiTranscription';
 import {
   classifyProductRequest as classifyPrototypeProductRequest,
   createNaturalHealthFallbackAnswer,
@@ -51,6 +50,7 @@ const logo = require('@/assets/images/mira-care-logo.png');
 const logoMark = require('@/assets/images/mira-care-mark.png');
 const iconInk = '#536491';
 const prototypeUserNickname = DEFAULT_USER_NICKNAME;
+const VOICE_INPUT_DISABLED_MESSAGE = 'Voice input is paused until openai-transcribe is deployed.';
 
 type PrototypeChatMessage = ChatMessage & {
   uiCards?: ChatUiCard[];
@@ -171,22 +171,6 @@ function createDemoAnswer(question: string) {
       topic: match.topic,
     })),
   };
-}
-
-function blobToBase64(blob: Blob) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error('Could not read recorded audio.'));
-    reader.onloadend = () => {
-      const result = reader.result;
-      if (typeof result !== 'string') {
-        reject(new Error('Recorded audio could not be converted.'));
-        return;
-      }
-      resolve(result.includes(',') ? result.split(',').pop() ?? '' : result);
-    };
-    reader.readAsDataURL(blob);
-  });
 }
 
 function usePressScale() {
@@ -613,31 +597,27 @@ function EmptyChatHint() {
 
 function Composer({
   input,
-  isRecording,
   isSending,
-  isTranscribing,
   sendMessage,
   setInput,
   toggleVoiceRecording,
   voiceStatus,
 }: {
   input: string;
-  isRecording: boolean;
   isSending: boolean;
-  isTranscribing: boolean;
   sendMessage: () => void;
   setInput: (value: string) => void;
   toggleVoiceRecording: () => void;
   voiceStatus: string | null;
 }) {
   const { pressIn, pressOut, scale } = usePressScale();
-  const placeholder = isRecording ? 'Listening...' : isTranscribing ? 'Transcribing voice...' : 'Ask anything';
+  const placeholder = 'Ask anything';
 
   return (
     <View>
       {voiceStatus ? (
         <View style={styles.voiceStatusPill}>
-          <View style={[styles.voiceStatusDot, isRecording ? styles.voiceStatusDotLive : null]} />
+          <View style={styles.voiceStatusDot} />
           <Text numberOfLines={1} style={styles.voiceStatusText}>
             {voiceStatus}
           </Text>
@@ -645,13 +625,13 @@ function Composer({
       ) : null}
 
       <BlurView intensity={36} tint="light" style={styles.composerGlass}>
-        <Pressable disabled={isSending || isTranscribing} onPress={toggleVoiceRecording} style={({ pressed }) => [styles.voiceButtonPress, pressed ? styles.voiceButtonPressed : null]}>
+        <Pressable disabled={isSending} onPress={toggleVoiceRecording} style={({ pressed }) => [styles.voiceButtonPress, pressed ? styles.voiceButtonPressed : null]}>
           <LinearGradient
-            colors={isRecording ? ['#6FE7FF', '#587CFF'] : ['rgba(255,255,255,0.72)', 'rgba(255,255,255,0.32)']}
+            colors={['rgba(255,255,255,0.52)', 'rgba(255,255,255,0.24)']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
-            style={[styles.voiceButton, isRecording ? styles.voiceButtonRecording : null]}>
-            {isTranscribing ? <ActivityIndicator color="#536491" size="small" /> : <MicIcon color={isRecording ? '#FFFFFF' : iconInk} />}
+            style={[styles.voiceButton, styles.voiceButtonUnavailable]}>
+            <MicIcon color="#8A98B8" />
           </LinearGradient>
         </Pressable>
 
@@ -665,7 +645,7 @@ function Composer({
           style={styles.input}
         />
 
-        <Pressable disabled={isSending || isTranscribing} onPress={sendMessage} onPressIn={pressIn} onPressOut={pressOut}>
+        <Pressable disabled={isSending} onPress={sendMessage} onPressIn={pressIn} onPressOut={pressOut}>
           <Animated.View style={[styles.sendShadow, { transform: [{ scale }] }]}>
             <LinearGradient colors={['#C4ECFF', '#8FA6FF', '#6176F7']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.sendButton}>
               {isSending ? <ActivityIndicator color="#FFFFFF" size="small" /> : <SparkleIcon />}
@@ -710,14 +690,9 @@ export function PrototypeChatPanel() {
   const browserHeight = Platform.OS === 'web' && typeof window !== 'undefined' ? window.innerHeight : 640;
   const viewportWidth = width > 0 ? width : browserWidth;
   const viewportHeight = height > 0 ? height : browserHeight;
-  const audioChunksRef = useRef<Blob[]>([]);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const mediaStreamRef = useRef<MediaStream | null>(null);
   const scrollRef = useRef<ScrollView>(null);
   const [input, setInput] = useState('');
-  const [isRecording, setIsRecording] = useState(false);
   const [isSending, setIsSending] = useState(false);
-  const [isTranscribing, setIsTranscribing] = useState(false);
   const [messages, setMessages] = useState<PrototypeChatMessage[]>([]);
   const [products, setProducts] = useState<ChatProductCard[]>(fallbackProducts);
   const [viewMode, setViewMode] = useState<'chat' | 'home'>('home');
@@ -732,15 +707,6 @@ export function PrototypeChatPanel() {
     }),
     [isCompact, viewportHeight, viewportWidth],
   );
-
-  useEffect(() => {
-    return () => {
-      if (mediaRecorderRef.current?.state === 'recording') {
-        mediaRecorderRef.current.stop();
-      }
-      stopMediaStream();
-    };
-  }, []);
 
   useEffect(() => {
     if (viewMode === 'chat') {
@@ -770,102 +736,8 @@ export function PrototypeChatPanel() {
     };
   }, [fallbackProducts]);
 
-  function stopMediaStream() {
-    mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
-    mediaStreamRef.current = null;
-  }
-
-  async function transcribeRecordedAudio(mimeType: string) {
-    const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
-    audioChunksRef.current = [];
-    stopMediaStream();
-
-    if (audioBlob.size <= 0) {
-      setVoiceStatus('ไม่ได้ยินเสียง ลองกดพูดใหม่อีกครั้ง');
-      return;
-    }
-
-    setIsTranscribing(true);
-    setVoiceStatus('กำลังถอดเสียง...');
-
-    try {
-      const audioBase64 = await blobToBase64(audioBlob);
-      const transcript = await transcribeAudio({
-        audioBase64,
-        fileName: mimeType.includes('mp4') ? 'mira-voice.mp4' : 'mira-voice.webm',
-        language: 'th',
-        mimeType,
-      });
-
-      setInput((current) => (current.trim() ? `${current.trim()} ${transcript.text}` : transcript.text));
-      setVoiceStatus('ถอดเสียงเรียบร้อย พร้อมส่ง');
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Voice transcription failed.';
-      setVoiceStatus(`ยังใช้ voice ไม่ได้: ${message}`);
-    } finally {
-      setIsTranscribing(false);
-    }
-  }
-
-  async function startVoiceRecording() {
-    if (Platform.OS !== 'web' || typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
-      setVoiceStatus('Voice input รองรับบน web prototype ก่อน ต้องเพิ่ม native audio module สำหรับ iOS/Android');
-      return;
-    }
-
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-        ? 'audio/webm;codecs=opus'
-        : MediaRecorder.isTypeSupported('audio/webm')
-          ? 'audio/webm'
-          : 'audio/mp4';
-      const recorder = new MediaRecorder(stream, { mimeType });
-
-      audioChunksRef.current = [];
-      mediaStreamRef.current = stream;
-      mediaRecorderRef.current = recorder;
-      recorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
-        }
-      };
-      recorder.onstop = () => {
-        void transcribeRecordedAudio(mimeType);
-      };
-      recorder.start();
-      setIsRecording(true);
-      setVoiceStatus('กำลังฟัง... กดไมค์อีกครั้งเพื่อหยุด');
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Microphone permission failed.';
-      stopMediaStream();
-      setIsRecording(false);
-      setVoiceStatus(`เปิดไมค์ไม่ได้: ${message}`);
-    }
-  }
-
-  function stopVoiceRecording() {
-    const recorder = mediaRecorderRef.current;
-
-    if (!recorder || recorder.state === 'inactive') {
-      setIsRecording(false);
-      stopMediaStream();
-      return;
-    }
-
-    setIsRecording(false);
-    setVoiceStatus('หยุดฟังแล้ว กำลังเตรียมเสียง...');
-    recorder.stop();
-    mediaRecorderRef.current = null;
-  }
-
   function toggleVoiceRecording() {
-    if (isRecording) {
-      stopVoiceRecording();
-      return;
-    }
-
-    void startVoiceRecording();
+    setVoiceStatus(VOICE_INPUT_DISABLED_MESSAGE);
   }
 
   function showProductGrid(sourceProducts = products, mode: ChatContextAssessment['mode'] = 'direct_product') {
@@ -1024,7 +896,7 @@ export function PrototypeChatPanel() {
                   <HeroLogo />
 
                   <View style={styles.tileGrid}>
-                    <FeatureTile icon={<MicIcon />} label={'Voice\nChat'} onPress={toggleVoiceRecording} />
+                    <FeatureTile icon={<MicIcon color="#8A98B8" />} label={'Voice\nPaused'} onPress={toggleVoiceRecording} />
                     <FeatureTile icon={<ChatIcon />} label={'Health\nChat'} onPress={() => setViewMode('chat')} />
                     <FeatureTile icon={<ImageIcon />} label={'Generate\nImages'} />
                     <FeatureTile icon={<ScanIcon />} label={'Scan and\nSearch'} />
@@ -1033,9 +905,7 @@ export function PrototypeChatPanel() {
                   <View style={styles.bottomArea}>
                     <Composer
                       input={input}
-                      isRecording={isRecording}
                       isSending={isSending}
-                      isTranscribing={isTranscribing}
                       sendMessage={sendMessage}
                       setInput={setInput}
                       toggleVoiceRecording={toggleVoiceRecording}
@@ -1083,9 +953,7 @@ export function PrototypeChatPanel() {
                   <View style={styles.bottomArea}>
                     <Composer
                       input={input}
-                      isRecording={isRecording}
                       isSending={isSending}
-                      isTranscribing={isTranscribing}
                       sendMessage={sendMessage}
                       setInput={setInput}
                       toggleVoiceRecording={toggleVoiceRecording}
@@ -1756,11 +1624,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: 34,
   },
-  voiceButtonRecording: {
-    shadowColor: '#5E9DFF',
-    shadowOffset: { height: 5, width: 0 },
-    shadowOpacity: 0.34,
-    shadowRadius: 10,
+  voiceButtonUnavailable: {
+    opacity: 0.72,
   },
   voiceStatusPill: {
     alignItems: 'center',
@@ -1781,9 +1646,6 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     height: 6,
     width: 6,
-  },
-  voiceStatusDotLive: {
-    backgroundColor: '#6FE7FF',
   },
   voiceStatusText: {
     color: '#44547E',

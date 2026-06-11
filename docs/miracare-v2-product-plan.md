@@ -26,7 +26,7 @@ What already exists and must be REUSED or MIGRATED (not rebuilt blindly):
 | Memory | agent_memory_companion_chat, user_context_scores, health_fact_autosave_triggers | Foundation for the Silent Profile pipeline (§7) — extend, don't recreate |
 | Catalog/admin | canonical `products` table and `app/admin/catalog.tsx` | This is the tenant catalog source for chat + refer (§5, §6) |
 | Health data | patient_health_data_vault, blood_test RAG | Foundation for Health Dashboard (§8) |
-| Voice | openai-transcribe | Keep as optional input path |
+| Voice | openai-transcribe | Optional input path; `/prototype` keeps it paused unless the function is intentionally deployed |
 
 Codex must run a discovery pass first (read these files) and produce `docs/v2-gap-analysis.md` mapping each v2 requirement → exists / partial / missing, BEFORE writing feature code. This is Phase 0 (§9).
 
