@@ -1,5 +1,4 @@
 import { buildCatalogJson, buildPersonalContext, buildRecentChat, inferIntentCategory } from './context.ts';
-import { ORDER_INFO_COMPLETE_NOTICE_TH, ORDER_PAYMENT_SUBMITTED_NOTICE_TH } from '../../../lib/templates.ts';
 import {
   assertTenant,
   insertRow,
@@ -16,6 +15,7 @@ import { filterKnownProductMarkerKeys, parseProductMarker } from './marker.ts';
 import { formatActiveOrderContext, loadActiveOrder, missingOrderFields, toOrderPanel, transition, updateOrderFields } from './orders.ts';
 import { callMiraPrompt, callOrderFieldExtractor } from './openai.ts';
 import { resolveAttributedReferrerId } from './referrals.ts';
+import { ORDER_INFO_COMPLETE_NOTICE_TH, ORDER_PAYMENT_SUBMITTED_NOTICE_TH } from './templates.ts';
 import type {
   ChatMessageRow,
   ChatOrchestratorRequest,
@@ -104,7 +104,6 @@ async function resolveOrCreateSession({
 type ActionResult = {
   order?: OrderWithProductRow | null;
   response?: ChatOrchestratorResponse;
-  systemNoticePersisted?: boolean;
 };
 
 async function loadOrderForPanel(orderId: string, tenantId: string) {
@@ -297,7 +296,6 @@ async function handleAction({
         session_id: sessionId,
         text: ORDER_PAYMENT_SUBMITTED_NOTICE_TH,
       },
-      systemNoticePersisted: true,
     };
   }
 
@@ -445,18 +443,14 @@ async function completeActionResponseTurn({
   session,
   tenant,
 }: {
-  actionResult: Required<Pick<ActionResult, 'response'>> & Pick<ActionResult, 'systemNoticePersisted'>;
+  actionResult: Required<Pick<ActionResult, 'response'>>;
   clientMsgId: string;
   message: string;
   session: ChatSessionRow;
   tenant: TenantRow;
 }) {
   await persistUserMessage(session.id, clientMsgId, message);
-
-  if (!actionResult.systemNoticePersisted) {
-    await persistSystemNotice(session.id, actionResult.response.text);
-  }
-
+  await persistSystemNotice(session.id, actionResult.response.text);
   await updateSessionAfterAssistant(session.id, tenant.id, actionResult.response.text);
 
   return actionResult.response;
@@ -634,10 +628,7 @@ export async function orchestrateChat(request: ChatOrchestratorRequest, authoriz
 
   if (actionResult.response) {
     return completeActionResponseTurn({
-      actionResult: {
-        response: actionResult.response,
-        systemNoticePersisted: actionResult.systemNoticePersisted,
-      },
+      actionResult: { response: actionResult.response },
       clientMsgId: request.client_msg_id,
       message: request.message,
       session,
@@ -680,10 +671,7 @@ export async function orchestrateLine(request: {
 
   if (actionResult.response) {
     return completeActionResponseTurn({
-      actionResult: {
-        response: actionResult.response,
-        systemNoticePersisted: actionResult.systemNoticePersisted,
-      },
+      actionResult: { response: actionResult.response },
       clientMsgId: request.client_msg_id,
       message: request.message,
       session,

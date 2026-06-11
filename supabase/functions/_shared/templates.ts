@@ -1,0 +1,65 @@
+export const LAB_SUMMARY_DISCLAIMER_TH =
+  'ข้อมูลนี้เป็นข้อมูลประกอบการดูแลสุขภาพ ควรปรึกษาบุคลากรทางการแพทย์หากมีอาการหรือผลผิดปกติ';
+
+export const ORDER_PAYMENT_SUBMITTED_NOTICE_TH =
+  'ส่งข้อมูลการชำระเงินแล้วค่ะ ทีมโรงพยาบาลจะตรวจสอบและยืนยันให้เร็วที่สุด';
+
+export const ORDER_INFO_COMPLETE_NOTICE_TH =
+  'ข้อมูลครบแล้วค่ะ สามารถชำระเงินผ่าน QR ได้เลย';
+
+const DEFAULT_PRODUCT_NAME_TH = 'แพ็กเกจ';
+
+function formatBangkokDateTime(isoDateTime: string | null) {
+  if (!isoDateTime) {
+    return '';
+  }
+
+  const date = new Date(isoDateTime);
+
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    day: '2-digit',
+    hour: '2-digit',
+    hourCycle: 'h23',
+    minute: '2-digit',
+    month: '2-digit',
+    timeZone: 'Asia/Bangkok',
+    year: 'numeric',
+  }).formatToParts(date);
+  const byType = new Map(parts.map((part) => [part.type, part.value]));
+
+  return `${byType.get('year')}-${byType.get('month')}-${byType.get('day')} ${byType.get('hour')}:${byType.get('minute')}`;
+}
+
+export function orderConfirmedNoticeTh(productName: string | null | undefined) {
+  return `โรงพยาบาลยืนยันคำสั่งซื้อ ${productName || DEFAULT_PRODUCT_NAME_TH} แล้วค่ะ`;
+}
+
+export function orderBookedNoticeTh(productName: string | null | undefined, bookingAt: string | null | undefined) {
+  const when = formatBangkokDateTime(bookingAt ?? null);
+
+  return `ยืนยันการจอง ${productName || DEFAULT_PRODUCT_NAME_TH}${when ? ` วันที่ ${when}` : ''} เรียบร้อยค่ะ`;
+}
+
+export function orderSystemNoticeForStatus(
+  status: 'awaiting_payment' | 'booked' | 'cancelled' | 'collecting_info' | 'confirmed' | 'done' | 'submitted',
+  productName: string | null | undefined,
+  bookingAt: string | null | undefined,
+) {
+  if (status === 'submitted') {
+    return ORDER_PAYMENT_SUBMITTED_NOTICE_TH;
+  }
+
+  if (status === 'confirmed') {
+    return orderConfirmedNoticeTh(productName);
+  }
+
+  if (status === 'booked') {
+    return orderBookedNoticeTh(productName, bookingAt);
+  }
+
+  return null;
+}

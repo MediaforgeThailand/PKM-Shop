@@ -15,7 +15,8 @@ const files = {
   orchestrate: 'supabase/functions/_shared/orchestrate.ts',
   orders: 'supabase/functions/_shared/orders.ts',
   referrerOrder: 'supabase/functions/referrer-order/index.ts',
-  templates: 'lib/templates.ts',
+  systemNoticeMigration: 'supabase/migrations/20260611061000_a2_system_notice_single_source.sql',
+  templates: 'supabase/functions/_shared/templates.ts',
   wearableIngest: 'supabase/functions/wearable-ingest/index.ts',
 };
 
@@ -90,8 +91,18 @@ expect(
     sources.orchestrate.includes('await persistUserMessage(session.id, clientMsgId, message)') &&
     sources.orchestrate.includes('await persistSystemNotice(session.id, actionResult.response.text)') &&
     sources.orchestrate.includes('await updateSessionAfterAssistant(session.id, tenant.id, actionResult.response.text)') &&
-    sources.orchestrate.includes('systemNoticePersisted: true'),
-  'chat action responses that skip the model must still persist the user turn and a system notice unless the transition RPC already inserted it',
+    !sources.orchestrate.includes('systemNoticePersisted'),
+  'chat action responses that skip the model must persist the user turn and exactly one TypeScript system notice',
+);
+
+expect(
+  'system notice single writer',
+  !sources.systemNoticeMigration.includes('insert into public.chat_messages') &&
+    !sources.systemNoticeMigration.includes('system_notice') &&
+    sources.adminOrderAction.includes('await persistSystemNotice(notificationOrder.session_id, noticeText)') &&
+    sources.adminOrderAction.includes('await pushLineMessages(tenant.slug, customer.line_user_id, [textLineMessage(noticeText)])') &&
+    !sources.adminOrderAction.includes("selectOne<LatestNoticeRow>('chat_messages'"),
+  'transition_order must not insert notices; admin-order-action must persist one notice and push the same text to LINE',
 );
 
 expect(

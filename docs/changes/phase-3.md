@@ -8,8 +8,8 @@
 - Wired `chat-orchestrator` order actions: `select_product`, `order_form_submit`, order-field extraction while collecting info, PromptPay QR payload return, and `payment_done`.
 - Added `components/chat/OrderPanel.tsx` and wired chat product cards to create orders through `chat-orchestrator` instead of leaving the v2 flow for `/checkout`.
 - Replaced the mock `admin-booking` page with the v2 route `app/admin/orders.tsx` and removed the scattered legacy route; the live orders queue supports realtime refresh, booking actions, read-only transcript display, and signed `payment-slips` thumbnail URLs when `orders.slip_url` stores a private storage path.
-- `transition_order(...)` inserts `system_notice` chat messages for submitted, confirmed, and booked states; `admin-order-action` attempts LINE push delivery for confirmed/booked LINE orders.
-- The chat action-response path now persists the user action message and, when the transition RPC did not already insert one, a templated `system_notice` before returning without a model call.
+- `transition_order(...)` owns state changes, order events, and commission side effects only; TypeScript templates are the single source for `system_notice` chat messages.
+- The chat action-response path now persists the user action message and exactly one templated `system_notice` before returning without a model call.
 - The order form-complete and payment-submitted action responses now both come from `lib/templates.ts` so non-model system notices stay centralized.
 - The typed chat client now marks `order_form_submit` and `payment_done` responses as `system_notice`, so the live chat append and persisted reload render those action notices consistently.
 - Added Deno unit tests for PromptPay fixtures and the order state machine, including every legal transition plus representative illegal transitions.

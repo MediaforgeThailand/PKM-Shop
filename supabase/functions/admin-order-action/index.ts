@@ -1,8 +1,9 @@
-import { resolveAuthUserId, selectMany, selectOne, updateRows } from '../_shared/db.ts';
+import { insertRow, resolveAuthUserId, selectMany, selectOne, updateRows } from '../_shared/db.ts';
 import { HttpError, handleOptions, json, toErrorResponse, validateJson, z } from '../_shared/http.ts';
 import { pushLineMessages, textLineMessage } from '../_shared/line.ts';
 import { transition } from '../_shared/orders.ts';
-import type { AdminOrderActionRequest, OrderRow, OrderStatus } from '../_shared/types.ts';
+import { orderSystemNoticeForStatus } from '../_shared/templates.ts';
+import type { AdminOrderActionRequest, ChatMessageRow, OrderRow, OrderStatus } from '../_shared/types.ts';
 
 declare const Deno: {
   serve: (handler: (req: Request) => Response | Promise<Response>) => void;
@@ -21,13 +22,12 @@ type OrderNotificationRow = Pick<OrderRow, 'channel' | 'customer_id' | 'id' | 's
   customers: Embedded<{
     line_user_id: string | null;
   }>;
+  products: Embedded<{
+    name: string | null;
+  }>;
   tenants: Embedded<{
     slug: string;
   }>;
-};
-
-type LatestNoticeRow = {
-  content: string;
 };
 
 type LinePushResult =
@@ -65,19 +65,31 @@ function actionToStatus(action: AdminOrderActionRequest['action']): OrderStatus 
   return 'cancelled';
 }
 
-async function pushLineOrderNotice(orderId: string, tenantId: string, status: OrderStatus): Promise<LinePushResult> {
+async function loadOrderNotification(orderId: string, tenantId: string) {
+  return selectOne<OrderNotificationRow>('orders', {
+    id: `eq.${orderId}`,
+    select: 'id,tenant_id,customer_id,session_id,channel,tenants(slug),customers(line_user_id),products(name)',
+    tenant_id: `eq.${tenantId}`,
+  });
+}
+
+async function persistSystemNotice(sessionId: string, text: string) {
+  return insertRow<ChatMessageRow>('chat_messages', {
+    content: text,
+    role: 'system_notice',
+    session_id: sessionId,
+  }, {
+    select: 'id,session_id,role,content,marker_product_ids,openai_response_id,client_msg_id,created_at',
+  });
+}
+
+async function pushLineOrderNotice(order: OrderNotificationRow | null, status: OrderStatus, noticeText: string | null): Promise<LinePushResult> {
   if (status !== 'confirmed' && status !== 'booked') {
     return {
       attempted: false,
       reason: 'status_not_pushable',
     };
   }
-
-  const order = await selectOne<OrderNotificationRow>('orders', {
-    id: `eq.${orderId}`,
-    select: 'id,tenant_id,customer_id,session_id,channel,tenants(slug),customers(line_user_id)',
-    tenant_id: `eq.${tenantId}`,
-  });
 
   if (!order || order.channel !== 'chat_line' || !order.session_id) {
     return {
@@ -96,22 +108,15 @@ async function pushLineOrderNotice(orderId: string, tenantId: string, status: Or
     };
   }
 
-  const notice = await selectOne<LatestNoticeRow>('chat_messages', {
-    order: 'created_at.desc',
-    role: 'eq.system_notice',
-    select: 'content',
-    session_id: `eq.${order.session_id}`,
-  });
-
-  if (!notice?.content) {
+  if (!noticeText) {
     return {
       attempted: false,
-      reason: 'missing_system_notice',
+      reason: 'missing_notice_text',
     };
   }
 
   try {
-    await pushLineMessages(tenant.slug, customer.line_user_id, [textLineMessage(notice.content)]);
+    await pushLineMessages(tenant.slug, customer.line_user_id, [textLineMessage(noticeText)]);
 
     return {
       attempted: true,
@@ -120,7 +125,7 @@ async function pushLineOrderNotice(orderId: string, tenantId: string, status: Or
   } catch (error) {
     console.error('line_push_failed', {
       error: error instanceof Error ? error.message : String(error),
-      order_id: orderId,
+      order_id: order.id,
       status,
       tenant_slug: tenant.slug,
     });
@@ -196,11 +201,23 @@ Deno.serve(async (req) => {
       );
     }
 
-    const updatedOrder = await transition(order.id, actionToStatus(body.action), `admin:${authUserId}`, {
+    const targetStatus = actionToStatus(body.action);
+    const updatedOrder = await transition(order.id, targetStatus, `admin:${authUserId}`, {
       action: body.action,
       note: body.note ?? null,
     });
-    const linePush = await pushLineOrderNotice(order.id, order.tenant_id, updatedOrder.status);
+    const notificationOrder = await loadOrderNotification(order.id, order.tenant_id);
+    const productName = embeddedOne(notificationOrder?.products ?? null)?.name ?? null;
+    const didTransition = order.status !== updatedOrder.status;
+    const noticeText = didTransition ? orderSystemNoticeForStatus(updatedOrder.status, productName, updatedOrder.booking_at) : null;
+
+    if (noticeText && notificationOrder?.session_id) {
+      await persistSystemNotice(notificationOrder.session_id, noticeText);
+    }
+
+    const linePush = didTransition
+      ? await pushLineOrderNotice(notificationOrder, updatedOrder.status, noticeText)
+      : { attempted: false, reason: 'transition_noop' };
 
     return json({ line_push: linePush, order: updatedOrder });
   } catch (error) {
