@@ -155,4 +155,5 @@ jobs:
 
       - name: Commerce E2E skipped
         if: ${{ steps.gate.outputs.ready == 'true' && steps.gate.outputs.commerce_ready != 'true' }}
-        run: echo "Commerce E2E skipped: set MIRA_DEMO_PROMPTPAY_ID to seed the demo tenant PromptPay id."
+        run: |
+          echo "Commerce E2E skipped: set MIRA_DEMO_PROMPTPAY_ID to seed the demo tenant PromptPay id."
