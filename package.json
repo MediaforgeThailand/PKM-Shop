@@ -42,6 +42,7 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
+    "build": "expo export --platform web",
     "chat:quality": "node scripts/mira-chat-quality-check.mjs",
     "chat:regression": "node scripts/chat-regression.mjs",
     "orders:status-audit": "node scripts/order-status-write-audit.mjs",
