@@ -1,6 +1,20 @@
 name: MiraCare v2 verification
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/miracare-v2.yml'
+      - 'app/**'
+      - 'components/**'
+      - 'lib/**'
+      - 'scripts/**'
+      - 'supabase/functions/**'
+      - 'supabase/migrations/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig.json'
   pull_request:
     paths:
       - '.github/workflows/miracare-v2.yml'
@@ -102,6 +116,11 @@ jobs:
             echo "ready=false" >> "$GITHUB_OUTPUT"
             echo "Live regression skipped: missing one or more Supabase secrets."
           fi
+          if [ -n "$MIRA_DEMO_PROMPTPAY_ID" ]; then
+            echo "commerce_ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "commerce_ready=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Check out repository
         if: ${{ steps.gate.outputs.ready == 'true' }}
@@ -131,9 +150,9 @@ jobs:
         run: npm run chat:regression
 
       - name: Commerce E2E suite
-        if: ${{ steps.gate.outputs.ready == 'true' && env.MIRA_DEMO_PROMPTPAY_ID != '' }}
+        if: ${{ steps.gate.outputs.ready == 'true' && steps.gate.outputs.commerce_ready == 'true' }}
         run: npm run v2:e2e-commerce
 
       - name: Commerce E2E skipped
-        if: ${{ steps.gate.outputs.ready == 'true' && env.MIRA_DEMO_PROMPTPAY_ID == '' }}
+        if: ${{ steps.gate.outputs.ready == 'true' && steps.gate.outputs.commerce_ready != 'true' }}
         run: echo "Commerce E2E skipped: set MIRA_DEMO_PROMPTPAY_ID to seed the demo tenant PromptPay id."
