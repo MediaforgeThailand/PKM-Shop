@@ -276,9 +276,9 @@ export function CatalogCrud({ title = 'Catalog CRUD' }: { title?: string }) {
             <Pressable disabled={isLoading} onPress={refreshProducts} style={[styles.secondaryButton, isLoading ? styles.disabled : null]}>
               <Text style={styles.secondaryButtonText}>{isLoading ? 'Refreshing' : 'Refresh'}</Text>
             </Pressable>
-            <Link href="/(tabs)/packages" asChild>
+            <Link href="/" asChild>
               <Pressable style={styles.primaryButton}>
-                <Text style={styles.primaryButtonText}>Open Catalog</Text>
+                <Text style={styles.primaryButtonText}>Product Overview</Text>
               </Pressable>
             </Link>
           </View>

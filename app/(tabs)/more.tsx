@@ -5,6 +5,7 @@ import { BrandHeader, Screen, SectionHeader } from '@/components/MiraUI';
 import { MiraDesign } from '@/constants/Design';
 
 const menuItems = [
+  { title: 'Product overview', body: 'Client-facing tour for the four MiraCare product systems.', href: '/' },
   { title: 'Order and booking', body: 'Post-payment instruction and booking status.', href: '/order-status' },
   { title: 'Partner referral', body: 'Referral links, commission, and payouts.', href: '/partner' },
   { title: 'Hospital admin', body: 'Live orders queue, booking actions, and transcript review.', href: '/admin/orders' },
@@ -19,11 +20,11 @@ export default function MoreScreen() {
       <BrandHeader
         eyebrow="Operations"
         title="User, partner, and hospital surfaces."
-        subtitle="These are the supporting flows around the core marketplace and health dashboard."
+        subtitle="These are the supporting flows around the product showcase and live demo routes."
         compact
       />
 
-      <SectionHeader title="Prototype pages" meta="tap to open" />
+      <SectionHeader title="Operations" meta="tap to open" />
       {menuItems.map((item) => (
         <Link key={item.title} href={item.href} asChild>
           <Pressable style={styles.menuRow}>

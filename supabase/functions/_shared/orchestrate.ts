@@ -11,7 +11,7 @@ import {
   upsertRow,
 } from './db.ts';
 import { HttpError, z } from './http.ts';
-import { filterKnownProductMarkerKeys, parseProductMarker } from './marker.ts';
+import { filterKnownProductMarkerKeys, parseChatMarker } from './marker.ts';
 import {
   assertOrderBelongsToSession,
   assertPaymentSlipPathForOrder,
@@ -29,6 +29,8 @@ import { createSignedUploadUrl } from './storage.ts';
 import { ORDER_INFO_COMPLETE_NOTICE_TH, ORDER_PAYMENT_SUBMITTED_NOTICE_TH } from './templates.ts';
 import type {
   ChatMessageRow,
+  ChatCard,
+  ChatCategory,
   ChatOrchestratorRequest,
   ChatOrchestratorResponse,
   ChatSlipUploadResponse,
@@ -38,6 +40,7 @@ import type {
   OrderRow,
   OrderWithProductRow,
   ProductSummary,
+  OrderStatusInfo,
   ReferrerRow,
   TenantRow,
 } from './types.ts';
@@ -81,6 +84,15 @@ export const chatRequestSchema = z.object({
   session_id: z.string().uuid().nullable(),
   tenant_slug: z.string().regex(/^[a-z0-9-]{2,32}$/),
 });
+
+const CHAT_MESSAGE_SELECT = 'id,session_id,role,content,marker_product_ids,cards,openai_response_id,client_msg_id,created_at';
+const ORDER_PANEL_SELECT =
+  'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,channel,referrer_id,commission_scheme_snapshot,status,slip_url,booking_at,admin_note,created_at,updated_at,products(name,catalog_key,category,price_baht)';
+const CATEGORY_FALLBACK_LABELS: Record<string, { icon: string | null; label_th: string; sort: number }> = {
+  checkup: { icon: '🩺', label_th: 'ตรวจสุขภาพ', sort: 10 },
+  vaccine: { icon: '💉', label_th: 'วัคซีน', sort: 20 },
+  general: { icon: '🏥', label_th: 'บริการทั่วไป', sort: 30 },
+};
 
 function nowIso() {
   return new Date().toISOString();
@@ -130,8 +142,7 @@ type ActionResult = {
 async function loadOrderForPanel(orderId: string, tenantId: string) {
   return selectOne<OrderWithProductRow>('orders', {
     id: `eq.${orderId}`,
-    select:
-      'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,channel,referrer_id,commission_scheme_snapshot,status,slip_url,booking_at,admin_note,created_at,updated_at,products(name,catalog_key,category,price_baht)',
+    select: ORDER_PANEL_SELECT,
     tenant_id: `eq.${tenantId}`,
   });
 }
@@ -210,8 +221,7 @@ async function createOrderFromProduct({
     session_id: sessionId,
     tenant_id: tenant.id,
   }, {
-    select:
-      'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,channel,referrer_id,commission_scheme_snapshot,status,slip_url,booking_at,admin_note,created_at,updated_at',
+    select: ORDER_PANEL_SELECT,
   });
 
   return loadOrderForPanel(order.id, tenant.id);
@@ -261,6 +271,7 @@ async function refreshActiveOrder(session: ChatSessionRow, tenant: TenantRow): P
   const order = await loadActiveOrder(session.id, tenant.id);
 
   return {
+    cards: [],
     order: toOrderPanel(order, tenant),
     products: [],
     session_id: session.id,
@@ -335,6 +346,7 @@ async function handleAction({
     return {
       response: {
         order: toOrderPanel(loaded ?? null, tenant),
+        cards: [],
         products: [],
         session_id: sessionId,
         text: ORDER_INFO_COMPLETE_NOTICE_TH,
@@ -368,8 +380,7 @@ async function handleAction({
       {
         customer_id: `eq.${customer.id}`,
         id: `eq.${action.order_id}`,
-        select:
-          'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,channel,referrer_id,commission_scheme_snapshot,status,slip_url,booking_at,admin_note,created_at,updated_at,payment_provider,stripe_checkout_session_id,stripe_payment_intent_id,stripe_payment_status,paid_at',
+        select: `${ORDER_PANEL_SELECT},payment_provider,stripe_checkout_session_id,stripe_payment_intent_id,stripe_payment_status,paid_at`,
         session_id: `eq.${sessionId}`,
         tenant_id: `eq.${tenant.id}`,
       },
@@ -381,6 +392,7 @@ async function handleAction({
     return {
       response: {
         order: toOrderPanel(loaded, tenant),
+        cards: [],
         products: [],
         session_id: sessionId,
         text: ORDER_PAYMENT_SUBMITTED_NOTICE_TH,
@@ -394,7 +406,7 @@ async function handleAction({
 async function persistUserMessage(sessionId: string, clientMsgId: string, content: string) {
   const existing = await selectOne<ChatMessageRow>('chat_messages', {
     client_msg_id: `eq.${clientMsgId}`,
-    select: 'id,session_id,role,content,marker_product_ids,openai_response_id,client_msg_id,created_at',
+    select: CHAT_MESSAGE_SELECT,
     session_id: `eq.${sessionId}`,
   });
 
@@ -411,7 +423,7 @@ async function persistUserMessage(sessionId: string, clientMsgId: string, conten
     role: 'user',
     session_id: sessionId,
   }, {
-    select: 'id,session_id,role,content,marker_product_ids,openai_response_id,client_msg_id,created_at',
+    select: CHAT_MESSAGE_SELECT,
   });
 
   return {
@@ -425,7 +437,7 @@ async function cachedAssistantReply(sessionId: string, userMessageCreatedAt: str
     created_at: `gte.${userMessageCreatedAt}`,
     order: 'created_at.asc',
     role: 'eq.assistant',
-    select: 'id,session_id,role,content,marker_product_ids,openai_response_id,client_msg_id,created_at',
+    select: CHAT_MESSAGE_SELECT,
     session_id: `eq.${sessionId}`,
   });
 }
@@ -467,6 +479,7 @@ async function lookupProductsByCatalogKeys(tenantId: string, catalogKeys: string
 function toChatProduct(row: ProductSummary): ChatProduct {
   return {
     catalog_key: row.catalog_key,
+    category: row.category,
     description: row.description,
     image_url: row.image_url,
     name: row.name,
@@ -474,25 +487,182 @@ function toChatProduct(row: ProductSummary): ChatProduct {
   };
 }
 
+async function countActiveProductsByCategory(tenantId: string, category: string) {
+  const rows = await selectMany<{ id: string }>('products', {
+    active: 'eq.true',
+    category: `eq.${category}`,
+    select: 'id',
+    tenant_id: `eq.${tenantId}`,
+  });
+
+  return rows.length;
+}
+
+async function buildProductGridCard(
+  tenantId: string,
+  productRows: ProductSummary[],
+  source: Extract<ChatCard, { type: 'product_grid' }>['source'] = 'recommendation',
+): Promise<Extract<ChatCard, { type: 'product_grid' }> | null> {
+  if (productRows.length === 0) {
+    return null;
+  }
+
+  const categories = [...new Set(productRows.map((row) => row.category).filter(Boolean))];
+  const category = categories.length === 1 ? categories[0] : null;
+  const totalAvailable = category ? await countActiveProductsByCategory(tenantId, category) : productRows.length;
+
+  return {
+    category,
+    products: productRows.map(toChatProduct),
+    source,
+    total_available: totalAvailable,
+    type: 'product_grid',
+  };
+}
+
+async function buildCategoryGridCard(tenantId: string): Promise<Extract<ChatCard, { type: 'category_grid' }>> {
+  const rows = await selectMany<Pick<ProductSummary, 'category' | 'catalog_key'>>('products', {
+    active: 'eq.true',
+    order: 'category.asc',
+    select: 'category,catalog_key',
+    tenant_id: `eq.${tenantId}`,
+  });
+  const counts = new Map<string, number>();
+
+  for (const row of rows) {
+    counts.set(row.category, (counts.get(row.category) ?? 0) + 1);
+  }
+
+  const categories: ChatCategory[] = [...counts.entries()]
+    .map(([key, product_count]) => {
+      const fallback = CATEGORY_FALLBACK_LABELS[key] ?? { icon: null, label_th: key, sort: 1000 };
+
+      return {
+        icon: fallback.icon,
+        image_url: null,
+        key,
+        label_th: fallback.label_th,
+        product_count,
+      };
+    })
+    .sort((a, b) => {
+      const sortA = CATEGORY_FALLBACK_LABELS[a.key]?.sort ?? 1000;
+      const sortB = CATEGORY_FALLBACK_LABELS[b.key]?.sort ?? 1000;
+
+      return sortA - sortB || a.label_th.localeCompare(b.label_th, 'th');
+    });
+
+  return {
+    categories,
+    type: 'category_grid',
+  };
+}
+
+function productFromOrderJoin(order: OrderWithProductRow) {
+  if (Array.isArray(order.products)) {
+    return order.products[0] ?? null;
+  }
+
+  return order.products ?? null;
+}
+
+function toOrderStatusInfo(order: OrderWithProductRow): OrderStatusInfo {
+  const product = productFromOrderJoin(order);
+
+  return {
+    amount_baht: order.amount_baht,
+    booking_at: order.booking_at,
+    branch_name: order.preferred_branch,
+    created_at: order.created_at,
+    id: order.id,
+    product_name: product?.name ?? 'แพ็กเกจ',
+    status: order.status,
+  };
+}
+
+async function buildOrderStatusCard(tenantId: string, customerId: string): Promise<Extract<ChatCard, { type: 'order_status' }>> {
+  const rows = await selectMany<OrderWithProductRow>('orders', {
+    customer_id: `eq.${customerId}`,
+    limit: '6',
+    order: 'created_at.desc',
+    select: ORDER_PANEL_SELECT,
+    tenant_id: `eq.${tenantId}`,
+  });
+  const orders = rows
+    .filter((row) => row.status !== 'collecting_info')
+    .slice(0, 3)
+    .map(toOrderStatusInfo);
+
+  return {
+    orders,
+    type: 'order_status',
+  };
+}
+
+async function buildCardsFromMarker({
+  customerId,
+  marker,
+  productRows,
+  tenantId,
+}: {
+  customerId: string;
+  marker: ReturnType<typeof parseChatMarker>;
+  productRows: ProductSummary[];
+  tenantId: string;
+}): Promise<ChatCard[]> {
+  if (marker.type === 'products') {
+    const card = await buildProductGridCard(tenantId, productRows);
+
+    return card ? [card] : [];
+  }
+
+  if (marker.type === 'categories') {
+    return [await buildCategoryGridCard(tenantId)];
+  }
+
+  if (marker.type === 'order_status') {
+    return [await buildOrderStatusCard(tenantId, customerId)];
+  }
+
+  return [];
+}
+
+function isChatCard(value: unknown): value is ChatCard {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return false;
+  }
+
+  const type = (value as { type?: unknown }).type;
+
+  return type === 'product_grid' || type === 'category_grid' || type === 'order_status';
+}
+
+function productsFromCards(cards: ChatCard[]) {
+  return cards.find((card): card is Extract<ChatCard, { type: 'product_grid' }> => card.type === 'product_grid')?.products ?? [];
+}
+
 async function persistAssistantMessage({
   catalogKeys,
+  cards,
   responseId,
   sessionId,
   text,
 }: {
   catalogKeys: string[];
+  cards: ChatCard[];
   responseId: string | null;
   sessionId: string;
   text: string;
 }) {
   return insertRow<ChatMessageRow>('chat_messages', {
+    cards,
     content: text,
     marker_product_ids: catalogKeys,
     openai_response_id: responseId,
     role: 'assistant',
     session_id: sessionId,
   }, {
-    select: 'id,session_id,role,content,marker_product_ids,openai_response_id,client_msg_id,created_at',
+    select: CHAT_MESSAGE_SELECT,
   });
 }
 
@@ -502,7 +672,7 @@ async function persistSystemNotice(sessionId: string, text: string) {
     role: 'system_notice',
     session_id: sessionId,
   }, {
-    select: 'id,session_id,role,content,marker_product_ids,openai_response_id,client_msg_id,created_at',
+    select: CHAT_MESSAGE_SELECT,
   });
 }
 
@@ -546,9 +716,24 @@ async function completeActionResponseTurn({
 }
 
 async function buildResponseFromCachedMessage(sessionId: string, tenantId: string, message: ChatMessageRow): Promise<ChatOrchestratorResponse> {
+  const cachedCards = Array.isArray(message.cards) ? message.cards.filter(isChatCard) : [];
+
+  if (cachedCards.length > 0) {
+    return {
+      cards: cachedCards,
+      order: null,
+      products: productsFromCards(cachedCards),
+      session_id: sessionId,
+      text: message.content,
+    };
+  }
+
   const products = await lookupProductsByCatalogKeys(tenantId, message.marker_product_ids);
+  const card = await buildProductGridCard(tenantId, products);
+  const cards = card ? [card] : [];
 
   return {
+    cards,
     order: null,
     products: products.map(toChatProduct),
     session_id: sessionId,
@@ -669,11 +854,25 @@ async function completeChatTurn({
     },
     message,
   );
-  const parsed = parseProductMarker(promptResult.text);
+  const parsed = parseChatMarker(promptResult.text);
+  if (parsed.strippedExtraMarkerCount > 0) {
+    console.warn('marker_extra_stripped', {
+      count: parsed.strippedExtraMarkerCount,
+      markerType: parsed.type,
+      tenantId: tenant.id,
+    });
+  }
   const productRows = await lookupProductsByCatalogKeys(tenant.id, parsed.catalogKeys);
   const resolvedKeys = productRows.map((row) => row.catalog_key);
+  const cards = await buildCardsFromMarker({
+    customerId: customer.id,
+    marker: parsed,
+    productRows,
+    tenantId: tenant.id,
+  });
   const assistantMessage = await persistAssistantMessage({
     catalogKeys: resolvedKeys,
+    cards,
     responseId: promptResult.responseId,
     sessionId: session.id,
     text: parsed.text,
@@ -688,6 +887,7 @@ async function completeChatTurn({
   });
 
   return {
+    cards,
     order: toOrderPanel(activeOrder, tenant),
     products: productRows.map(toChatProduct),
     session_id: session.id,

@@ -3,6 +3,10 @@ import { Tabs } from 'expo-router';
 
 import { MiraDesign, shadow } from '@/constants/Design';
 
+export const unstable_settings = {
+  initialRouteName: 'chatbot',
+};
+
 export default function TabLayout() {
   return (
     <Tabs
@@ -30,29 +34,19 @@ export default function TabLayout() {
         },
       }}>
       <Tabs.Screen
-        name="home"
+        name="chatbot"
         options={{
-          title: 'Home',
+          title: 'Chatbot',
           tabBarIcon: ({ color }) => (
-            <SymbolView name={{ ios: 'house.fill', android: 'home', web: 'home' }} tintColor={color} size={27} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="packages"
-        options={{
-          title: 'Packages',
-          tabBarIcon: ({ color }) => (
-            <SymbolView name={{ ios: 'bag.fill', android: 'local_mall', web: 'local_mall' }} tintColor={color} size={27} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="agent"
-        options={{
-          title: 'AI',
-          tabBarIcon: ({ color }) => (
-            <SymbolView name={{ ios: 'sparkles', android: 'smart_toy', web: 'smart_toy' }} tintColor={color} size={27} />
+            <SymbolView
+              name={{
+                ios: 'message.and.waveform.fill',
+                android: 'chat',
+                web: 'chat',
+              }}
+              tintColor={color}
+              size={28}
+            />
           ),
         }}
       />
@@ -75,20 +69,21 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="chatbot"
+        name="home"
         options={{
-          title: 'Chatbot',
-          tabBarIcon: ({ color }) => (
-            <SymbolView
-              name={{
-                ios: 'message.and.waveform.fill',
-                android: 'chat',
-                web: 'chat',
-              }}
-              tintColor={color}
-              size={28}
-            />
-          ),
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="packages"
+        options={{
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="agent"
+        options={{
+          href: null,
         }}
       />
     </Tabs>

@@ -1,311 +1,295 @@
-import { Link, router } from 'expo-router';
-import { useState } from 'react';
-import { Image, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Link } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
+import { SymbolView } from 'expo-symbols';
+import type { ImageSourcePropType } from 'react-native';
+import { Image, ImageBackground, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { HealthFigure, StatusRing } from '@/components/HealthVisuals';
-import { ActionButton, Card, Screen } from '@/components/MiraUI';
-import { MiraDesign, softShadow } from '@/constants/Design';
-import { signInWithEmailPassword, signUpWithEmailPassword, useAuthSession, useSignOut } from '@/lib/auth/useAuthSession';
-import { supabaseConfigStatus } from '@/lib/supabase';
+import { showcaseModules, type ShowcaseModule, type ShowcaseModuleId } from '@/lib/showcase/modules';
 
-const brandLogo = require('@/assets/images/mira-care-logo.png');
+const logo = require('@/assets/images/mira-care-logo.png');
 
-type AuthMode = 'sign-in' | 'sign-up';
+const moduleImages: Record<ShowcaseModuleId, ImageSourcePropType> = {
+  admin: require('@/assets/images/product-preview-longevity.png'),
+  'ai-chat': require('@/assets/images/product-preview-heart.png'),
+  'health-dashboard': require('@/assets/images/mockup-health-check-results.png'),
+  referral: require('@/assets/images/mira-care-mark.png'),
+};
 
-export default function LoginScreen() {
-  const auth = useAuthSession();
-  const signOut = useSignOut();
-  const [authMode, setAuthMode] = useState<AuthMode>('sign-in');
-  const [displayName, setDisplayName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+const moduleIcons = {
+  admin: { android: 'admin_panel_settings', ios: 'slider.horizontal.3', web: 'admin_panel_settings' },
+  'ai-chat': { android: 'chat', ios: 'message.and.waveform.fill', web: 'chat' },
+  'health-dashboard': { android: 'monitor_heart', ios: 'heart.text.square.fill', web: 'monitor_heart' },
+  referral: { android: 'link', ios: 'link', web: 'link' },
+} as const;
 
-  async function handleAuthSubmit() {
-    const normalizedEmail = email.trim();
-
-    if (!normalizedEmail || password.length < 6) {
-      setMessage('ใส่อีเมลและรหัสผ่านอย่างน้อย 6 ตัวอักษร');
-      return;
-    }
-
-    setIsSubmitting(true);
-    setMessage(null);
-
-    try {
-      const data =
-        authMode === 'sign-in'
-          ? await signInWithEmailPassword(normalizedEmail, password)
-          : await signUpWithEmailPassword(normalizedEmail, password, displayName);
-
-      if (data.session) {
-        router.replace('/home');
-        return;
-      }
-
-      setMessage('สร้างบัญชีแล้ว กรุณายืนยันอีเมลถ้า Supabase project เปิด email confirmation อยู่');
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'เข้าสู่ระบบไม่สำเร็จ');
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
-  async function handleSignOut() {
-    setIsSubmitting(true);
-    setMessage(null);
-
-    try {
-      await signOut();
-      setMessage('ออกจากระบบแล้ว');
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'ออกจากระบบไม่สำเร็จ');
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
+export default function ProductOverviewScreen() {
+  const { width } = useWindowDimensions();
+  const useTwoColumns = width >= 760;
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.keyboard}>
-      <Screen>
-        <View style={styles.heroCard}>
-          <View style={styles.brandRow}>
-            <Image source={brandLogo} resizeMode="contain" style={styles.brandLogo} />
-          </View>
-          <View style={styles.visualRow}>
-            <View style={styles.figureWrap}>
-              <HealthFigure />
-            </View>
-            <StatusRing value={82} label="Match" size={112} />
-          </View>
-          <Text style={styles.title}>ตรวจสุขภาพที่ใช่ พร้อม AI ช่วยจำบริบทสุขภาพของคุณ</Text>
-          <Text style={styles.subtitle}>เข้าสู่ระบบก่อนใช้ OpenAI chatbot และบันทึก Health Profile จากแชทอย่างปลอดภัย</Text>
-        </View>
-
-        <Card style={styles.loginCard}>
-          <View style={styles.cardTop}>
-            <View>
-              <Text style={styles.cardTitle}>{authMode === 'sign-in' ? 'เข้าสู่ระบบ' : 'สร้างบัญชี'}</Text>
-              <Text style={styles.cardSubtitle}>ใช้ Supabase Auth เพื่อออก JWT ให้ Edge Function และ RLS</Text>
-            </View>
-            {auth.user ? <Text style={styles.sessionBadge}>Signed in</Text> : null}
-          </View>
-
-          {!supabaseConfigStatus.isConfigured ? (
-            <Text style={styles.warningText}>ยังไม่ได้ตั้งค่า Supabase public env จึงเข้าสู่ระบบไม่ได้</Text>
-          ) : null}
-
-          {auth.user ? (
-            <>
-              <Text style={styles.signedInText}>{auth.user.email}</Text>
-              <Link href="/home" asChild>
-                <ActionButton label="เข้าแอป" />
-              </Link>
-              <ActionButton disabled={isSubmitting} label="ออกจากระบบ" onPress={handleSignOut} variant="secondary" />
-            </>
-          ) : (
-            <>
-              {authMode === 'sign-up' ? (
-                <TextInput
-                  autoCapitalize="words"
-                  onChangeText={setDisplayName}
-                  placeholder="ชื่อที่จะแสดง"
-                  placeholderTextColor={MiraDesign.color.muted}
-                  style={styles.input}
-                  value={displayName}
-                />
-              ) : null}
-              <TextInput
-                autoCapitalize="none"
-                keyboardType="email-address"
-                onChangeText={setEmail}
-                placeholder="อีเมล"
-                placeholderTextColor={MiraDesign.color.muted}
-                style={styles.input}
-                value={email}
-              />
-              <TextInput
-                autoCapitalize="none"
-                onChangeText={setPassword}
-                placeholder="รหัสผ่าน"
-                placeholderTextColor={MiraDesign.color.muted}
-                secureTextEntry
-                style={styles.input}
-                value={password}
-              />
-              <ActionButton
-                disabled={isSubmitting || !supabaseConfigStatus.isConfigured}
-                label={isSubmitting ? 'กำลังดำเนินการ' : authMode === 'sign-in' ? 'เข้าสู่ระบบ' : 'สร้างบัญชี'}
-                onPress={handleAuthSubmit}
-              />
-              <Pressable
-                onPress={() => {
-                  setAuthMode(authMode === 'sign-in' ? 'sign-up' : 'sign-in');
-                  setMessage(null);
-                }}
-                style={styles.modeSwitch}
-              >
-                <Text style={styles.modeSwitchText}>{authMode === 'sign-in' ? 'ยังไม่มีบัญชี? สร้างบัญชี' : 'มีบัญชีแล้ว? เข้าสู่ระบบ'}</Text>
-              </Pressable>
-            </>
-          )}
-
-          {message ? <Text style={styles.messageText}>{message}</Text> : null}
-        </Card>
-
-        <View style={styles.marketStrip}>
-          <View style={styles.marketItem}>
-            <Text style={styles.marketValue}>JWT</Text>
-            <Text style={styles.marketLabel}>AI proxy</Text>
-          </View>
-          <View style={styles.marketItem}>
-            <Text style={styles.marketValue}>RLS</Text>
-            <Text style={styles.marketLabel}>Health data</Text>
-          </View>
-          <View style={styles.marketItem}>
-            <Text style={styles.marketValue}>Consent</Text>
-            <Text style={styles.marketLabel}>Memory</Text>
+    <SafeAreaView style={styles.safeArea}>
+      <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+        <View style={styles.topBar}>
+          <Image resizeMode="contain" source={logo} style={styles.logo} />
+          <View style={styles.topBadge}>
+            <Text style={styles.topBadgeText}>Client demo tour</Text>
           </View>
         </View>
-      </Screen>
-    </KeyboardAvoidingView>
+
+        <View style={styles.titleBlock}>
+          <Text style={styles.kicker}>MiraCare product showcase</Text>
+          <Text style={[styles.title, !useTwoColumns ? styles.titleCompact : null]}>Choose a system category.</Text>
+          <Text style={styles.subtitle}>Each category opens a curated list of the real URL pages available in this build.</Text>
+        </View>
+
+        <View style={styles.moduleGrid}>
+          {showcaseModules.map((module, index) => (
+            <ModuleTile key={module.id} index={index} module={module} useTwoColumns={useTwoColumns} />
+          ))}
+        </View>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+function ModuleTile({ index, module, useTwoColumns }: { index: number; module: ShowcaseModule; useTwoColumns: boolean }) {
+  const previewPages = module.pages.slice(0, 3);
+
+  return (
+    <Link href={{ pathname: '/showcase/[module]', params: { module: module.id } }} asChild>
+      <Pressable
+        style={StyleSheet.flatten([
+          styles.moduleTile,
+          useTwoColumns ? styles.moduleTileTwoColumn : styles.moduleTileSingleColumn,
+          { borderColor: module.accent },
+        ])}>
+        <ImageBackground imageStyle={styles.tileImage} resizeMode="cover" source={moduleImages[module.id]} style={styles.tileImageWrap}>
+          <LinearGradient colors={['rgba(9, 16, 16, 0.10)', 'rgba(9, 16, 16, 0.82)']} style={styles.tileImageOverlay}>
+            <View style={[styles.moduleIcon, { backgroundColor: module.accent }]}>
+              <SymbolView name={moduleIcons[module.id]} size={23} tintColor="#07110F" />
+            </View>
+            <Text style={styles.moduleNumber}>{String(index + 1).padStart(2, '0')}</Text>
+          </LinearGradient>
+        </ImageBackground>
+
+        <View style={styles.tileBody}>
+          <View style={styles.tileHeader}>
+            <View style={styles.tileCopy}>
+              <Text style={styles.moduleEyebrow}>{module.eyebrow}</Text>
+              <Text style={styles.moduleTitle}>{module.title}</Text>
+            </View>
+            <View style={[styles.countBadge, { backgroundColor: module.accent }]}>
+              <Text style={styles.countBadgeText}>{module.pages.length}</Text>
+            </View>
+          </View>
+
+          <Text style={styles.moduleBody}>{module.body}</Text>
+
+          <View style={styles.pathList}>
+            {previewPages.map((page) => (
+              <View key={page.path} style={styles.pathPreviewRow}>
+                <View style={[styles.pathDot, { backgroundColor: module.accent }]} />
+                <Text numberOfLines={1} style={styles.pathPreviewText}>
+                  {page.path}
+                </Text>
+              </View>
+            ))}
+          </View>
+
+          <View style={styles.tileFooter}>
+            <Text style={[styles.openText, { color: module.accent }]}>View URLs</Text>
+            <SymbolView name={{ ios: 'chevron.right', android: 'arrow_forward', web: 'arrow_forward' }} size={18} tintColor={module.accent} />
+          </View>
+        </View>
+      </Pressable>
+    </Link>
   );
 }
 
 const styles = StyleSheet.create({
-  keyboard: {
+  safeArea: {
+    backgroundColor: '#F5F8F7',
     flex: 1,
   },
-  heroCard: {
-    backgroundColor: MiraDesign.color.surface,
-    borderColor: MiraDesign.color.line,
-    borderRadius: MiraDesign.radius.lg,
-    borderWidth: 1,
-    gap: MiraDesign.space.lg,
-    overflow: 'hidden',
-    padding: MiraDesign.space.xl,
-    ...softShadow,
+  container: {
+    gap: 22,
+    padding: 20,
+    paddingBottom: 42,
   },
-  brandRow: {
+  topBar: {
     alignItems: 'center',
     flexDirection: 'row',
-    gap: MiraDesign.space.sm,
-  },
-  brandLogo: {
-    height: 54,
-    width: 196,
-  },
-  visualRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: MiraDesign.space.md,
-  },
-  figureWrap: {
-    backgroundColor: MiraDesign.color.surfaceSoft,
-    borderRadius: MiraDesign.radius.lg,
-    flex: 1,
-    minHeight: 180,
-    paddingTop: MiraDesign.space.sm,
-  },
-  title: {
-    color: MiraDesign.color.ink,
-    fontSize: 29,
-    fontWeight: '900',
-    lineHeight: 36,
-  },
-  subtitle: {
-    color: MiraDesign.color.inkSoft,
-    fontSize: 15,
-    lineHeight: 23,
-  },
-  loginCard: {
-    gap: MiraDesign.space.md,
-  },
-  cardTop: {
-    alignItems: 'flex-start',
-    flexDirection: 'row',
-    gap: MiraDesign.space.md,
+    gap: 14,
     justifyContent: 'space-between',
   },
-  cardTitle: {
-    color: MiraDesign.color.ink,
-    fontSize: 20,
-    fontWeight: '900',
+  logo: {
+    height: 44,
+    width: 170,
   },
-  cardSubtitle: {
-    color: MiraDesign.color.inkSoft,
+  topBadge: {
+    backgroundColor: '#0D2A2E',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  topBadgeText: {
+    color: '#FFFFFF',
     fontSize: 12,
-    fontWeight: '800',
-    lineHeight: 18,
-    marginTop: MiraDesign.space.xs,
-  },
-  sessionBadge: {
-    backgroundColor: MiraDesign.color.primarySoft,
-    borderRadius: MiraDesign.radius.pill,
-    color: MiraDesign.color.primaryDeep,
-    fontSize: 11,
     fontWeight: '900',
-    overflow: 'hidden',
-    paddingHorizontal: MiraDesign.space.md,
-    paddingVertical: MiraDesign.space.xs,
+    textTransform: 'uppercase',
   },
-  input: {
-    backgroundColor: MiraDesign.color.surfaceSoft,
-    borderColor: MiraDesign.color.line,
-    borderRadius: MiraDesign.radius.md,
-    borderWidth: 1,
-    color: MiraDesign.color.ink,
-    fontSize: 16,
-    minHeight: 56,
-    paddingHorizontal: MiraDesign.space.lg,
+  titleBlock: {
+    gap: 8,
+    maxWidth: 760,
+    paddingBottom: 2,
   },
-  warningText: {
-    color: MiraDesign.color.danger,
-    fontSize: 13,
+  kicker: {
+    color: '#087B7A',
+    fontSize: 12,
     fontWeight: '900',
-    lineHeight: 19,
+    textTransform: 'uppercase',
   },
-  signedInText: {
-    color: MiraDesign.color.ink,
+  title: {
+    color: '#12343B',
+    fontSize: 42,
+    fontWeight: '900',
+    lineHeight: 48,
+  },
+  titleCompact: {
+    fontSize: 34,
+    lineHeight: 40,
+  },
+  subtitle: {
+    color: '#587177',
     fontSize: 15,
-    fontWeight: '900',
+    lineHeight: 22,
   },
-  modeSwitch: {
-    alignSelf: 'flex-start',
-    minHeight: 38,
+  moduleGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 16,
+  },
+  moduleTile: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    borderWidth: 1,
+    minHeight: 360,
+    overflow: 'hidden',
+  },
+  moduleTileTwoColumn: {
+    width: '48.8%',
+  },
+  moduleTileSingleColumn: {
+    width: '100%',
+  },
+  tileImageWrap: {
+    height: 138,
+  },
+  tileImage: {
+    borderTopLeftRadius: 8,
+    borderTopRightRadius: 8,
+  },
+  tileImageOverlay: {
+    alignItems: 'flex-end',
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    padding: 14,
+  },
+  moduleIcon: {
+    alignItems: 'center',
+    borderRadius: 8,
+    height: 44,
     justifyContent: 'center',
+    width: 44,
   },
-  modeSwitchText: {
-    color: MiraDesign.color.primaryDeep,
+  moduleNumber: {
+    color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '900',
   },
-  messageText: {
-    color: MiraDesign.color.primaryDeep,
-    fontSize: 13,
-    fontWeight: '900',
-    lineHeight: 19,
-  },
-  marketStrip: {
-    flexDirection: 'row',
-    gap: MiraDesign.space.md,
-  },
-  marketItem: {
-    backgroundColor: MiraDesign.color.surface,
-    borderRadius: MiraDesign.radius.md,
+  tileBody: {
     flex: 1,
-    gap: MiraDesign.space.xs,
-    padding: MiraDesign.space.md,
+    gap: 13,
+    padding: 16,
   },
-  marketValue: {
-    color: MiraDesign.color.primary,
-    fontSize: 21,
-    fontWeight: '900',
+  tileHeader: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: 12,
+    justifyContent: 'space-between',
   },
-  marketLabel: {
-    color: MiraDesign.color.inkSoft,
+  tileCopy: {
+    flex: 1,
+    gap: 4,
+    minWidth: 0,
+  },
+  moduleEyebrow: {
+    color: '#587177',
     fontSize: 11,
     fontWeight: '900',
+    textTransform: 'uppercase',
+  },
+  moduleTitle: {
+    color: '#12343B',
+    fontSize: 25,
+    fontWeight: '900',
+    lineHeight: 30,
+  },
+  countBadge: {
+    alignItems: 'center',
+    borderRadius: 8,
+    height: 36,
+    justifyContent: 'center',
+    width: 36,
+  },
+  countBadgeText: {
+    color: '#07110F',
+    fontSize: 14,
+    fontWeight: '900',
+  },
+  moduleBody: {
+    color: '#587177',
+    fontSize: 14,
+    lineHeight: 21,
+  },
+  pathList: {
+    gap: 8,
+  },
+  pathPreviewRow: {
+    alignItems: 'center',
+    backgroundColor: '#F1F6F6',
+    borderRadius: 8,
+    flexDirection: 'row',
+    gap: 8,
+    minHeight: 34,
+    paddingHorizontal: 10,
+  },
+  pathDot: {
+    borderRadius: 4,
+    height: 8,
+    width: 8,
+  },
+  pathPreviewText: {
+    color: '#12343B',
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  tileFooter: {
+    alignItems: 'center',
+    borderTopColor: '#D8E8EA',
+    borderTopWidth: 1,
+    flexDirection: 'row',
+    gap: 6,
+    justifyContent: 'flex-end',
+    marginTop: 'auto',
+    paddingTop: 12,
+  },
+  openText: {
+    fontSize: 13,
+    fontWeight: '900',
+    textTransform: 'uppercase',
   },
 });
