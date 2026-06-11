@@ -65,8 +65,8 @@ export default function CheckoutScreen() {
         <Card>
           <Text style={styles.cardTitle}>No active products</Text>
           <Text style={styles.body}>Publish a tenant product before starting checkout.</Text>
-          <Link href="/packages" asChild>
-            <ActionButton label="Back to marketplace" variant="secondary" />
+          <Link href="/chatbot" asChild>
+            <ActionButton label="Back to chat" variant="secondary" />
           </Link>
         </Card>
       ) : null}

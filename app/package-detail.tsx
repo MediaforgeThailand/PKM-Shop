@@ -62,8 +62,8 @@ export default function PackageDetailScreen() {
     return (
       <Screen>
         <BrandHeader eyebrow="Package detail" title="Product unavailable" subtitle="The product is not active in the tenant catalog." compact />
-        <Link href="/packages" asChild>
-          <ActionButton label="Back to marketplace" variant="secondary" />
+        <Link href="/chatbot" asChild>
+          <ActionButton label="Back to chat" variant="secondary" />
         </Link>
       </Screen>
     );
@@ -110,8 +110,8 @@ export default function PackageDetailScreen() {
       <Link href="/chatbot" asChild>
         <ActionButton label="Start booking in chat" />
       </Link>
-      <Link href="/packages" asChild>
-        <ActionButton label="Back to marketplace" variant="secondary" />
+      <Link href="/chatbot" asChild>
+        <ActionButton label="Back to chat" variant="secondary" />
       </Link>
     </Screen>
   );
