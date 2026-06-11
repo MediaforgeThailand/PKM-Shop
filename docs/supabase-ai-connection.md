@@ -7,7 +7,7 @@ This document is for AI agents and developers working on Mira Health. It explain
 ```text
 Expo mobile app
 -> Supabase client
--> Supabase Edge Function: mira-chat
+-> Supabase Edge Function: chat-orchestrator
 -> MiraCare OpenAI Platform prompt variables + persistent logs
 -> OpenAI Responses API
 ```
@@ -30,7 +30,7 @@ The mobile app does not call OpenAI directly and no longer sends client-built RA
   - `supabase/migrations/20260605011000_hospital_product_location_fields.sql`
   - `supabase/migrations/20260605012000_hospital_product_management_policies.sql`
 - RAG vector embedding migration: `supabase/migrations/20260605013000_rag_vector_embeddings.sql`
-- Edge Function: `supabase/functions/mira-chat/index.ts`
+- Edge Function: `supabase/functions/chat-orchestrator/index.ts`
 - RAG embedding Edge Function: `supabase/functions/rag-embed/index.ts`
 - Deploy helper: `scripts/deploy-mira-chat.ps1`
 
@@ -56,27 +56,27 @@ Notes:
 
 ## Supabase Secrets
 
-Set OpenAI secrets in Supabase, not in the mobile app:
+Set OpenAI and MiraCare v2 secrets in Supabase, not in the mobile app:
 
 ```bash
 npx supabase secrets set OPENAI_API_KEY=your_openai_api_key_here --project-ref your-project-ref
-npx supabase secrets set OPENAI_CHAT_PROMPT_ID=pmpt_6a29c7e353b88196a6e648b24c54849e0f6204e24d65c021 --project-ref your-project-ref
-npx supabase secrets set OPENAI_CHAT_PROMPT_VERSION=2 --project-ref your-project-ref
-npx supabase secrets set MIRACARE_BRAND_NAME=MiraCare --project-ref your-project-ref
-npx supabase secrets set OPENAI_RATE_LIMIT_PER_MINUTE=30 --project-ref your-project-ref
-npx supabase secrets set DEFAULT_USER_NICKNAME=ลูกค้า --project-ref your-project-ref
+npx supabase secrets set MIRACARE_PROMPT_ID=pmpt_6a29c7e353b88196a6e648b24c54849e0f6204e24d65c021 --project-ref your-project-ref
+npx supabase secrets set FACT_MODEL=gpt-5.5-mini --project-ref your-project-ref
+npx supabase secrets set APP_BASE_URL=https://your-app.example --project-ref your-project-ref
 ```
 
 Optional:
 
 ```bash
 npx supabase secrets set OPENAI_API_BASE_URL=https://api.openai.com/v1 --project-ref your-project-ref
-npx supabase secrets set OPENAI_CHAT_MODEL=gpt-5.5 --project-ref your-project-ref
+npx supabase secrets set MIRA_DEFAULT_TENANT_SLUG=demo-hospital --project-ref your-project-ref
+npx supabase secrets set LINE_CHANNEL_SECRET__demo-hospital=your_line_secret --project-ref your-project-ref
+npx supabase secrets set LINE_CHANNEL_TOKEN__demo-hospital=your_line_channel_token --project-ref your-project-ref
 ```
 
 ## Deploy Edge Function
 
-The helper script reads `SUPABASE_ACCESS_TOKEN` and `EXPO_PUBLIC_SUPABASE_URL` from `.env.local`, derives the project ref, and deploys `mira-chat`.
+The helper script reads `SUPABASE_ACCESS_TOKEN` and `EXPO_PUBLIC_SUPABASE_URL` from `.env.local`, derives the project ref, and deploys the v2 Edge Functions.
 
 ```powershell
 cd D:\Work\mira-health-app
@@ -85,8 +85,8 @@ cd D:\Work\mira-health-app
 
 Current behavior:
 
-- The function is deployed with JWT verification enabled.
-- The app must have a Supabase Auth session before calling `mira-chat`.
+- Customer-facing functions are deployed with JWT verification enabled.
+- The app must have a Supabase Auth session before calling `chat-orchestrator`.
 - The published MiraCare prompt in OpenAI Platform is the source of truth.
 - The Edge Function supplies `brand_name`, `user_nickname`, `personal_context`, `recent_chat`, and `product_catalog` on every OpenAI request.
 - Product cards are rendered by stripping the final `[[products: ...]]` marker and resolving IDs against active hospital products.
@@ -126,11 +126,11 @@ The production hardening migration creates `app_user_roles`, `prompt_versions`, 
 
 The user nickname prompt migration archives older active chatbot prompts and activates `mira-health-chatbot-v5-user-nickname`, which addresses the default user as `คุณบอส` and avoids self-references like AI, chatbot, Mira, or doctor in normal answers.
 
-The hospital product portal migrations create `hospital_products`, add hospital address/map fields, allow `marketplace.product` RAG chunks, and add prototype RLS policies for authenticated staff to add products, auto-publish product RAG, and read their managed archived products from `/hospital-products`.
+The MiraCare v2 catalog migration consolidates legacy hospital product data into the canonical `products` table. Tenant admins manage products from `/admin/catalog`, product images are stored in `product-images`, and active products feed chat, marketplace, and referrer flows directly.
 
 The vector embedding migration enables `pgvector`, adds `rag_chunks.embedding`, and creates:
 
-- `match_rag_chunks`: vector search RPC used by `mira-chat`.
+- `match_rag_chunks`: legacy vector search RPC retained for older RAG utilities, not the v2 customer reply path.
 - `update_rag_chunk_embedding`: authenticated RPC used by `rag-embed` after product RAG publish.
 
 `rag-embed` and vector retrieval use the Supabase Edge Function secret `GEMINI_API_KEY` plus optional `GEMINI_EMBEDDING_MODEL` defaulting to `gemini-embedding-001`. Chat answers still use OpenAI Responses API. Embeddings store 768-dimension vectors, so any model/dimension change requires a coordinated DB migration and re-embedding.
@@ -147,14 +147,17 @@ Get-Content .env.local | ForEach-Object {
   }
 }
 
-$uri = $vars['EXPO_PUBLIC_SUPABASE_URL'].TrimEnd('/') + '/functions/v1/mira-chat'
+$uri = $vars['EXPO_PUBLIC_SUPABASE_URL'].TrimEnd('/') + '/functions/v1/chat-orchestrator'
 $anon = $vars['EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY']
 $userJwt = 'paste_authenticated_user_access_token_here'
 $body = @{
-  model = $vars['EXPO_PUBLIC_OPENAI_MODEL']
-  userNickname = $vars['EXPO_PUBLIC_USER_NICKNAME']
+  action = $null
+  channel = 'pwa'
+  client_msg_id = [guid]::NewGuid().ToString()
+  message = 'hello'
+  session_id = $null
   question = 'จ่ายเงินค่าตรวจสุขภาพแล้วต้องทำยังไงต่อ'
-  messages = @()
+  tenant_slug = 'demo-hospital'
 } | ConvertTo-Json -Depth 5
 
 $res = Invoke-WebRequest `
@@ -185,7 +188,7 @@ Common errors:
 `lib/ai/miraChat.ts` follows this order:
 
 1. If `EXPO_PUBLIC_AI_PROXY_URL` is set, call that external proxy.
-2. Otherwise, if Supabase public config exists, call `supabase.functions.invoke('mira-chat')`.
+2. Otherwise, if Supabase public config exists, call `supabase.functions.invoke('chat-orchestrator')`.
 3. If neither exists, show local RAG preview only.
 
 For the Supabase path, the mobile app sends the authenticated question and short chat history only. The Edge Function prepares MiraCare prompt variables, calls the published OpenAI Platform prompt with `store: false`, strips product markers, and returns text plus UI cards.
@@ -196,13 +199,13 @@ For the Supabase path, the mobile app sends the authenticated question and short
 - Never add `EXPO_PUBLIC_OPENAI_API_KEY`.
 - Never place `OPENAI_API_KEY`, Supabase service-role key, or `SUPABASE_ACCESS_TOKEN` in committed files.
 - Do not use service-role keys in Expo or React Native code.
-- Keep Supabase Auth JWT required on `mira-chat`.
+- Keep Supabase Auth JWT required on `chat-orchestrator`.
 - Keep rate limiting enabled before public launch.
 - Log which RAG chunks were used, but do not log full personal health data.
 
 ## RAG Notes
 
-The app still keeps local fallback RAG chunks for offline preview. In normal Supabase mode, product knowledge comes from active `hospital_products` serialized into the `product_catalog` prompt variable.
+The app still keeps local fallback RAG chunks for offline preview. In normal Supabase mode, product knowledge comes from active tenant `products` serialized into the `product_catalog` prompt variable.
 
 Before using real medical content:
 
@@ -212,8 +215,8 @@ Before using real medical content:
 - Use the dotted taxonomy in `docs/rag-source-plan.md` so unrelated chunks are not sent to the model.
 - Keep `summary` short and set `token_budget` per chunk.
 - Keep emergency escalation rules in system policy, not only in RAG content.
-- Product RAG from `/hospital-portal` is for marketplace/package awareness. Before production, add a review queue before approving medical preparation notes.
+- Product catalog data from `/admin/catalog` is operational product/price/booking data. Medical preparation notes should be reviewed before publication if they are added to product descriptions.
 
 See `docs/rag-source-plan.md` for recommended source strategy.
 See `docs/patient-health-data-vault.md` for user-specific health memory, consent, and audit rules.
-See `docs/hospital-product-portal.md` for the portal product-to-RAG prototype flow.
+See `docs/hospital-product-portal.md` for the v2 catalog admin flow.

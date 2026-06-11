@@ -138,10 +138,9 @@ Run these in order. The expected behavior matters more than exact wording.
 
 Do not use this workflow for the production MiraCare prompt path. Prompt changes must be made as a new OpenAI Platform prompt version and then regression-tested.
 
-For old local-prompt experiments only:
+For old local-prompt experiments only, keep the experiment out of the production customer path. The v2 production path is `chat-orchestrator` with the published OpenAI Platform prompt, not the deleted legacy `mira-chat` function.
 
-1. Copy the final Developer message into a new Supabase prompt migration.
+1. Copy the final Developer message into an experimental Supabase prompt migration.
 2. Apply it to `public.prompt_versions`.
-3. Deploy `supabase/functions/mira-chat`.
-4. Run `npm run chat:quality` and `npm run typecheck`.
-5. Smoke test `/prototype`.
+3. Run `npm run chat:quality` and `npm run typecheck`.
+4. Smoke test `/prototype`.
