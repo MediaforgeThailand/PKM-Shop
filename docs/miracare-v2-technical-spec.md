@@ -393,7 +393,7 @@ return envelope
 - `select_product` action (user tapped a card CTA): create order `collecting_info` (amount = price×qty, channel from request), attach to session. Compute `missing_fields` = required minus known (`buyer_name` ← fact `nickname`? NO — full name must be explicit; `buyer_phone` ← customers.phone if present).
 - While an order is `collecting_info`, the orchestrator after EVERY model reply runs `extractOrderFields(userMessage)` — a small structured-output extraction (same call as fact extractor, separate schema: `{buyer_name?, buyer_phone?, preferred_date?}`) — and writes found fields to the order. When complete → `transition(awaiting_payment, actor:'ai')` → response includes `order.qr_payload` (client renders QR + "จ่ายแล้ว" button + slip upload).
 - The MODEL is informed of order state ONLY via the `personal_context` order line (§2.2 #3). It will ask for missing info naturally per its prompt. Backend never injects scripted questions. Fallback: if after 2 model turns a required field is still missing, response sets `order.show_form = true` → client renders the form card (`order_form_submit` action fills the rest).
-- `payment_done` / slip upload → `transition(submitted)`; respond with templated `system_notice` message (Thai, from `lib/templates.ts`) — not a model call.
+- `payment_done` / slip upload → `transition(submitted)`; respond with templated `system_notice` message (Thai, from `supabase/functions/_shared/templates.ts`) — not a model call.
 
 ---
 
@@ -446,7 +446,7 @@ insert commission_entries (unique order_id → idempotent)
 ## 7. Health dashboard (Phase 5)
 
 ### 7.1 `lab-ingest` function
-`POST {storage_path, customer_id}` → insert `lab_reports(processing)` → vision call (OpenAI, image input, structured output array of `{test_name_raw, mapped_code|null, value, unit, ref_low, ref_high, confidence}` with the normalization table for the 15 supported `test_code`s embedded in the system text) → insert `lab_results` → report status: any field confidence <0.8 → `needs_confirmation` else `ready` → generate `ai_summary_th` ONCE (plain-Thai, 3-5 sentences, fixed disclaimer appended from `lib/templates.ts`, never the word "วินิจฉัย") → for `ready` rows with code in {FBS, HBA1C, CHOL, weight-related}: insert `user_facts(source:'lab_import', source_ref: report_id)`.
+`POST {storage_path, customer_id}` → insert `lab_reports(processing)` → vision call (OpenAI, image input, structured output array of `{test_name_raw, mapped_code|null, value, unit, ref_low, ref_high, confidence}` with the normalization table for the 15 supported `test_code`s embedded in the system text) → insert `lab_results` → report status: any field confidence <0.8 → `needs_confirmation` else `ready` → generate `ai_summary_th` ONCE (plain-Thai, 3-5 sentences, fixed disclaimer appended from `supabase/functions/_shared/templates.ts`, never the word "วินิจฉัย") → for `ready` rows with code in {FBS, HBA1C, CHOL, weight-related}: insert `user_facts(source:'lab_import', source_ref: report_id)`.
 Client confirmation UI: list low-confidence fields → user edits/confirms → `confirmed=true` → status `ready` → facts inserted then.
 
 ### 7.2 `wearable-ingest` function

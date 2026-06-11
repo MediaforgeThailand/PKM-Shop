@@ -1,3 +1,6 @@
+// Mirror of supabase/functions/_shared/templates.ts.
+// The edge shared file is canonical; run npm run templates:mirror-audit after changing constants.
+
 export const LAB_SUMMARY_DISCLAIMER_TH =
   'ข้อมูลนี้เป็นข้อมูลประกอบการดูแลสุขภาพ ควรปรึกษาบุคลากรทางการแพทย์หากมีอาการหรือผลผิดปกติ';
 

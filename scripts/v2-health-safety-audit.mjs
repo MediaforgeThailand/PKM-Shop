@@ -13,7 +13,7 @@ const files = {
   overviewRoute: 'app/body-overview.tsx',
   wearableRoute: 'app/wearable-health.tsx',
   openai: 'supabase/functions/_shared/openai.ts',
-  templates: 'lib/templates.ts',
+  templates: 'supabase/functions/_shared/templates.ts',
   wearable: 'supabase/functions/_shared/wearable.ts',
   wearableFixture: 'supabase/functions/_shared/__tests__/fixtures/apple_health_export.ts',
   wearableIngest: 'supabase/functions/wearable-ingest/index.ts',
@@ -41,12 +41,12 @@ expect(
   'lab disclaimer template',
   sources.templates.includes('LAB_SUMMARY_DISCLAIMER_TH') &&
     sources.templates.includes('ข้อมูลนี้เป็นข้อมูลประกอบการดูแลสุขภาพ'),
-  'fixed lab disclaimer must live in lib/templates.ts',
+  'fixed lab disclaimer must live in supabase/functions/_shared/templates.ts',
 );
 
 expect(
   'lab summary uses shared template',
-  sources.lab.includes("from '../../../lib/templates.ts'") &&
+  sources.lab.includes("from './templates.ts'") &&
     sources.lab.includes('sanitizeLabSummary') &&
     sources.openai.includes('sanitizeLabSummary(extractText(payload))'),
   'lab summary must sanitize model output and append the fixed template before storage',

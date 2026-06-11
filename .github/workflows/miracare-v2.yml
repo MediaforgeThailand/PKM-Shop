@@ -76,6 +76,9 @@ jobs:
       - name: Type mirror audit
         run: npm run types:mirror-audit
 
+      - name: Template mirror audit
+        run: npm run templates:mirror-audit
+
       - name: Deno edge entrypoint check
         run: npm run v2:deno-check
 

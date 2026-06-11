@@ -1,7 +1,7 @@
 import type { LabVisionResult } from './openai.ts';
 
-export { LAB_SUMMARY_DISCLAIMER_TH } from '../../../lib/templates.ts';
-import { LAB_SUMMARY_DISCLAIMER_TH } from '../../../lib/templates.ts';
+export { LAB_SUMMARY_DISCLAIMER_TH } from './templates.ts';
+import { LAB_SUMMARY_DISCLAIMER_TH } from './templates.ts';
 
 export const LAB_CODE_NORMALIZATION_TABLE = [
   { test_code: 'FBS' },

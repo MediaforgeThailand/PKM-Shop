@@ -40,9 +40,53 @@ const sourceEntries = await Promise.all(
 const sources = Object.fromEntries(sourceEntries);
 const violations = [];
 
+async function listTsFiles(directory) {
+  const entries = await fs.readdir(directory, { withFileTypes: true });
+  const nested = await Promise.all(entries.map(async (entry) => {
+    const fullPath = path.join(directory, entry.name);
+
+    if (entry.isDirectory()) {
+      return listTsFiles(fullPath);
+    }
+
+    return entry.isFile() && entry.name.endsWith('.ts') ? [fullPath] : [];
+  }));
+
+  return nested.flat();
+}
+
 function expect(name, condition, detail) {
   if (!condition) {
     violations.push(`${name}: ${detail}`);
+  }
+}
+
+const functionsRoot = path.join(repoRoot, 'supabase/functions');
+const importSpecifiers = [
+  /(?:import|export)\s+(?:type\s+)?(?:[^'"]*?\s+from\s+)?['"]([^'"]+)['"]/g,
+  /import\(\s*['"]([^'"]+)['"]\s*\)/g,
+];
+const edgeFiles = await listTsFiles(functionsRoot);
+
+for (const filePath of edgeFiles) {
+  const source = await fs.readFile(filePath, 'utf8');
+  const relativeFile = path.relative(repoRoot, filePath).replace(/\\/g, '/');
+
+  for (const pattern of importSpecifiers) {
+    for (const match of source.matchAll(pattern)) {
+      const specifier = match[1];
+
+      if (!specifier.startsWith('.')) {
+        continue;
+      }
+
+      const resolved = path.resolve(path.dirname(filePath), specifier);
+      const relativeTarget = path.relative(functionsRoot, resolved);
+
+      if (relativeTarget.startsWith('..') || path.isAbsolute(relativeTarget)) {
+        violations.push(`${relativeFile}: edge import escapes supabase/functions (${specifier})`);
+      }
+    }
   }
 }
 

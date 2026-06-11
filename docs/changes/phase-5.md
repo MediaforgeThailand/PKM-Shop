@@ -10,7 +10,7 @@
 - Added a read-only `Needs Confirmation` panel that lists low-confidence or unconfirmed lab rows from `lab_results` while the trusted confirmation write contract remains open.
 - Added `lib/health/v2HealthDashboard.ts` as the typed client loader for the health dashboard routes.
 - Added sample fixture files for lab vision extraction and Apple Health XML parsing under `supabase/functions/_shared/__tests__/fixtures/`.
-- Added `lib/templates.ts` plus deterministic lab-summary sanitization so ready lab summaries always append the fixed disclaimer and remove diagnosis wording before storage.
+- Added deterministic lab-summary sanitization so ready lab summaries always append the fixed disclaimer from `supabase/functions/_shared/templates.ts` and remove diagnosis wording before storage.
 - Added a shared 15-code lab normalization table from the spec and embedded it in the OpenAI vision system text; unsupported mapped codes now normalize to `UNMAPPED_*` instead of being trusted.
 - Hardened lab and wearable follow-up writes with tenant filters where tenant context is available.
 - Replaced the main `/(tabs)/health` screen with the same live `HealthInsightScreen` overview used by the Phase 5 routes.
