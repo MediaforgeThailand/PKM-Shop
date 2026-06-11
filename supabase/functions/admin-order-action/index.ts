@@ -161,7 +161,7 @@ Deno.serve(async (req) => {
     const order = await selectOne<OrderRow>('orders', {
       id: `eq.${body.order_id}`,
       select:
-        'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,channel,referrer_id,status,slip_url,booking_at,admin_note,created_at,updated_at',
+        'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,channel,referrer_id,commission_scheme_snapshot,status,slip_url,booking_at,admin_note,created_at,updated_at',
       tenant_id: `in.(${tenantFilter})`,
     });
 
@@ -190,7 +190,7 @@ Deno.serve(async (req) => {
         {
           id: `eq.${order.id}`,
           select:
-            'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,channel,referrer_id,status,slip_url,booking_at,admin_note,created_at,updated_at',
+            'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,channel,referrer_id,commission_scheme_snapshot,status,slip_url,booking_at,admin_note,created_at,updated_at',
           tenant_id: `eq.${order.tenant_id}`,
         },
       );

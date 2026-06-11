@@ -111,7 +111,7 @@ async function loadOrderForPanel(orderId: string, tenantId: string) {
   return selectOne<OrderWithProductRow>('orders', {
     id: `eq.${orderId}`,
     select:
-      'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,channel,referrer_id,status,slip_url,booking_at,admin_note,created_at,updated_at,products(name,catalog_key,category,price_baht)',
+      'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,channel,referrer_id,commission_scheme_snapshot,status,slip_url,booking_at,admin_note,created_at,updated_at,products(name,catalog_key,category,price_baht)',
     tenant_id: `eq.${tenantId}`,
   });
 }
@@ -170,19 +170,28 @@ async function createOrderFromProduct({
   sessionId: string;
   tenant: TenantRow;
 }) {
+  const referrerId = resolveAttributedReferrerId(customer, tenant);
+  const referrer = referrerId
+    ? await selectOne<Pick<ReferrerRow, 'commission_scheme'>>('referrers', {
+      id: `eq.${referrerId}`,
+      select: 'commission_scheme',
+      tenant_id: `eq.${tenant.id}`,
+    })
+    : null;
   const order = await insertRow<OrderRow>('orders', {
     amount_baht: product.price_baht,
     buyer_phone: customer.phone,
     channel: channel === 'app' ? 'chat_app' : channel === 'line' ? 'chat_line' : 'chat_pwa',
+    commission_scheme_snapshot: referrer?.commission_scheme ?? null,
     customer_id: customer.id,
     product_id: product.id,
     qty: 1,
-    referrer_id: resolveAttributedReferrerId(customer, tenant),
+    referrer_id: referrerId,
     session_id: sessionId,
     tenant_id: tenant.id,
   }, {
     select:
-      'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,channel,referrer_id,status,slip_url,booking_at,admin_note,created_at,updated_at',
+      'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,channel,referrer_id,commission_scheme_snapshot,status,slip_url,booking_at,admin_note,created_at,updated_at',
   });
 
   return loadOrderForPanel(order.id, tenant.id);

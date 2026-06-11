@@ -1,7 +1,7 @@
 import { rpc, selectOne, updateRows } from './db.ts';
 import { HttpError } from './http.ts';
 import { buildPromptPayPayload } from './promptpay.ts';
-import type { OrderPanelState, OrderRow, OrderStatus, OrderWithProductRow, TenantRow } from './types.ts';
+import type { OrderPanelState, OrderRow, OrderStatus, OrderWithProductRow, ReferrerRow, TenantRow } from './types.ts';
 
 export type Actor = 'ai' | 'customer' | `admin:${string}` | `referrer:${string}` | 'system';
 
@@ -51,6 +51,13 @@ export function canTransition(order: Pick<OrderRow, 'booking_at' | 'buyer_name' 
   }
 
   return false;
+}
+
+export function commissionSchemeForConfirmedOrder(
+  order: Pick<OrderRow, 'commission_scheme_snapshot'>,
+  referrer: Pick<ReferrerRow, 'commission_scheme'> | null,
+) {
+  return order.commission_scheme_snapshot ?? referrer?.commission_scheme ?? null;
 }
 
 export class IllegalTransition extends Error {
@@ -137,7 +144,7 @@ export async function loadActiveOrder(sessionId: string, tenantId: string) {
   return selectOne<OrderWithProductRow>('orders', {
     order: 'created_at.desc',
     select:
-      'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,channel,referrer_id,status,slip_url,booking_at,admin_note,created_at,updated_at,products(name,catalog_key,category,price_baht)',
+      'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,channel,referrer_id,commission_scheme_snapshot,status,slip_url,booking_at,admin_note,created_at,updated_at,products(name,catalog_key,category,price_baht)',
     session_id: `eq.${sessionId}`,
     status: 'in.(collecting_info,awaiting_payment,submitted,confirmed,booked)',
     tenant_id: `eq.${tenantId}`,
@@ -148,7 +155,7 @@ export async function loadOrderForPanel(orderId: string, tenantId: string) {
   return selectOne<OrderWithProductRow>('orders', {
     id: `eq.${orderId}`,
     select:
-      'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,channel,referrer_id,status,slip_url,booking_at,admin_note,created_at,updated_at,products(name,catalog_key,category,price_baht)',
+      'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,channel,referrer_id,commission_scheme_snapshot,status,slip_url,booking_at,admin_note,created_at,updated_at,products(name,catalog_key,category,price_baht)',
     tenant_id: `eq.${tenantId}`,
   });
 }
@@ -182,7 +189,7 @@ export async function updateOrderFields(
     ...(scope.customerId ? { customer_id: `eq.${scope.customerId}` } : {}),
     id: `eq.${orderId}`,
     select:
-      'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,channel,referrer_id,status,slip_url,booking_at,admin_note,created_at,updated_at',
+      'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,channel,referrer_id,commission_scheme_snapshot,status,slip_url,booking_at,admin_note,created_at,updated_at',
     ...(scope.sessionId ? { session_id: `eq.${scope.sessionId}` } : {}),
     tenant_id: `eq.${scope.tenantId}`,
   });

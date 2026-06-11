@@ -103,6 +103,7 @@ async function createReferrerOrder(body: Extract<ReferrerOrderRequest, { action:
     buyer_name: body.buyer_name,
     buyer_phone: body.buyer_phone,
     channel: 'referrer',
+    commission_scheme_snapshot: referrer.commission_scheme,
     customer_id: customer.id,
     preferred_date: body.preferred_date ?? null,
     product_id: product.id,
@@ -111,7 +112,7 @@ async function createReferrerOrder(body: Extract<ReferrerOrderRequest, { action:
     tenant_id: referrer.tenant_id,
   }, {
     select:
-      'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,channel,referrer_id,status,slip_url,booking_at,admin_note,created_at,updated_at',
+      'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,channel,referrer_id,commission_scheme_snapshot,status,slip_url,booking_at,admin_note,created_at,updated_at',
   });
 
   await transition(order.id, 'awaiting_payment', `referrer:${referrer.id}`, { channel: 'referrer' });
@@ -153,7 +154,7 @@ Deno.serve(async (req) => {
       id: `eq.${body.order_id}`,
       referrer_id: `eq.${referrer.id}`,
       select:
-        'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,channel,referrer_id,status,slip_url,booking_at,admin_note,created_at,updated_at',
+        'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,channel,referrer_id,commission_scheme_snapshot,status,slip_url,booking_at,admin_note,created_at,updated_at',
       tenant_id: `eq.${tenant.id}`,
     });
 

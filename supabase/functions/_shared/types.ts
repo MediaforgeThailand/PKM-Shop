@@ -217,6 +217,7 @@ export type OrderRow = {
   buyer_name: string | null;
   buyer_phone: string | null;
   channel: 'chat_app' | 'chat_line' | 'chat_pwa' | 'referrer';
+  commission_scheme_snapshot: ReferrerRow['commission_scheme'] | null;
   created_at: string;
   customer_id: string | null;
   id: string;

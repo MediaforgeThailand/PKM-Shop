@@ -216,6 +216,7 @@ export function OrdersQueue({ title = 'Orders Queue' }: { title?: string }) {
             'preferred_date',
             'channel',
             'referrer_id',
+            'commission_scheme_snapshot',
             'status',
             'slip_url',
             'booking_at',

@@ -1,4 +1,4 @@
-import { canTransition } from '../orders.ts';
+import { canTransition, commissionSchemeForConfirmedOrder } from '../orders.ts';
 import type { OrderRow, OrderStatus } from '../types.ts';
 
 declare const Deno: {
@@ -7,6 +7,12 @@ declare const Deno: {
 
 function assert(condition: boolean, message: string) {
   if (!condition) {
+    throw new Error(message);
+  }
+}
+
+function assertSame<T>(actual: T, expected: T, message: string) {
+  if (actual !== expected) {
     throw new Error(message);
   }
 }
@@ -102,4 +108,37 @@ Deno.test('canTransition blocks representative illegal transitions', () => {
       `expected ${testCase.from} -> ${testCase.to} to be illegal`,
     );
   }
+});
+
+Deno.test('commissionSchemeForConfirmedOrder prefers the order snapshot over the current referrer scheme', () => {
+  const snapshot = {
+    by_category: { checkup: 12 },
+    default: 10,
+    mode: 'percent' as const,
+  };
+  const current = {
+    by_category: { checkup: 5 },
+    default: 5,
+    mode: 'percent' as const,
+  };
+
+  assertSame(
+    commissionSchemeForConfirmedOrder({ commission_scheme_snapshot: snapshot }, { commission_scheme: current }),
+    snapshot,
+    'expected order-time snapshot to win',
+  );
+});
+
+Deno.test('commissionSchemeForConfirmedOrder falls back to current referrer scheme for legacy orders', () => {
+  const current = {
+    by_category: {},
+    default: 100,
+    mode: 'flat_baht' as const,
+  };
+
+  assertSame(
+    commissionSchemeForConfirmedOrder({ commission_scheme_snapshot: null }, { commission_scheme: current }),
+    current,
+    'expected legacy order to use current referrer scheme',
+  );
 });

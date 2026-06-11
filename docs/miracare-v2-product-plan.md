@@ -220,7 +220,7 @@ Verify the draft implements THIS plan — catching silent scope drift, contract 
 
 **D. Commerce correctness (P1)**
 - [✅ 2026-06-11] Order state transitions only via defined machine; illegal transitions rejected. Evidence: `transition_order`, `_shared/orders.ts`, `_shared/__tests__/orders_test.ts`, `npm run orders:status-audit`.
-- [✅ 2026-06-11] QR amount/PromptPay id correct per tenant; commission computed from scheme snapshot at order time (not current scheme). Evidence: `_shared/promptpay.ts`, `_shared/__tests__/promptpay_test.ts`, `_shared/commissions.ts`, `_shared/__tests__/commissions_test.ts`, Phase 4 `transition_order` commission insert.
+- [✅ 2026-06-11] QR amount/PromptPay id correct per tenant; commission computed from `orders.commission_scheme_snapshot` captured at order time, with current referrer scheme used only for legacy rows where the snapshot is null. Evidence: `_shared/promptpay.ts`, `_shared/__tests__/promptpay_test.ts`, `_shared/commissions.ts`, `_shared/__tests__/commissions_test.ts`, `_shared/__tests__/orders_test.ts`, A1 `transition_order` migration.
 - [❌ 2026-06-11] Attribution window honored; assisted orders bypass attribution correctly (direct referrer credit). Deterministic attribution-window units and assisted-order static audit exist, but live attributed/assisted E2E proof is still pending.
 
 **E. Conversation quality (P1)**
