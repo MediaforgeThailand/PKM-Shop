@@ -130,6 +130,7 @@ export async function callMiraPrompt(
   input: string,
 ) {
   const promptId = envOrDefault('MIRACARE_PROMPT_ID', 'pmpt_6a29c7e353b88196a6e648b24c54849e0f6204e24d65c021');
+  const promptVersion = readEnv('MIRA_PROMPT_VERSION')?.trim();
   const timeoutMs = Number(envOrDefault('OPENAI_REQUEST_TIMEOUT_MS', '30000'));
   let lastError: unknown = null;
 
@@ -140,6 +141,7 @@ export async function callMiraPrompt(
           input,
           prompt: {
             id: promptId,
+            ...(promptVersion ? { version: promptVersion } : {}),
             variables: vars,
           },
           store: false,

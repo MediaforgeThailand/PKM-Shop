@@ -3,6 +3,7 @@ import { invokeFunction } from '@/lib/api/client';
 import { supabase, supabaseConfigStatus } from '@/lib/supabase';
 import type {
   ChatAction,
+  ChatCard,
   ChatMessageRow,
   ChatOrchestratorRequest,
   ChatOrchestratorResponse,
@@ -98,7 +99,7 @@ export const aiChatConfigStatus = {
   mode: hasSupabaseProxy ? 'supabase-edge-function' : hasExternalProxy ? 'external-proxy' : 'offline',
 };
 
-const chatMessageSelect = 'id,session_id,role,content,marker_product_ids,openai_response_id,client_msg_id,created_at';
+const chatMessageSelect = 'id,session_id,role,content,marker_product_ids,cards,openai_response_id,client_msg_id,created_at';
 const chatHistoryPageSize = 40;
 
 type LatestChatSessionRow = {
@@ -290,6 +291,8 @@ async function callSupabaseOrchestrator({
   });
   orchestratorSessionId = result.session_id;
   const text = result.text.trim();
+  const legacyUiCards = productsToUiCards(result.products);
+  const uiCards = apiCardsToUiCards(result.cards, legacyUiCards);
 
   if (!text) {
     throw new Error('AI proxy returned an empty response.');
@@ -298,7 +301,7 @@ async function callSupabaseOrchestrator({
   return {
     contextAssessment: undefined,
     finishReason: undefined,
-    intent: result.products.length ? 'product_recommendation' : result.order ? 'checkout' : undefined,
+    intent: uiCards.some((card) => card.type === 'product_grid') ? 'product_recommendation' : result.order ? 'checkout' : undefined,
     latencyMs: Date.now() - startedAt,
     memoryWrites: [],
     mode: 'supabase-edge-function',
@@ -316,7 +319,7 @@ async function callSupabaseOrchestrator({
     sessionId: result.session_id,
     responseRole: action?.type === 'order_form_submit' || action?.type === 'payment_done' ? 'system_notice' : 'assistant',
     text,
-    uiCards: productsToUiCards(result.products),
+    uiCards,
   };
 }
 
@@ -447,13 +450,14 @@ async function rowsToChatMessages(rows: ChatMessageRow[]): Promise<ChatMessage[]
       .map((key) => productByKey.get(key))
       .filter((product): product is ProductSummary => Boolean(product))
       .map(productSummaryToChatProduct);
+    const legacyUiCards = productsToUiCards(rowProducts);
 
     return {
       content: row.content,
       createdAt: row.created_at,
       id: row.id,
       role: row.role,
-      uiCards: row.role === 'assistant' ? productsToUiCards(rowProducts) : [],
+      uiCards: row.role === 'assistant' ? apiCardsToUiCards(row.cards, legacyUiCards) : [],
     };
   });
 }
@@ -478,11 +482,48 @@ async function loadProductsByCatalogKeys(catalogKeys: string[]) {
 function productSummaryToChatProduct(row: ProductSummary): ChatProduct {
   return {
     catalog_key: row.catalog_key,
+    category: row.category,
     description: row.description,
     image_url: row.image_url,
     name: row.name,
     price_baht: row.price_baht,
   };
+}
+
+function apiProductGridToUiCard(card: Extract<ChatCard, { type: 'product_grid' }>): ChatUiCard | null {
+  if (card.products.length === 0) {
+    return null;
+  }
+
+  return {
+    id: `products-${card.products.map((product) => product.catalog_key).join('-')}`,
+    products: card.products.map((product) => ({
+      category: product.category ?? card.category ?? 'catalog',
+      description: product.description,
+      hospitalName: defaultTenantSlug,
+      id: product.catalog_key,
+      includes: [],
+      priceAmount: product.price_baht,
+      productImagePreviewUri: product.image_url,
+      ragChunkId: null,
+      tags: [card.source === 'recommendation' ? 'Recommended' : 'Catalog'],
+      title: product.name,
+    })),
+    title: card.source === 'recommendation' ? 'Recommended products' : 'Products',
+    type: 'product_grid',
+  };
+}
+
+function apiCardsToUiCards(cards: ChatCard[] | null | undefined, fallback: ChatUiCard[] = []): ChatUiCard[] {
+  if (!Array.isArray(cards) || cards.length === 0) {
+    return fallback;
+  }
+
+  const uiCards = cards
+    .map((card): ChatUiCard | null => (card.type === 'product_grid' ? apiProductGridToUiCard(card) : null))
+    .filter((card): card is ChatUiCard => Boolean(card));
+
+  return uiCards.length > 0 ? uiCards : fallback;
 }
 
 function productsToUiCards(products: ChatProduct[]): ChatUiCard[] {
@@ -494,7 +535,7 @@ function productsToUiCards(products: ChatProduct[]): ChatUiCard[] {
     {
       id: `products-${products.map((product) => product.catalog_key).join('-')}`,
       products: products.map((product) => ({
-        category: 'catalog',
+        category: product.category ?? 'catalog',
         description: product.description,
         hospitalName: defaultTenantSlug,
         id: product.catalog_key,

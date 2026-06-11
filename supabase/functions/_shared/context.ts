@@ -124,6 +124,7 @@ export function inferIntentCategory(message: string): 'checkup' | 'vaccine' | nu
 export async function buildCatalogJson(tenantId: string, intentCategory?: 'checkup' | 'vaccine' | null) {
   const rows = await selectMany<{
     catalog_key: string;
+    category: string;
     description: string;
     image_url: string | null;
     name: string;
@@ -141,6 +142,7 @@ export async function buildCatalogJson(tenantId: string, intentCategory?: 'check
 
   return JSON.stringify(
     filtered.map((row) => ({
+      category: row.category,
       description: row.description,
       id: row.catalog_key,
       image: row.image_url,

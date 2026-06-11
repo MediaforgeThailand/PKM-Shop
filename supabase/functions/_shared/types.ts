@@ -35,11 +35,47 @@ export type ProductSummary = {
 
 export type ChatProduct = {
   catalog_key: string;
+  category?: string | null;
   description: string;
   image_url: string | null;
   name: string;
   price_baht: number;
 };
+
+export type ChatCategory = {
+  icon: string | null;
+  image_url: string | null;
+  key: string;
+  label_th: string;
+  product_count: number;
+};
+
+export type OrderStatusInfo = {
+  amount_baht: number;
+  booking_at: string | null;
+  branch_name: string | null;
+  created_at: string;
+  id: string;
+  product_name: string;
+  status: OrderStatus;
+};
+
+export type ChatCard =
+  | {
+      category: string | null;
+      products: ChatProduct[];
+      source: 'category_browse' | 'recommendation';
+      total_available: number;
+      type: 'product_grid';
+    }
+  | {
+      categories: ChatCategory[];
+      type: 'category_grid';
+    }
+  | {
+      orders: OrderStatusInfo[];
+      type: 'order_status';
+    };
 
 export type OrderPanelState = {
   amount_baht: number;
@@ -93,6 +129,7 @@ export type ChatOrchestratorRequest = {
 };
 
 export type ChatOrchestratorResponse = {
+  cards: ChatCard[];
   order: OrderPanelState;
   products: ChatProduct[];
   session_id: string;
@@ -229,6 +266,7 @@ export type ChatSessionRow = {
 };
 
 export type ChatMessageRow = {
+  cards?: ChatCard[] | null;
   client_msg_id: string | null;
   content: string;
   created_at: string;

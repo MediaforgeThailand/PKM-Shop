@@ -124,6 +124,7 @@ function MemorySavedCard({ card }: { card: Extract<ChatUiCard, { type: 'memory_s
 function productGridToChatProducts(card: Extract<ChatUiCard, { type: 'product_grid' }>): ChatProduct[] {
   return card.products.map((product) => ({
     catalog_key: product.id,
+    category: product.category,
     description: product.description,
     image_url: product.productImagePreviewUri ?? null,
     name: product.title,

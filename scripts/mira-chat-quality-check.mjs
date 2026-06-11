@@ -119,11 +119,22 @@ assert('backend has chat orchestrator', edgeFunctionSource.includes('orchestrate
 assert('edge function references published MiraCare prompt', edgeFunctionSource.includes('pmpt_6a29c7e353b88196a6e648b24c54849e0f6204e24d65c021'));
 assert('edge function sends OpenAI prompt variables', ['brand_name', 'user_nickname', 'personal_context', 'recent_chat', 'product_catalog'].every((key) => edgeFunctionSource.includes(key)));
 assert('edge function disables OpenAI response storage', edgeFunctionSource.includes('store: false'));
-assert('edge function parses product marker into product cards', edgeFunctionSource.includes('parseProductMarker') && edgeFunctionSource.includes('lookupProductsByCatalogKeys'));
+assert(
+  'edge function parses v3 markers into cards with legacy product fallback',
+  edgeFunctionSource.includes('parseChatMarker') &&
+    edgeFunctionSource.includes('buildCardsFromMarker') &&
+    edgeFunctionSource.includes('lookupProductsByCatalogKeys') &&
+    edgeFunctionSource.includes('products: productRows.map(toChatProduct)'),
+);
 assert('fact extractor is service-role internal only', factExtractorSource.includes('assertInternalServiceRoleAuthorization') && factExtractorSource.includes("req.headers.get('authorization')"));
 assert('prototype fallback has no canned numbered compactTips', !prototypePanelSource.includes('compactTips'));
 assert('prototype fallback uses shared natural helper', prototypePanelSource.includes('createNaturalHealthFallbackAnswer') && !prototypePanelSource.includes('function createNaturalDemoText'));
-assert('chatbot renders backend UI cards', miraChatSource.includes('productsToUiCards(result.products)') && chatbotScreenSource.includes('ChatUiCardRenderer'));
+assert(
+  'chatbot renders backend UI cards',
+  miraChatSource.includes('apiCardsToUiCards(result.cards') &&
+    miraChatSource.includes('productsToUiCards(result.products)') &&
+    chatbotScreenSource.includes('ChatUiCardRenderer'),
+);
 assert('chatbot small-talk shortcut is offline only', chatbotScreenSource.includes('smallTalkAnswer && !canUseAi'));
 assert('offline fallback has no numbered RAG list template', !miraChatSource.includes('ragMatches.slice(0, 2).map'));
 assert('offline fallback avoids repeated latest-checkup prompt', !miraChatSource.includes('ตรวจล่าสุดเมื่อไหร่คะ ถ้าจำไม่ได้ตอบคร่าวๆ ได้เลย'));
