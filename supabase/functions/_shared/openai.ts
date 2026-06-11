@@ -175,7 +175,7 @@ export async function callMiraPrompt(
 }
 
 export async function callFactExtractor(message: string, registry: FactKeyRow[]) {
-  const model = envOrDefault('FACT_MODEL', 'gpt-5.5-mini');
+  const model = envOrDefault('FACT_MODEL', 'gpt-5-mini');
   const schema = {
     additionalProperties: false,
     properties: {
@@ -241,7 +241,7 @@ export async function callFactExtractor(message: string, registry: FactKeyRow[])
 }
 
 export async function callOrderFieldExtractor(message: string) {
-  const model = envOrDefault('FACT_MODEL', 'gpt-5.5-mini');
+  const model = envOrDefault('FACT_MODEL', 'gpt-5-mini');
   const schema = {
     additionalProperties: false,
     properties: {
@@ -303,7 +303,7 @@ export async function callOrderFieldExtractor(message: string) {
 }
 
 export async function callLabVisionExtractor(bytes: Uint8Array, contentType: string) {
-  const model = envOrDefault('VISION_MODEL', envOrDefault('FACT_MODEL', 'gpt-5.5-mini'));
+  const model = envOrDefault('VISION_MODEL', envOrDefault('FACT_MODEL', 'gpt-5-mini'));
   const normalizationTable = formatLabCodeNormalizationTable();
   const schema = {
     additionalProperties: false,
@@ -405,7 +405,7 @@ export async function callLabVisionExtractor(bytes: Uint8Array, contentType: str
 }
 
 export async function callLabSummary(results: LabVisionResult[]) {
-  const model = envOrDefault('FACT_MODEL', 'gpt-5.5-mini');
+  const model = envOrDefault('FACT_MODEL', 'gpt-5-mini');
   const payload = await postResponses(
     {
       input: [

@@ -175,11 +175,11 @@ Status 2026-06-11: migrations, admin catalog CRUD, seed script, and live RLS scr
 
 **Phase 2 — Chat migration (highest value).** Orchestrator on OpenAI prompt per §4.2; marker parsing + product cards in app/PWA; silent profile pipeline §7.2; regression suite automated (`scripts/` runner hitting the orchestrator with the 7-case suite from the handoff doc). DoD: suite 100%; repeat user not re-asked known facts; no Gemini call in customer reply path.
 
-Status 2026-06-11: the production chat screen now uses React Query, hydrates the latest persisted `chat_messages` page, can load older pages, passes the active `chat_sessions.id` to `chat-orchestrator`, and sends consent through the explicit `consent_granted` action. Seeded regression evidence is still pending.
+Status 2026-06-11: the production chat screen now uses React Query, hydrates the latest persisted `chat_messages` page, can load older pages, passes the active `chat_sessions.id` to `chat-orchestrator`, and sends consent through the explicit `consent_granted` action. The credentialed live 7-case regression passed after final redeploy.
 
 **Phase 3 — Commerce.** Order state machine, conversational buyer-info collection, PromptPay QR, slip upload; Admin orders queue + booking statuses + customer notifications. DoD: end-to-end test purchase from chat reaches admin queue and books.
 
-Status 2026-06-11: order tables, `transition_order`, PromptPay helpers, chat order panel, persisted order-panel refresh, slip upload, action-response `system_notice` persistence/rendering, admin order queue, and `scripts/e2e-commerce.mjs` exist; Deno state-machine/PromptPay/slip-path tests and `orders:status-audit` pass. The live commerce runner still needs the external Supabase/PromptPay gate to execute.
+Status 2026-06-11: order tables, `transition_order`, PromptPay helpers, chat order panel, persisted order-panel refresh, slip upload, action-response `system_notice` persistence/rendering, admin order queue, and `scripts/e2e-commerce.mjs` exist; Deno state-machine/PromptPay/slip-path tests and `orders:status-audit` pass. The credentialed live commerce runner passed against the linked project.
 
 **Phase 4 — Refer Program.** Referrer entity + attribution links, assisted purchase + QR, commission ledger, referrer view, admin commission screens. DoD: attributed order pays commission entry correctly; assisted purchase end-to-end.
 
@@ -224,7 +224,7 @@ Verify the draft implements THIS plan — catching silent scope drift, contract 
 - [✅ 2026-06-11] Attribution window honored; assisted orders bypass attribution correctly (direct referrer credit). Deterministic attribution-window units, assisted-order static audit, and the credentialed attributed-purchase commission runner exist.
 
 **E. Conversation quality (P1)**
-- [❌ 2026-06-11] 7-case regression suite green on app/PWA (and LINE when built), automated in `scripts/`. Runner and programmatic test identity bootstrap exist, but live Supabase execution and LINE sandbox credentials remain pending.
+- [✅ 2026-06-11] 7-case regression suite green on app/PWA, automated in `scripts/`. The credentialed live run passed all 7 handoff cases after the final v2 function redeploy; LINE sandbox credentials remain pending separately.
 - [✅ 2026-06-11] Order-info collection feels conversational (no hardcoded scripted sequences in backend code — grep for canned Thai reply strings outside templates). Evidence: active order context + order field extractor; payment/admin notices are templated system notices.
 - [❌ 2026-06-11] Known-user test: facts from a previous session used, not re-asked. Context builder tests exist, but seeded end-to-end known-user proof is pending.
 

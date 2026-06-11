@@ -61,7 +61,7 @@ Set OpenAI and MiraCare v2 secrets in Supabase, not in the mobile app:
 ```bash
 npx supabase secrets set OPENAI_API_KEY=your_openai_api_key_here --project-ref your-project-ref
 npx supabase secrets set MIRACARE_PROMPT_ID=pmpt_6a29c7e353b88196a6e648b24c54849e0f6204e24d65c021 --project-ref your-project-ref
-npx supabase secrets set FACT_MODEL=gpt-5.5-mini --project-ref your-project-ref
+npx supabase secrets set FACT_MODEL=gpt-5-mini --project-ref your-project-ref
 npx supabase secrets set APP_BASE_URL=https://your-app.example --project-ref your-project-ref
 ```
 
