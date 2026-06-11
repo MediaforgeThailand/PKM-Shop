@@ -1,16 +1,17 @@
 import { insertRow, resolveAuthUserId, selectMany, selectOne, updateRows } from '../_shared/db.ts';
 import { HttpError, handleOptions, json, toErrorResponse, validateJson, z } from '../_shared/http.ts';
 import { pushLineMessages, textLineMessage } from '../_shared/line.ts';
-import { transition } from '../_shared/orders.ts';
+import { normalizePaymentSlipPath, transition } from '../_shared/orders.ts';
+import { createSignedReadUrl } from '../_shared/storage.ts';
 import { orderSystemNoticeForStatus } from '../_shared/templates.ts';
-import type { AdminOrderActionRequest, ChatMessageRow, OrderRow, OrderStatus } from '../_shared/types.ts';
+import type { AdminOrderActionRequest, AdminSlipUrlResponse, ChatMessageRow, OrderRow, OrderStatus } from '../_shared/types.ts';
 
 declare const Deno: {
   serve: (handler: (req: Request) => Response | Promise<Response>) => void;
 };
 
 const requestSchema = z.object({
-  action: z.enum(['confirm', 'book', 'done', 'cancel']),
+  action: z.enum(['confirm', 'book', 'done', 'cancel', 'slip_url']),
   booking_at: z.string().optional(),
   note: z.string().optional(),
   order_id: z.string().uuid(),
@@ -49,7 +50,9 @@ function embeddedOne<T>(value: Embedded<T>) {
   return value;
 }
 
-function actionToStatus(action: AdminOrderActionRequest['action']): OrderStatus {
+type StatusAction = Extract<AdminOrderActionRequest, { action: 'book' | 'cancel' | 'confirm' | 'done' }>['action'];
+
+function actionToStatus(action: StatusAction): OrderStatus {
   if (action === 'confirm') {
     return 'confirmed';
   }
@@ -63,6 +66,32 @@ function actionToStatus(action: AdminOrderActionRequest['action']): OrderStatus 
   }
 
   return 'cancelled';
+}
+
+async function signedSlipUrl(order: Pick<OrderRow, 'slip_url'>): Promise<AdminSlipUrlResponse> {
+  if (!order.slip_url) {
+    return {
+      expires_in: 60 * 60,
+      signed_url: null,
+      storage_path: null,
+    };
+  }
+
+  if (order.slip_url.startsWith('http')) {
+    return {
+      expires_in: 60 * 60,
+      signed_url: order.slip_url,
+      storage_path: null,
+    };
+  }
+
+  const storagePath = normalizePaymentSlipPath(order.slip_url);
+
+  return {
+    expires_in: 60 * 60,
+    signed_url: await createSignedReadUrl('payment-slips', storagePath, 60 * 60),
+    storage_path: storagePath,
+  };
 }
 
 async function loadOrderNotification(orderId: string, tenantId: string) {
@@ -178,6 +207,10 @@ Deno.serve(async (req) => {
 
     if (role !== 'superadmin' && role !== 'tenant_admin' && role !== 'tenant_staff') {
       throw new HttpError('VALIDATION', 'Not allowed for this tenant.', 403);
+    }
+
+    if (body.action === 'slip_url') {
+      return json(await signedSlipUrl(order));
     }
 
     if (body.action === 'book' && !body.booking_at) {

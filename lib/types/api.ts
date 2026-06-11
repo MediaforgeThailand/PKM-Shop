@@ -70,7 +70,13 @@ export type ChatAction =
     }
   | {
       order_id: string;
+      slip_path?: string;
       type: 'payment_done';
+    }
+  | {
+      content_type: 'image/jpeg' | 'image/png';
+      order_id: string;
+      type: 'request_slip_upload';
     };
 
 export type ChatOrchestratorRequest = {
@@ -90,15 +96,31 @@ export type ChatOrchestratorResponse = {
   text: string;
 };
 
+export type ChatSlipUploadResponse = {
+  storage_path: string;
+  upload_url: string;
+};
+
 export type FactExtractorRequest = {
   message_id: string;
 };
 
-export type AdminOrderActionRequest = {
-  action: 'book' | 'cancel' | 'confirm' | 'done';
-  booking_at?: string;
-  note?: string;
-  order_id: string;
+export type AdminOrderActionRequest =
+  | {
+      action: 'book' | 'cancel' | 'confirm' | 'done';
+      booking_at?: string;
+      note?: string;
+      order_id: string;
+    }
+  | {
+      action: 'slip_url';
+      order_id: string;
+    };
+
+export type AdminSlipUrlResponse = {
+  expires_in: number;
+  signed_url: string | null;
+  storage_path: string | null;
 };
 
 export type ReferrerOrderRequest =

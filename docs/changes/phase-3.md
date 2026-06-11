@@ -12,6 +12,7 @@
 - The chat action-response path now persists the user action message and exactly one templated `system_notice` before returning without a model call.
 - The order form-complete and payment-submitted action responses now both come from `supabase/functions/_shared/templates.ts` so non-model system notices stay centralized inside the edge boundary.
 - The typed chat client now marks `order_form_submit` and `payment_done` responses as `system_notice`, so the live chat append and persisted reload render those action notices consistently.
+- Added the B4 payment-slip upload flow: `request_slip_upload` signs an order-scoped `payment-slips` upload URL through the edge service role, the client uploads the selected JPG/PNG directly, `payment_done` validates/stores `slip_path`, and admin thumbnails use `admin-order-action` to mint 60-minute signed read URLs.
 - Added Deno unit tests for PromptPay fixtures and the order state machine, including every legal transition plus representative illegal transitions.
 - Hardened order writes so chat order-form/payment actions validate the current tenant, session, and customer before writing, and admin actions load orders through the authenticated staff member's tenant allow-list.
 
@@ -24,10 +25,9 @@
 - `npm run v2:edge-security-audit` passed and now covers chat/admin order tenant-scope invariants plus action-response persistence and template guards.
 - `git diff --check` passed.
 - Direct status-write audit allows status writes only inside `public.transition_order(...)`; app/admin direct reads do not update status.
-- `npx.cmd -y deno@2.8.2 test --allow-env --allow-net --import-map=supabase/functions/import_map.json supabase/functions/_shared/__tests__` passed with the Phase 3 order and PromptPay tests included.
+- `npx.cmd -y deno@2.8.2 test --allow-env --allow-net --import-map=supabase/functions/import_map.json supabase/functions/_shared/__tests__` passed with 79 shared tests, including the Phase 3 order, PromptPay, and B4 slip-path guard tests.
 
 ## Boundaries
 
 - Referrer display and commission side effects are implemented in Phase 4.
-- Slip upload is not implemented yet because the spec does not define how the app attaches `slip_url` or how customers write to the private `payment-slips` bucket; this is logged in `docs/v2-open-questions.md`. The admin queue can display signed thumbnails for existing `payment-slips` storage paths or direct HTTP URLs.
 - Persisted chat reload reconstructs text, system notices, and product cards, but persisted order-panel reload is intentionally not guessed because `chat_messages` has no order reference/payload and `qr_payload` is not persisted on `orders`; this contract question is logged in `docs/v2-open-questions.md`.

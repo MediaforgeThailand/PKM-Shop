@@ -179,7 +179,7 @@ Status 2026-06-11: the production chat screen now uses React Query, hydrates the
 
 **Phase 3 — Commerce.** Order state machine, conversational buyer-info collection, PromptPay QR, slip upload; Admin orders queue + booking statuses + customer notifications. DoD: end-to-end test purchase from chat reaches admin queue and books.
 
-Status 2026-06-11: order tables, `transition_order`, PromptPay helpers, chat order panel, action-response `system_notice` persistence/rendering, and admin order queue exist; Deno state-machine/PromptPay tests and `orders:status-audit` pass. Slip upload and seeded purchase E2E are still unresolved.
+Status 2026-06-11: order tables, `transition_order`, PromptPay helpers, chat order panel, slip upload, action-response `system_notice` persistence/rendering, and admin order queue exist; Deno state-machine/PromptPay/slip-path tests and `orders:status-audit` pass. Seeded purchase E2E is still unresolved.
 
 **Phase 4 — Refer Program.** Referrer entity + attribution links, assisted purchase + QR, commission ledger, referrer view, admin commission screens. DoD: attributed order pays commission entry correctly; assisted purchase end-to-end.
 
@@ -210,7 +210,7 @@ Verify the draft implements THIS plan — catching silent scope drift, contract 
 
 **B. Multi-tenancy & security (P0)**
 - [✅ 2026-06-11] Every business table: tenant_id + RLS; cross-tenant read/write attempts fail in tests. Schema/RLS exists and `scripts/rls-check.mjs` verifies linked-project customer isolation and cross-tenant product write denial through PostgREST when Supabase secrets are present.
-- [❌ 2026-06-11] Storage buckets private; slips/labs via signed URLs; service-role keys only in edge functions. Labs/slips are private and admin signed-read paths exist; slip upload contract and LINE QR bucket policy remain open.
+- [✅ 2026-06-11] Storage buckets private; slips/labs via signed URLs; service-role keys only in edge functions. Labs/slips are private, payment-slip upload/read signing runs through edge functions, and LINE QR bucket policy remains tracked separately.
 - [✅ 2026-06-11] Roles enforced (staff can't edit catalog/commissions). Evidence: `tenant_members` RLS helpers, admin client guards, referrer/commission admin policies.
 
 **C. Data/profile integrity (P1)**

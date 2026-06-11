@@ -25,8 +25,11 @@ import {
   loadChatHistoryPage,
   loadHealthDataConsent,
   loadLatestChatHistoryPage,
+  requestPaymentSlipUpload,
   setCurrentChatSessionId,
+  uploadPaymentSlipFile,
   type ChatMessage,
+  type SlipUploadFile,
 } from '@/lib/ai/miraChat';
 import {
   resolveAppRole,
@@ -125,6 +128,24 @@ function productGridToChatProducts(card: Extract<ChatUiCard, { type: 'product_gr
   }));
 }
 
+function slipContentType(file: SlipUploadFile): 'image/jpeg' | 'image/png' | null {
+  if (file.type === 'image/jpeg' || file.type === 'image/png') {
+    return file.type;
+  }
+
+  const name = file.name?.toLowerCase() ?? '';
+
+  if (name.endsWith('.jpg') || name.endsWith('.jpeg')) {
+    return 'image/jpeg';
+  }
+
+  if (name.endsWith('.png')) {
+    return 'image/png';
+  }
+
+  return null;
+}
+
 function ChatUiCardRenderer({
   card,
   disabled,
@@ -203,6 +224,7 @@ export default function ChatbotScreen() {
   const [isLoadingKnowledge, setIsLoadingKnowledge] = useState(true);
   const [isLoadingMoreHistory, setIsLoadingMoreHistory] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [isUploadingSlip, setIsUploadingSlip] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const isWideLayout = width >= 1100;
@@ -653,6 +675,58 @@ export default function ChatbotScreen() {
     });
   }
 
+  async function handleSlipSelected({ file, order_id }: { file: SlipUploadFile; order_id: string }) {
+    if (isSending || isUploadingSlip || !canUseOrderActions) {
+      return;
+    }
+
+    const contentType = slipContentType(file);
+
+    if (!contentType) {
+      setError('Payment slip must be a JPEG or PNG image.');
+      return;
+    }
+
+    try {
+      setError(null);
+      setIsUploadingSlip(true);
+      appendLog({
+        category: 'api',
+        detail: 'Requesting a signed payment slip upload URL from the chat backend.',
+        status: 'info',
+        title: 'Slip upload started',
+      });
+      const upload = await requestPaymentSlipUpload({
+        contentType,
+        orderId: order_id,
+        sessionId: activeSessionId,
+      });
+      await uploadPaymentSlipFile(upload.upload_url, file);
+      appendLog({
+        category: 'api',
+        detail: 'Slip image uploaded to private storage; confirming payment with the storage path.',
+        status: 'success',
+        title: 'Slip uploaded',
+      });
+      await sendMessage('จ่ายแล้ว', {
+        order_id,
+        slip_path: upload.storage_path,
+        type: 'payment_done',
+      });
+    } catch (uploadError) {
+      const message = uploadError instanceof Error ? uploadError.message : 'Unable to upload payment slip.';
+      setError(message);
+      appendLog({
+        category: 'api',
+        detail: message,
+        status: 'error',
+        title: 'Slip upload failed',
+      });
+    } finally {
+      setIsUploadingSlip(false);
+    }
+  }
+
   function handleGrantConsent() {
     void sendMessage('Health data consent granted.', {
       type: 'consent_granted',
@@ -855,8 +929,9 @@ export default function ChatbotScreen() {
               {message.role === 'assistant' && message.order ? (
                 <View style={styles.uiCardStack}>
                   <OrderPanel
-                    disabled={isSending || !canUseOrderActions}
+                    disabled={isSending || isUploadingSlip || !canUseOrderActions}
                     onPaymentDone={handlePaymentDone}
+                    onSlipSelected={(payload) => void handleSlipSelected(payload)}
                     onSubmitForm={handleOrderFormSubmit}
                     order={message.order}
                   />

@@ -17,14 +17,23 @@ const docs = [
 ];
 
 const stalePatterns = [
-  [/12 edge\/shared files scanned/i, 'edge-security audit now scans 13 edge/shared/template files'],
-  [/12 files scanned/i, 'edge-security audit now scans 13 files'],
-  [/26 production files scanned/i, 'client audit now scans 28 production files'],
+  [/14 edge\/shared\/storage\/template files scanned/i, 'edge-security audit now scans 15 edge/shared/storage/template files'],
+  [/13 edge\/shared\/template files scanned/i, 'edge-security audit now scans 15 edge/shared/storage/template files'],
+  [/13 edge\/shared files scanned/i, 'edge-security audit now scans 15 edge/shared/storage/template files'],
+  [/13 files scanned/i, 'edge-security audit now scans 15 files'],
+  [/12 edge\/shared files scanned/i, 'edge-security audit now scans 15 edge/shared/storage/template files'],
+  [/12 files scanned/i, 'edge-security audit now scans 15 files'],
+  [/28 production files scanned/i, 'client audit now scans 29 production files'],
+  [/26 production files scanned/i, 'client audit now scans 29 production files'],
   [/11 health\/lab/i, 'health safety audit now scans 14 health/lab/wearable files'],
-  [/60 shared tests/i, 'shared Deno suite now has 68 tests'],
-  [/62 shared tests/i, 'shared Deno suite now has 68 tests'],
-  [/passed with 60/i, 'shared Deno suite now has 68 tests'],
-  [/passed with 62/i, 'shared Deno suite now has 68 tests'],
+  [/75 shared tests/i, 'shared Deno suite now has 79 tests'],
+  [/68 shared tests/i, 'shared Deno suite now has 79 tests'],
+  [/60 shared tests/i, 'shared Deno suite now has 79 tests'],
+  [/62 shared tests/i, 'shared Deno suite now has 79 tests'],
+  [/passed with 75/i, 'shared Deno suite now has 79 tests'],
+  [/passed with 68/i, 'shared Deno suite now has 79 tests'],
+  [/passed with 60/i, 'shared Deno suite now has 79 tests'],
+  [/passed with 62/i, 'shared Deno suite now has 79 tests'],
   [/140 files scanned/i, 'order status audit count drifted after new audit scripts'],
   [/141 files scanned/i, 'order status audit count drifted after new audit scripts'],
   [/142 files scanned/i, 'order status audit count drifted after new audit scripts'],
@@ -43,7 +52,7 @@ const requiredSnippets = [
   ['docs/v2-gap-analysis.md', '`npm run v2:local-readiness-audit`: passing'],
   ['docs/v2-audit-report-2026-06-11.md', '`npm run v2:docs-audit`'],
   ['docs/v2-audit-report-2026-06-11.md', '`npm run v2:local-readiness-audit`'],
-  ['docs/changes/phase-6.md', 'passed with 68 shared tests'],
+  ['docs/changes/phase-6.md', 'passed with 79 shared tests'],
 ];
 
 const violations = [];

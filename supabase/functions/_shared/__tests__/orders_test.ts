@@ -1,4 +1,10 @@
-import { canTransition, commissionSchemeForConfirmedOrder } from '../orders.ts';
+import {
+  assertOrderBelongsToSession,
+  assertPaymentSlipPathForOrder,
+  canTransition,
+  commissionSchemeForConfirmedOrder,
+  paymentSlipStoragePath,
+} from '../orders.ts';
 import type { OrderRow, OrderStatus } from '../types.ts';
 
 declare const Deno: {
@@ -141,4 +147,90 @@ Deno.test('commissionSchemeForConfirmedOrder falls back to current referrer sche
     current,
     'expected legacy order to use current referrer scheme',
   );
+});
+
+Deno.test('paymentSlipStoragePath creates an order-scoped jpg path', () => {
+  assertSame(
+    paymentSlipStoragePath({
+      contentType: 'image/jpeg',
+      objectId: 'slip-1',
+      orderId: 'order-1',
+      tenantId: 'tenant-1',
+    }),
+    'tenant-1/order-1/slip-1.jpg',
+    'expected tenant/order scoped jpg path',
+  );
+});
+
+Deno.test('assertPaymentSlipPathForOrder accepts only the matching tenant/order prefix', () => {
+  const validPath = assertPaymentSlipPathForOrder({
+    orderId: 'order-1',
+    slipPath: 'payment-slips/tenant-1/order-1/slip-1.png',
+    tenantId: 'tenant-1',
+  });
+
+  assertSame(validPath, 'tenant-1/order-1/slip-1.png', 'expected bucket prefix to be stripped');
+
+  let rejected = false;
+
+  try {
+    assertPaymentSlipPathForOrder({
+      orderId: 'order-1',
+      slipPath: 'tenant-1/order-2/slip-1.png',
+      tenantId: 'tenant-1',
+    });
+  } catch {
+    rejected = true;
+  }
+
+  assert(rejected, 'expected another order path to be rejected');
+});
+
+Deno.test('paymentSlipStoragePath rejects unsupported content types', () => {
+  let rejected = false;
+
+  try {
+    paymentSlipStoragePath({
+      contentType: 'application/pdf',
+      objectId: 'slip-1',
+      orderId: 'order-1',
+      tenantId: 'tenant-1',
+    });
+  } catch {
+    rejected = true;
+  }
+
+  assert(rejected, 'expected unsupported content type to be rejected');
+});
+
+Deno.test('assertOrderBelongsToSession rejects another customer or session', () => {
+  assertOrderBelongsToSession(
+    {
+      customer_id: 'customer-1',
+      session_id: 'session-1',
+    },
+    {
+      customerId: 'customer-1',
+      sessionId: 'session-1',
+    },
+  );
+
+  let rejected = false;
+
+  try {
+    assertOrderBelongsToSession(
+      {
+        customer_id: 'customer-2',
+        session_id: 'session-1',
+      },
+      {
+        customerId: 'customer-1',
+        sessionId: 'session-1',
+      },
+    );
+  } catch {
+    rejected = true;
+  }
+
+  assert(rejected, 'expected ownership mismatch to be rejected');
 });

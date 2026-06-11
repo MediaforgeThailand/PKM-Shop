@@ -7,19 +7,19 @@ Scope: current worktree against `docs/miracare-codex-handoff.md`, `docs/miracare
 - PASS: `npm run typecheck`
 - PASS: `npm run v2:verify` (deterministic local verification bundle)
 - PASS: `npm run v2:external-preflight` (script ran; four external gates report WAIT in this environment)
-- PASS: `npm run v2:type-safety-audit` (102 TypeScript files scanned)
+- PASS: `npm run v2:type-safety-audit` (104 TypeScript files scanned)
 - PASS: `npm run chat:quality`
 - PASS: `npm run orders:status-audit`
-- PASS: `npm run v2:schema-audit` (16 tables, 32 policies, 30 indexes, 29 migrations checked)
-- PASS: `npm run v2:open-questions-audit` (25 unresolved-contract topics, 4 blocked rows checked)
-- PASS: `npm run v2:local-readiness-audit` (0 Missing rows, 21 decision blockers, 4 external gates checked)
+- PASS: `npm run v2:schema-audit` (16 tables, 32 policies, 30 indexes, 31 migrations checked)
+- PASS: `npm run v2:open-questions-audit` (24 unresolved-contract topics, 3 blocked rows checked)
+- PASS: `npm run v2:local-readiness-audit` (0 Missing rows, 20 decision blockers, 4 external gates checked)
 - PASS: `npm run v2:docs-audit` (11 docs checked)
-- PASS: `npm run v2:client-audit` (28 production files, 3 removed routes, 64 client files secret-scanned)
-- PASS: `npm run v2:edge-security-audit` (13 edge/shared/template files scanned)
+- PASS: `npm run v2:client-audit` (29 production files, 3 removed routes, 64 client files secret-scanned)
+- PASS: `npm run v2:edge-security-audit` (15 edge/shared/storage/template files scanned)
 - PASS: `npm run v2:health-safety-audit` (14 files scanned)
-- PASS: `npm run types:mirror-audit` (34 exported types checked)
+- PASS: `npm run types:mirror-audit` (36 exported types checked)
 - PASS: `npm run v2:deno-check` (7 v2 edge entrypoints)
-- PASS: `npx.cmd -y deno@2.8.2 test --allow-env --allow-net --import-map=supabase/functions/import_map.json supabase/functions/_shared/__tests__/` (68 passed)
+- PASS: `npx.cmd -y deno@2.8.2 test --allow-env --allow-net --import-map=supabase/functions/import_map.json supabase/functions/_shared/__tests__/` (79 passed)
 - PASS: `git diff --check` (Windows line-ending warnings only)
 
 ## Findings
@@ -39,8 +39,9 @@ Scope: current worktree against `docs/miracare-codex-handoff.md`, `docs/miracare
 | Service-role tenant filtering | FAIL | P0 | `v2:edge-security-audit` passes known invariants, but `fact-extractor`, `lab-ingest`, and wearable request-context contracts remain open | Do not tighten initial lookups until tenant-context contracts are approved in `docs/v2-open-questions.md`. |
 | Customer chat code path | PASS | P1 | React Query history, persisted messages, consent action, `chat-orchestrator`, marker parsing; `chat:quality` and client audit pass | Keep code-path audits in CI. |
 | Seeded chat regression credentials | PASS | P1 | `scripts/create-test-jwt.mjs` creates/updates `regression-test@miracare.dev`, prints only the token when run directly, and `chat-regression` bootstraps it inline when service-role secrets exist | Run the optional live-regression CI job or local suite against the linked project before release. |
-| Order state machine and admin queue | PASS | P1 | `transition_order`, PromptPay tests, action-response `system_notice` persistence/rendering, admin queue, status-write audit | Keep deterministic tests/audits required in CI. |
-| Slip upload and persisted order-panel reload | FAIL | P1 | Current implementation intentionally stops before guessing private `payment-slips` write contract and QR reload contract | Resolve contracts in `docs/v2-open-questions.md`; then run seeded purchase E2E through admin booking. |
+| Order state machine and admin queue | PASS | P1 | `transition_order`, PromptPay tests, action-response `system_notice` persistence/rendering, admin queue, slip signed-read action, status-write audit | Keep deterministic tests/audits required in CI. |
+| Slip upload contract | PASS | P1 | `request_slip_upload` validates ownership and returns a service-role signed upload URL; `payment_done` validates/stores order-scoped `slip_path`; admin thumbnails use server-generated signed read URLs | Run seeded purchase E2E with a real uploaded slip before release. |
+| Persisted order-panel reload | FAIL | P1 | Current implementation still stops before guessing the QR reload contract | Resolve the order-panel payload contract in `docs/v2-open-questions.md`; then run seeded purchase E2E through admin booking. |
 | Referral and commissions code path | PASS | P1 | attribution route, assisted purchase, commission unit tests, referrer admin audit | Keep deterministic tests/audits required in CI. |
 | Referral production contracts and live E2E | FAIL | P1 | `ref_code` format/transport, default commission schemes, endpoint split, and live E2E proof remain open | Confirm contracts and run live attributed/assisted E2E. |
 | Lab/wearable deterministic pipeline | PASS | P1 | lab/wearable schema, lab safety audit, fixture-backed normalizer tests, Apple Health XML/zip streaming tests | Keep health safety audit and shared Deno tests required in CI. |

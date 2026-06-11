@@ -24,7 +24,7 @@
 - `npm run v2:schema-audit` passed and now covers the Phase 5 table contracts, RLS policies, and health-dashboard indexes.
 - `npm run v2:health-safety-audit` passed and now asserts the lab summary disclaimer/template path, the lab vision normalization table, the Phase 5 sample fixtures, Apple Health zip `export.xml` streaming, live dashboard table reads, no dashboard mock/model-call paths, and rule-based wearable trend windows.
 - `git diff --check` passed after Phase 5 implementation.
-- Shared Phase 5 tests were added in `supabase/functions/_shared/__tests__/lab_test.ts`, `wearable_test.ts`, and `supabase/functions/_shared/__tests__/fixtures/`; `npx.cmd -y deno@2.8.2 test --allow-env --allow-net --import-map=supabase/functions/import_map.json supabase/functions/_shared/__tests__/` currently passes locally with 68 tests and CI runs the same Deno workflow.
+- Shared Phase 5 tests were added in `supabase/functions/_shared/__tests__/lab_test.ts`, `wearable_test.ts`, and `supabase/functions/_shared/__tests__/fixtures/`; `npx.cmd -y deno@2.8.2 test --allow-env --allow-net --import-map=supabase/functions/import_map.json supabase/functions/_shared/__tests__/` currently passes locally with 79 tests and CI runs the same Deno workflow.
 - The dashboard route audit now covers `HealthInsightScreens.tsx`, `lib/health/v2HealthDashboard.ts`, `health-check-results.tsx`, `body-overview.tsx`, and `wearable-health.tsx` for live table reads and no mock/model-call leakage.
 - Browser smoke checks on `localhost:8081` render `/health-check-results`, `/body-overview`, `/wearable-health`, and `/ai-body-overview`. A web-only Expo Router `Link asChild` style-array crash was fixed by flattening the tab link style.
 

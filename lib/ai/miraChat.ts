@@ -7,6 +7,7 @@ import type {
   ChatOrchestratorRequest,
   ChatOrchestratorResponse,
   ChatProduct,
+  ChatSlipUploadResponse,
   OrderPanelState,
   ProductSummary,
 } from '@/lib/types/api';
@@ -61,6 +62,11 @@ export type AskAiResult = {
   text: string;
   order?: OrderPanelState;
   uiCards: ChatUiCard[];
+};
+
+export type SlipUploadFile = Blob & {
+  name?: string;
+  type?: string;
 };
 
 const FALLBACK_USER_NICKNAME = '\u0e25\u0e39\u0e01\u0e04\u0e49\u0e32';
@@ -292,6 +298,49 @@ async function callSupabaseOrchestrator({
     text,
     uiCards: productsToUiCards(result.products),
   };
+}
+
+export async function requestPaymentSlipUpload({
+  contentType,
+  orderId,
+  sessionId,
+}: {
+  contentType: 'image/jpeg' | 'image/png';
+  orderId: string;
+  sessionId?: string | null;
+}) {
+  return invokeFunction<ChatOrchestratorRequest, ChatSlipUploadResponse>('chat-orchestrator', {
+    action: {
+      content_type: contentType,
+      order_id: orderId,
+      type: 'request_slip_upload',
+    },
+    channel: 'app',
+    client_msg_id: crypto.randomUUID(),
+    message: '',
+    ref_code: readStoredReferralCode() ?? undefined,
+    session_id: sessionId ?? orchestratorSessionId,
+    tenant_slug: defaultTenantSlug,
+  });
+}
+
+export async function uploadPaymentSlipFile(uploadUrl: string, file: SlipUploadFile) {
+  const body = new FormData();
+
+  body.append('cacheControl', '600');
+  body.append('', file);
+
+  const response = await fetch(uploadUrl, {
+    body,
+    headers: {
+      'x-upsert': 'false',
+    },
+    method: 'PUT',
+  });
+
+  if (!response.ok) {
+    throw new Error(`Slip upload failed with ${response.status}.`);
+  }
 }
 
 async function callProxy({

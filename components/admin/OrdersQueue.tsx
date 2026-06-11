@@ -7,7 +7,7 @@ import { MiraDesign, softShadow } from '@/constants/Design';
 import { invokeFunction } from '@/lib/api/client';
 import { useAuthSession } from '@/lib/auth/useAuthSession';
 import { supabase, supabaseConfigStatus } from '@/lib/supabase';
-import type { AdminOrderActionRequest, ChatMessageRow, OrderRow, OrderStatus, TenantSummary } from '@/lib/types/api';
+import type { AdminOrderActionRequest, AdminSlipUrlResponse, ChatMessageRow, OrderRow, OrderStatus, TenantSummary } from '@/lib/types/api';
 import { defaultTenantSlug } from '@/lib/marketplace/hospitalProducts';
 
 type ProductJoin = {
@@ -39,6 +39,7 @@ type TenantContext = TenantSummary & {
 };
 
 type TranscriptRow = Pick<ChatMessageRow, 'content' | 'created_at' | 'id' | 'role'>;
+type OrderMutationAction = Extract<AdminOrderActionRequest, { action: 'book' | 'cancel' | 'confirm' | 'done' }>['action'];
 
 const activeStatuses: OrderStatus[] = ['collecting_info', 'awaiting_payment', 'submitted', 'confirmed', 'booked'];
 
@@ -64,14 +65,6 @@ function formatDateTime(value: string | null) {
   });
 }
 
-function slipStoragePath(value: string | null) {
-  if (!value || value.startsWith('http')) {
-    return null;
-  }
-
-  return value.replace(/^payment-slips\//, '').replace(/^\/+/, '');
-}
-
 function statusTone(status: OrderStatus): 'amber' | 'blue' | 'danger' | 'mint' {
   if (status === 'cancelled') {
     return 'danger';
@@ -88,7 +81,7 @@ function statusTone(status: OrderStatus): 'amber' | 'blue' | 'danger' | 'mint' {
   return 'amber';
 }
 
-function canAct(order: OrderQueueRow, action: AdminOrderActionRequest['action']) {
+function canAct(order: OrderQueueRow, action: OrderMutationAction) {
   if (action === 'confirm') {
     return order.status === 'submitted';
   }
@@ -117,7 +110,7 @@ export function OrdersQueue({ title = 'Orders Queue' }: { title?: string }) {
   const [query, setQuery] = useState('');
   const [showActiveOnly, setShowActiveOnly] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
-  const [busyAction, setBusyAction] = useState<AdminOrderActionRequest['action'] | null>(null);
+  const [busyAction, setBusyAction] = useState<OrderMutationAction | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const isWide = width >= 1080;
@@ -241,16 +234,24 @@ export function OrdersQueue({ title = 'Orders Queue' }: { title?: string }) {
 
       await Promise.all(
         rows.map(async (order) => {
-          const path = slipStoragePath(order.slip_url);
-
-          if (!path) {
+          if (!order.slip_url) {
             return;
           }
 
-          const { data: signed, error: signedError } = await supabase.storage.from('payment-slips').createSignedUrl(path, 60 * 60);
+          try {
+            const signed = await invokeFunction<Extract<AdminOrderActionRequest, { action: 'slip_url' }>, AdminSlipUrlResponse>(
+              'admin-order-action',
+              {
+                action: 'slip_url',
+                order_id: order.id,
+              },
+            );
 
-          if (!signedError && signed?.signedUrl) {
-            nextSignedUrls[order.id] = signed.signedUrl;
+            if (signed.signed_url) {
+              nextSignedUrls[order.id] = signed.signed_url;
+            }
+          } catch {
+            // Keep the queue usable even if one thumbnail cannot be signed.
           }
         }),
       );
@@ -352,7 +353,7 @@ export function OrdersQueue({ title = 'Orders Queue' }: { title?: string }) {
     };
   }, [selectedOrder?.session_id]);
 
-  async function runAction(action: AdminOrderActionRequest['action']) {
+  async function runAction(action: OrderMutationAction) {
     if (!selectedOrder || busyAction || !canAct(selectedOrder, action)) {
       return;
     }
@@ -551,9 +552,9 @@ function OrderDetail({
   transcript,
 }: {
   bookingAt: string;
-  busyAction: AdminOrderActionRequest['action'] | null;
+  busyAction: OrderMutationAction | null;
   note: string;
-  onAction: (action: AdminOrderActionRequest['action']) => void;
+  onAction: (action: OrderMutationAction) => void;
   onBookingAtChange: (value: string) => void;
   onNoteChange: (value: string) => void;
   order: OrderQueueRow;
@@ -647,11 +648,11 @@ function ActionButton({
   disabled,
   onAction,
 }: {
-  action: AdminOrderActionRequest['action'];
-  busyAction: AdminOrderActionRequest['action'] | null;
+  action: OrderMutationAction;
+  busyAction: OrderMutationAction | null;
   danger?: boolean;
   disabled?: boolean;
-  onAction: (action: AdminOrderActionRequest['action']) => void;
+  onAction: (action: OrderMutationAction) => void;
 }) {
   const isBusy = busyAction === action;
 

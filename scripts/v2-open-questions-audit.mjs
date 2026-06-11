@@ -23,7 +23,6 @@ const requiredTopics = [
   ['prototype release policy', ['prototype/mockup']],
   ['action idempotency sequencing', ['client_msg_id']],
   ['fact extractor tenant context', ['fact-extractor']],
-  ['payment slip upload contract', ['payment-slips']],
   ['persisted order-panel QR contract', ['qr_payload']],
   ['manual payment verification', ['manual staff verification']],
   ['referral code format', ['6-character base32']],

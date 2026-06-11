@@ -3,7 +3,7 @@
 ## Triage Summary
 
 - Local-only implementation status: no unblocked `Missing` rows remain in `docs/v2-gap-analysis.md`; new local work should be added as tests, audits, or docs unless an owner contract is required.
-- Owner decision blockers: canonical catalog, legacy consent mapping, PDPA export/delete, prototype/mockup release policy, `client_msg_id` idempotency sequencing, fact-extractor tenant context, payment slip upload, persisted order-panel reload, manual staff verification, 6-character base32 referral codes, `ref_code` transport, referrer payment endpoint split, default commission scheme, lab fact keys, synonym/alias matrix, `lab-ingest` tenant context, low-confidence lab rows confirmation, medical liability wording, `defaultTenantSlug` tenant resolution, `wearable-ingest` request context, wearable `source_ref`, `wearable-imports` bucket naming, Apple Health export upload UX, and `line-assets` bucket policy.
+- Owner decision blockers: canonical catalog, legacy consent mapping, PDPA export/delete, prototype/mockup release policy, `client_msg_id` idempotency sequencing, fact-extractor tenant context, persisted order-panel reload, manual staff verification, 6-character base32 referral codes, `ref_code` transport, referrer payment endpoint split, default commission scheme, lab fact keys, synonym/alias matrix, `lab-ingest` tenant context, low-confidence lab rows confirmation, medical liability wording, `defaultTenantSlug` tenant resolution, `wearable-ingest` request context, wearable `source_ref`, `wearable-imports` bucket naming, Apple Health export upload UX, and `line-assets` bucket policy.
 - External setup blockers: seed-demo service role setup and LINE sandbox setup.
 
 ## Phase 1
@@ -20,7 +20,6 @@
 
 ## Phase 3
 
-- The spec requires the order panel to support slip upload and says `payment_done` / slip upload transitions the order to `submitted`, but the section 3.1 action schema only defines `payment_done` with `order_id`, and the Phase 1 storage policies do not define customer writes to the private `payment-slips` bucket. The current implementation transitions `payment_done` without attaching `slip_url` and the admin queue can display signed thumbnails for existing slip paths. Confirm whether to extend `payment_done` with `slip_url`, add a dedicated upload/signing function, or add a path-scoped customer storage policy before implementing uploads.
 - The spec says the chat screen loads messages from DB and renders a status-driven order panel, but `chat_messages` does not store an order reference or order panel payload, while `qr_payload` is returned by `chat-orchestrator` and is not persisted on `orders`. Current reload reconstructs text/system notices/product cards from `chat_messages`, but cannot safely rebuild an awaiting-payment QR panel without either denormalizing order state onto chat messages, adding a spec-defined active-order read endpoint/RPC, exposing enough tenant payment config to the customer client, or persisting a QR payload/payment-intent artifact. Confirm the desired contract before implementing persisted order-panel reload.
 - The product plan says payment confirmation is manual staff verification for v2, with bank/PSP auto-verification deferred. Confirm this manual verification model is acceptable for the first v2 release before adding any automated payment verification path.
 

@@ -12,14 +12,26 @@ import {
 } from './db.ts';
 import { HttpError, z } from './http.ts';
 import { filterKnownProductMarkerKeys, parseProductMarker } from './marker.ts';
-import { formatActiveOrderContext, loadActiveOrder, missingOrderFields, toOrderPanel, transition, updateOrderFields } from './orders.ts';
+import {
+  assertOrderBelongsToSession,
+  assertPaymentSlipPathForOrder,
+  formatActiveOrderContext,
+  loadActiveOrder,
+  missingOrderFields,
+  paymentSlipStoragePath,
+  toOrderPanel,
+  transition,
+  updateOrderFields,
+} from './orders.ts';
 import { callMiraPrompt, callOrderFieldExtractor } from './openai.ts';
 import { resolveAttributedReferrerId } from './referrals.ts';
+import { createSignedUploadUrl } from './storage.ts';
 import { ORDER_INFO_COMPLETE_NOTICE_TH, ORDER_PAYMENT_SUBMITTED_NOTICE_TH } from './templates.ts';
 import type {
   ChatMessageRow,
   ChatOrchestratorRequest,
   ChatOrchestratorResponse,
+  ChatSlipUploadResponse,
   ChatProduct,
   ChatSessionRow,
   CustomerRow,
@@ -47,7 +59,13 @@ const actionSchema = z.discriminatedUnion('type', [
   }),
   z.object({
     order_id: z.string().uuid(),
+    slip_path: z.string().optional(),
     type: z.literal('payment_done'),
+  }),
+  z.object({
+    content_type: z.enum(['image/jpeg', 'image/png']),
+    order_id: z.string().uuid(),
+    type: z.literal('request_slip_upload'),
   }),
 ]);
 
@@ -55,7 +73,7 @@ export const chatRequestSchema = z.object({
   action: actionSchema.nullable(),
   channel: z.enum(['app', 'pwa', 'line']),
   client_msg_id: z.string().uuid(),
-  message: z.string().trim().min(1),
+  message: z.string().trim(),
   ref_code: z.string().regex(/^[A-Z0-9-]{3,32}$/).optional(),
   session_id: z.string().uuid().nullable(),
   tenant_slug: z.string().regex(/^[a-z0-9-]{2,32}$/),
@@ -206,6 +224,36 @@ async function maybeAdvanceCollectingOrder(order: OrderWithProductRow | null) {
   return loadOrderForPanel(order.id, order.tenant_id);
 }
 
+async function createSlipUpload({
+  action,
+  customer,
+  sessionId,
+  tenant,
+}: {
+  action: Extract<ChatOrchestratorRequest['action'], { type: 'request_slip_upload' }>;
+  customer: CustomerRow;
+  sessionId: string;
+  tenant: TenantRow;
+}): Promise<ChatSlipUploadResponse> {
+  const existingOrder = await loadOrderForPanel(action.order_id, tenant.id);
+  assertOrderBelongsToSession(existingOrder, {
+    customerId: customer.id,
+    sessionId,
+  });
+
+  const storagePath = paymentSlipStoragePath({
+    contentType: action.content_type,
+    orderId: action.order_id,
+    tenantId: tenant.id,
+  });
+  const uploadUrl = await createSignedUploadUrl('payment-slips', storagePath, 10 * 60);
+
+  return {
+    storage_path: storagePath,
+    upload_url: uploadUrl,
+  };
+}
+
 async function handleAction({
   action,
   channel,
@@ -254,9 +302,10 @@ async function handleAction({
   if (action.type === 'order_form_submit') {
     const existingOrder = await loadOrderForPanel(action.order_id, tenant.id);
 
-    if (!existingOrder || existingOrder.customer_id !== customer.id || existingOrder.session_id !== sessionId) {
-      throw new HttpError('VALIDATION', 'Order not found for this session.', 404);
-    }
+    assertOrderBelongsToSession(existingOrder, {
+      customerId: customer.id,
+      sessionId,
+    });
 
     const order = await updateOrderFields(action.order_id, {
       customerId: customer.id,
@@ -282,8 +331,31 @@ async function handleAction({
   if (action.type === 'payment_done') {
     const existingOrder = await loadOrderForPanel(action.order_id, tenant.id);
 
-    if (!existingOrder || existingOrder.customer_id !== customer.id || existingOrder.session_id !== sessionId) {
-      throw new HttpError('VALIDATION', 'Order not found for this session.', 404);
+    assertOrderBelongsToSession(existingOrder, {
+      customerId: customer.id,
+      sessionId,
+    });
+
+    if (action.slip_path) {
+      await updateRows<OrderRow>(
+        'orders',
+        {
+          slip_url: assertPaymentSlipPathForOrder({
+            orderId: action.order_id,
+            slipPath: action.slip_path,
+            tenantId: tenant.id,
+          }),
+          updated_at: nowIso(),
+        },
+        {
+          customer_id: `eq.${customer.id}`,
+          id: `eq.${action.order_id}`,
+          select:
+            'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,channel,referrer_id,commission_scheme_snapshot,status,slip_url,booking_at,admin_note,created_at,updated_at',
+          session_id: `eq.${sessionId}`,
+          tenant_id: `eq.${tenant.id}`,
+        },
+      );
     }
 
     const order = await transition(action.order_id, 'submitted', 'customer', { channel });
@@ -606,7 +678,14 @@ async function completeChatTurn({
   };
 }
 
-export async function orchestrateChat(request: ChatOrchestratorRequest, authorization: string | null): Promise<ChatOrchestratorResponse> {
+export async function orchestrateChat(
+  request: ChatOrchestratorRequest,
+  authorization: string | null,
+): Promise<ChatOrchestratorResponse | ChatSlipUploadResponse> {
+  if (request.action?.type !== 'request_slip_upload' && request.message.length === 0) {
+    throw new HttpError('VALIDATION', 'Message is required.', 400);
+  }
+
   const tenant = await assertTenant(request.tenant_slug);
   const authUserId = await resolveAuthUserId(authorization);
   let customer = await resolveOrCreateCustomer(tenant.id, authUserId);
@@ -617,6 +696,15 @@ export async function orchestrateChat(request: ChatOrchestratorRequest, authoriz
     sessionId: request.session_id,
     tenant,
   });
+
+  if (request.action?.type === 'request_slip_upload') {
+    return createSlipUpload({
+      action: request.action,
+      customer,
+      sessionId: session.id,
+      tenant,
+    });
+  }
 
   const actionResult = await handleAction({
     action: request.action,

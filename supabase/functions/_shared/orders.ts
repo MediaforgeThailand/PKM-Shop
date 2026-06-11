@@ -97,6 +97,67 @@ export function missingOrderFields(order: Pick<OrderRow, 'buyer_name' | 'buyer_p
   return missing;
 }
 
+export function assertOrderBelongsToSession(
+  order: Pick<OrderRow, 'customer_id' | 'session_id'> | null,
+  scope: {
+    customerId: string;
+    sessionId: string;
+  },
+) {
+  if (!order || order.customer_id !== scope.customerId || order.session_id !== scope.sessionId) {
+    throw new HttpError('VALIDATION', 'Order not found for this session.', 404);
+  }
+}
+
+export function paymentSlipExtension(contentType: string) {
+  if (contentType === 'image/jpeg') {
+    return 'jpg';
+  }
+
+  if (contentType === 'image/png') {
+    return 'png';
+  }
+
+  throw new HttpError('VALIDATION', 'Payment slip must be a JPEG or PNG image.', 400);
+}
+
+export function paymentSlipStoragePath({
+  contentType,
+  objectId = crypto.randomUUID(),
+  orderId,
+  tenantId,
+}: {
+  contentType: string;
+  objectId?: string;
+  orderId: string;
+  tenantId: string;
+}) {
+  return `${tenantId}/${orderId}/${objectId}.${paymentSlipExtension(contentType)}`;
+}
+
+export function normalizePaymentSlipPath(path: string) {
+  return path.replace(/^payment-slips\//, '').replace(/^\/+/, '');
+}
+
+export function assertPaymentSlipPathForOrder({
+  orderId,
+  slipPath,
+  tenantId,
+}: {
+  orderId: string;
+  slipPath: string;
+  tenantId: string;
+}) {
+  const normalizedPath = normalizePaymentSlipPath(slipPath);
+  const expectedPrefix = `${tenantId}/${orderId}/`;
+
+  if (!normalizedPath.startsWith(expectedPrefix) || !/\.(jpg|png)$/i.test(normalizedPath)) {
+    throw new HttpError('VALIDATION', 'Payment slip path is not valid for this order.', 400);
+  }
+
+  return normalizedPath;
+}
+
 export function toOrderPanel(order: OrderWithProductRow | null, tenant: Pick<TenantRow, 'promptpay_id'>): OrderPanelState {
   if (!order) {
     return null;

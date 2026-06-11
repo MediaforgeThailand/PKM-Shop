@@ -15,6 +15,7 @@ const files = {
   orchestrate: 'supabase/functions/_shared/orchestrate.ts',
   orders: 'supabase/functions/_shared/orders.ts',
   referrerOrder: 'supabase/functions/referrer-order/index.ts',
+  storage: 'supabase/functions/_shared/storage.ts',
   systemNoticeMigration: 'supabase/migrations/20260611061000_a2_system_notice_single_source.sql',
   templates: 'supabase/functions/_shared/templates.ts',
   wearableIngest: 'supabase/functions/wearable-ingest/index.ts',
@@ -121,10 +122,23 @@ expect(
 
 expect(
   'chat order ownership validation',
-  sources.orchestrate.includes('existingOrder.customer_id !== customer.id') &&
-    sources.orchestrate.includes('existingOrder.session_id !== sessionId') &&
+  sources.orders.includes('assertOrderBelongsToSession') &&
+    sources.orders.includes('order.customer_id !== scope.customerId') &&
+    sources.orders.includes('order.session_id !== scope.sessionId') &&
+    sources.orchestrate.includes('assertOrderBelongsToSession(existingOrder') &&
     sources.orchestrate.includes('tenantId: tenant.id'),
   'chat order actions must verify current tenant/session/customer before updating or submitting orders',
+);
+
+expect(
+  'payment slip signed upload contract',
+  sources.orchestrate.includes("type: z.literal('request_slip_upload')") &&
+    sources.orchestrate.includes("createSignedUploadUrl('payment-slips', storagePath, 10 * 60)") &&
+    sources.orchestrate.includes('assertPaymentSlipPathForOrder') &&
+    sources.orders.includes('paymentSlipStoragePath') &&
+    sources.storage.includes('createSignedUploadUrl') &&
+    sources.storage.includes('/storage/v1/object/upload/sign/'),
+  'chat slip upload action must validate ownership/path prefix and return a service-role signed payment-slips upload URL',
 );
 
 expect(
@@ -155,6 +169,16 @@ expect(
     sources.adminOrderAction.includes('tenant_id: `in.(${tenantFilter})`') &&
     sources.adminOrderAction.includes('tenant_id: `eq.${order.tenant_id}`'),
   'admin order actions must load orders through the authenticated staff member tenant allow-list',
+);
+
+expect(
+  'admin payment slip signed read contract',
+  sources.adminOrderAction.includes("action: z.enum(['confirm', 'book', 'done', 'cancel', 'slip_url'])") &&
+    sources.adminOrderAction.includes("createSignedReadUrl('payment-slips', storagePath, 60 * 60)") &&
+    sources.adminOrderAction.includes('normalizePaymentSlipPath') &&
+    sources.storage.includes('createSignedReadUrl') &&
+    sources.storage.includes('/storage/v1/object/sign/'),
+  'admin slip thumbnails must be read through a tenant-authorized service-role signed URL action',
 );
 
 expect(

@@ -6,6 +6,7 @@ import { MiraDesign } from '@/constants/Design';
 import type { OrderPanelState } from '@/lib/types/api';
 
 type Order = NonNullable<OrderPanelState>;
+type SlipUploadFile = Blob & { name?: string; type?: string };
 
 const fieldLabels: Record<string, string> = {
   buyer_name: 'ชื่อ-นามสกุล',
@@ -34,11 +35,13 @@ function missingLabel(fields: string[]) {
 export function OrderPanel({
   disabled,
   onPaymentDone,
+  onSlipSelected,
   onSubmitForm,
   order,
 }: {
   disabled?: boolean;
   onPaymentDone?: (orderId: string) => void;
+  onSlipSelected?: (payload: { file: SlipUploadFile; order_id: string }) => void;
   onSubmitForm?: (payload: { buyer_name: string; buyer_phone: string; order_id: string; preferred_date?: string }) => void;
   order: Order;
 }) {
@@ -57,6 +60,27 @@ export function OrderPanel({
 
     return styles.statusWaiting;
   }, [order.status]);
+
+  function selectSlipFile() {
+    if (disabled || !onSlipSelected || typeof document === 'undefined') {
+      return;
+    }
+
+    const input = document.createElement('input');
+    input.accept = 'image/jpeg,image/png';
+    input.type = 'file';
+    input.onchange = () => {
+      const file = input.files?.item(0);
+
+      if (file) {
+        onSlipSelected({
+          file,
+          order_id: order.id,
+        });
+      }
+    };
+    input.click();
+  }
 
   return (
     <View style={styles.panel}>
@@ -140,6 +164,15 @@ export function OrderPanel({
             >
               <Text style={styles.primaryButtonText}>{disabled ? 'กำลังส่ง' : 'จ่ายแล้ว'}</Text>
             </Pressable>
+            {onSlipSelected ? (
+              <Pressable
+                disabled={disabled}
+                onPress={selectSlipFile}
+                style={[styles.secondaryButton, disabled ? styles.disabled : null]}
+              >
+                <Text style={styles.secondaryButtonText}>อัปโหลดสลิป</Text>
+              </Pressable>
+            ) : null}
           </View>
         </View>
       ) : null}
@@ -256,6 +289,22 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: {
     color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  secondaryButton: {
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: '#FFFFFF',
+    borderColor: MiraDesign.color.line,
+    borderRadius: 8,
+    borderWidth: 1,
+    justifyContent: 'center',
+    minHeight: 40,
+    paddingHorizontal: 16,
+  },
+  secondaryButtonText: {
+    color: MiraDesign.color.primaryDeep,
     fontSize: 13,
     fontWeight: '900',
   },

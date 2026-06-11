@@ -43,6 +43,22 @@ async function fetchStorageObject(bucket: string, path: string) {
   return response;
 }
 
+async function parseStorageJson(response: Response): Promise<Record<string, unknown>> {
+  const text = await response.text();
+
+  if (!text) {
+    return {};
+  }
+
+  try {
+    const payload = JSON.parse(text) as unknown;
+
+    return payload && typeof payload === 'object' && !Array.isArray(payload) ? payload as Record<string, unknown> : {};
+  } catch {
+    return {};
+  }
+}
+
 export async function downloadStorageObject(bucket: string, path: string) {
   const response = await fetchStorageObject(bucket, path);
 
@@ -88,4 +104,64 @@ export async function uploadStorageObject(bucket: string, path: string, bytes: U
   }
 
   return `${supabaseUrl}/storage/v1/object/public/${bucket}/${normalizedPath}`;
+}
+
+export async function createSignedUploadUrl(bucket: string, path: string, expiresIn: number) {
+  const { serviceRoleKey, supabaseUrl } = serviceConfig();
+  const normalizedPath = path.replace(/^\/+/, '');
+  const response = await fetch(`${supabaseUrl}/storage/v1/object/upload/sign/${bucket}/${normalizedPath}`, {
+    body: JSON.stringify({ expiresIn }),
+    headers: {
+      Authorization: `Bearer ${serviceRoleKey}`,
+      'Content-Type': 'application/json',
+      apikey: serviceRoleKey,
+    },
+    method: 'POST',
+  });
+  const payload = await parseStorageJson(response);
+
+  if (!response.ok) {
+    throw new HttpError('UPSTREAM', `Unable to sign upload ${bucket}/${normalizedPath}.`, response.status);
+  }
+
+  const signedUrl = typeof payload.signedUrl === 'string'
+    ? payload.signedUrl
+    : typeof payload.url === 'string'
+      ? payload.url.startsWith('http')
+        ? payload.url
+        : `${supabaseUrl}/storage/v1${payload.url}`
+      : null;
+
+  if (!signedUrl) {
+    throw new HttpError('UPSTREAM', `Storage did not return a signed upload URL for ${bucket}/${normalizedPath}.`, 502);
+  }
+
+  return signedUrl;
+}
+
+export async function createSignedReadUrl(bucket: string, path: string, expiresIn: number) {
+  const { serviceRoleKey, supabaseUrl } = serviceConfig();
+  const normalizedPath = path.replace(/^\/+/, '');
+  const response = await fetch(`${supabaseUrl}/storage/v1/object/sign/${bucket}/${normalizedPath}`, {
+    body: JSON.stringify({ expiresIn }),
+    headers: {
+      Authorization: `Bearer ${serviceRoleKey}`,
+      'Content-Type': 'application/json',
+      apikey: serviceRoleKey,
+    },
+    method: 'POST',
+  });
+  const payload = await parseStorageJson(response);
+
+  if (!response.ok) {
+    throw new HttpError('UPSTREAM', `Unable to sign read ${bucket}/${normalizedPath}.`, response.status);
+  }
+
+  const signedPath = typeof payload.signedURL === 'string' ? payload.signedURL : typeof payload.signedUrl === 'string' ? payload.signedUrl : null;
+
+  if (!signedPath) {
+    throw new HttpError('UPSTREAM', `Storage did not return a signed read URL for ${bucket}/${normalizedPath}.`, 502);
+  }
+
+  return signedPath.startsWith('http') ? signedPath : `${supabaseUrl}/storage/v1${signedPath}`;
 }
