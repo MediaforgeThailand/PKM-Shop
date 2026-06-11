@@ -706,6 +706,10 @@ export function PrototypeChatPanel() {
   const router = useRouter();
   const fallbackProducts = useMemo(() => mockProducts(), []);
   const { height, width } = useWindowDimensions();
+  const browserWidth = Platform.OS === 'web' && typeof window !== 'undefined' ? window.innerWidth : 390;
+  const browserHeight = Platform.OS === 'web' && typeof window !== 'undefined' ? window.innerHeight : 640;
+  const viewportWidth = width > 0 ? width : browserWidth;
+  const viewportHeight = height > 0 ? height : browserHeight;
   const audioChunksRef = useRef<Blob[]>([]);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
@@ -720,13 +724,13 @@ export function PrototypeChatPanel() {
   const [voiceStatus, setVoiceStatus] = useState<string | null>(null);
 
   const canUseLiveAi = Boolean(auth.session && aiChatConfigStatus.hasProxy);
-  const isCompact = width < 390;
+  const isCompact = viewportWidth < 390;
   const frameSize = useMemo(
     () => ({
-      height: isCompact ? height : Math.min(604, Math.max(590, height - 36)),
-      width: isCompact ? width : 292,
+      height: isCompact ? viewportHeight : Math.min(604, Math.max(590, viewportHeight - 36)),
+      width: isCompact ? viewportWidth : 292,
     }),
-    [height, isCompact, width],
+    [isCompact, viewportHeight, viewportWidth],
   );
 
   useEffect(() => {
