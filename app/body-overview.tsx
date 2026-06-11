@@ -1,5 +1,5 @@
 import { HealthInsightScreen } from '@/components/HealthInsightScreens';
 
-export default function HealthScreen() {
+export default function BodyOverviewRoute() {
   return <HealthInsightScreen screen="overview" />;
 }

@@ -1,47 +1,46 @@
 import { Link } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ActionButton, Card, Pill, Screen, SectionHeader } from '@/components/MiraUI';
-import { BiomarkerBar, StatusRing } from '@/components/HealthVisuals';
 import { MiraDesign, softShadow } from '@/constants/Design';
-import { loadActiveHospitalProducts, type HospitalProduct } from '@/lib/marketplace/hospitalProducts';
-import { formatMoney, healthPackages } from '@/services/mockBackend';
+import {
+  getProductCategories,
+  getProductCategoryLabel,
+  loadActiveHospitalProducts,
+  type HospitalProduct,
+  type ProductCategory,
+} from '@/lib/marketplace/hospitalProducts';
 
-const categories = ['All', 'Heart', 'Cancer', 'Longevity', 'Metabolic'];
+type CategoryFilter = ProductCategory | 'all';
+
+const categoryFilters: CategoryFilter[] = ['all', ...getProductCategories()];
+
+function formatMoney(amount: number) {
+  return `${amount.toLocaleString('th-TH')} THB`;
+}
+
+function categoryLabel(category: CategoryFilter) {
+  return category === 'all' ? 'All' : getProductCategoryLabel(category);
+}
 
 export default function PackagesScreen() {
-  const [hospitalProducts, setHospitalProducts] = useState<HospitalProduct[]>([]);
+  const [activeCategory, setActiveCategory] = useState<CategoryFilter>('all');
+  const [products, setProducts] = useState<HospitalProduct[]>([]);
   const [isLoadingProducts, setIsLoadingProducts] = useState(true);
+
   const visibleProducts = useMemo(
-    () => [
-      ...hospitalProducts.map((product) => ({
-        id: product.id,
-        title: product.title,
-        hospital: product.hospitalName,
-        category: product.category,
-        price: { amount: product.priceAmount, currency: 'THB' as const },
-        duration: product.duration ?? 'Confirm with hospital',
-        location: product.hospitalAddress ?? product.location ?? 'Confirm with hospital',
-        tags: product.tags.length ? product.tags : ['Hospital product'],
-        includes: product.includes,
-        bestFor: product.description,
-        aiReason: product.ragChunkId
-          ? 'Added by hospital portal and published into chatbot RAG.'
-          : 'Added by hospital portal.',
-      })),
-      ...healthPackages,
-    ],
-    [hospitalProducts],
+    () => products.filter((product) => activeCategory === 'all' || product.category === activeCategory),
+    [activeCategory, products],
   );
 
   useEffect(() => {
     let isMounted = true;
 
     loadActiveHospitalProducts()
-      .then((products) => {
+      .then((items) => {
         if (isMounted) {
-          setHospitalProducts(products);
+          setProducts(items);
         }
       })
       .finally(() => {
@@ -60,64 +59,88 @@ export default function PackagesScreen() {
       <View style={styles.hero}>
         <View style={styles.heroCopy}>
           <Text style={styles.eyebrow}>Health package marketplace</Text>
-          <Text style={styles.title}>แพ็กเกจตรวจสุขภาพที่เลือกง่ายกว่าเดิม</Text>
-          <Text style={styles.subtitle}>จัดกลุ่มตามเป้าหมายสุขภาพ พร้อมคะแนน match จาก AI</Text>
+          <Text style={styles.title}>Active hospital catalog</Text>
+          <Text style={styles.subtitle}>Products shown here come from the v2 `products` table for the current tenant.</Text>
         </View>
-        <StatusRing value={86} label="Match" size={104} color={MiraDesign.color.blue} />
+        <View style={styles.catalogMetric}>
+          <Text style={styles.catalogMetricValue}>{products.length}</Text>
+          <Text style={styles.catalogMetricLabel}>active</Text>
+        </View>
       </View>
 
       <View style={styles.categoryRow}>
-        {categories.map((category, index) => (
-          <Text key={category} style={[styles.categoryChip, index === 0 ? styles.categoryActive : null]}>
-            {category}
-          </Text>
+        {categoryFilters.map((category) => (
+          <Pressable
+            key={category}
+            onPress={() => setActiveCategory(category)}
+            style={[styles.categoryChip, activeCategory === category ? styles.categoryActive : null]}
+          >
+            <Text style={[styles.categoryText, activeCategory === category ? styles.categoryTextActive : null]}>{categoryLabel(category)}</Text>
+          </Pressable>
         ))}
       </View>
 
       <SectionHeader
-        title="แพ็กเกจแนะนำ"
-        meta={isLoadingProducts ? 'syncing portal' : `${visibleProducts.length} offers`}
+        title="Available products"
+        meta={isLoadingProducts ? 'syncing catalog' : `${visibleProducts.length} shown`}
       />
-      {visibleProducts.map((item, index) => {
-        const match = [86, 79, 73][index] ?? 70;
 
-        return (
-          <Card key={item.id} style={styles.packageCard}>
-            <View style={styles.cardTop}>
-              <View style={[styles.hospitalBadge, index === 1 ? styles.blueBadge : index === 2 ? styles.lavenderBadge : null]}>
-                <Text style={styles.hospitalBadgeText}>{item.hospital.slice(0, 1)}</Text>
-              </View>
-              <View style={styles.titleWrap}>
-                <Text style={styles.packageTitle}>{item.title}</Text>
-                <Text style={styles.hospital}>{item.hospital}</Text>
-              </View>
-              <Text style={styles.price}>{formatMoney(item.price)}</Text>
+      {!isLoadingProducts && visibleProducts.length === 0 ? (
+        <Card style={styles.emptyCard}>
+          <Text style={styles.emptyTitle}>No active products</Text>
+          <Text style={styles.emptyBody}>Publish products from the tenant catalog admin to show them here.</Text>
+          <Link href="/admin/catalog" asChild>
+            <ActionButton label="Open catalog admin" variant="secondary" />
+          </Link>
+        </Card>
+      ) : null}
+
+      {visibleProducts.map((product) => (
+        <Card key={product.id} style={styles.packageCard}>
+          <View style={styles.cardTop}>
+            <View style={styles.hospitalBadge}>
+              <Text style={styles.hospitalBadgeText}>{product.hospitalName.slice(0, 1).toUpperCase()}</Text>
             </View>
-
-            <View style={styles.visualMatch}>
-              <View style={styles.matchCircle}>
-                <Text style={styles.matchValue}>{match}</Text>
-                <Text style={styles.matchLabel}>AI</Text>
-              </View>
-              <View style={styles.matchBars}>
-                <BiomarkerBar label="Goal fit" value={`${match}%`} percent={match} tone={MiraDesign.color.primary} />
-                <BiomarkerBar label="Data need" value={`${Math.max(match - 14, 55)}%`} percent={Math.max(match - 14, 55)} tone={MiraDesign.color.amber} />
-              </View>
+            <View style={styles.titleWrap}>
+              <Text style={styles.packageTitle}>{product.title}</Text>
+              <Text style={styles.hospital}>{product.hospitalName}</Text>
             </View>
+            <Text style={styles.price}>{formatMoney(product.priceAmount)}</Text>
+          </View>
 
-            <View style={styles.tagRow}>
-              {item.tags.slice(0, 3).map((tag) => (
-                <Pill key={tag} label={tag} tone="blue" />
-              ))}
-            </View>
+          <Text numberOfLines={3} style={styles.description}>
+            {product.description}
+          </Text>
 
-            <Link href="/package-detail" asChild>
-              <ActionButton label="ดูแพ็กเกจ" variant={index === 0 ? 'primary' : 'secondary'} />
-            </Link>
-          </Card>
-        );
-      })}
+          <View style={styles.productMetaGrid}>
+            <Meta label="Catalog key" value={product.catalogKey} />
+            <Meta label="Category" value={getProductCategoryLabel(product.category)} />
+            <Meta label="Booking" value={product.requiresAppointment ? 'Appointment' : 'Walk-in'} />
+          </View>
+
+          <View style={styles.tagRow}>
+            {(product.tags.length ? product.tags : [getProductCategoryLabel(product.category)]).slice(0, 3).map((tag) => (
+              <Pill key={tag} label={tag} tone="blue" />
+            ))}
+          </View>
+
+          <Link href={`/package-detail?productId=${encodeURIComponent(product.id)}`} asChild>
+            <ActionButton label="View product" />
+          </Link>
+        </Card>
+      ))}
     </Screen>
+  );
+}
+
+function Meta({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.metaCell}>
+      <Text style={styles.metaLabel}>{label}</Text>
+      <Text numberOfLines={1} style={styles.metaValue}>
+        {value}
+      </Text>
+    </View>
   );
 }
 
@@ -154,8 +177,29 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 19,
   },
+  catalogMetric: {
+    alignItems: 'center',
+    backgroundColor: MiraDesign.color.primarySoft,
+    borderRadius: MiraDesign.radius.md,
+    justifyContent: 'center',
+    minHeight: 82,
+    minWidth: 82,
+    padding: MiraDesign.space.md,
+  },
+  catalogMetricValue: {
+    color: MiraDesign.color.primary,
+    fontSize: 28,
+    fontWeight: '900',
+  },
+  catalogMetricLabel: {
+    color: MiraDesign.color.primaryDeep,
+    fontSize: 11,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+  },
   categoryRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: MiraDesign.space.sm,
   },
   categoryChip: {
@@ -163,16 +207,33 @@ const styles = StyleSheet.create({
     borderColor: MiraDesign.color.line,
     borderRadius: MiraDesign.radius.pill,
     borderWidth: 1,
-    color: MiraDesign.color.inkSoft,
-    fontSize: 12,
-    fontWeight: '900',
-    overflow: 'hidden',
     paddingHorizontal: MiraDesign.space.md,
     paddingVertical: MiraDesign.space.sm,
   },
   categoryActive: {
     backgroundColor: MiraDesign.color.primary,
+    borderColor: MiraDesign.color.primary,
+  },
+  categoryText: {
+    color: MiraDesign.color.inkSoft,
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  categoryTextActive: {
     color: '#FFFFFF',
+  },
+  emptyCard: {
+    gap: MiraDesign.space.md,
+  },
+  emptyTitle: {
+    color: MiraDesign.color.ink,
+    fontSize: 17,
+    fontWeight: '900',
+  },
+  emptyBody: {
+    color: MiraDesign.color.inkSoft,
+    fontSize: 14,
+    lineHeight: 20,
   },
   packageCard: {
     gap: MiraDesign.space.lg,
@@ -189,12 +250,6 @@ const styles = StyleSheet.create({
     height: 56,
     justifyContent: 'center',
     width: 56,
-  },
-  blueBadge: {
-    backgroundColor: MiraDesign.color.blueSoft,
-  },
-  lavenderBadge: {
-    backgroundColor: '#EFEDFF',
   },
   hospitalBadgeText: {
     color: MiraDesign.color.primary,
@@ -221,35 +276,36 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '900',
   },
-  visualMatch: {
-    alignItems: 'center',
-    backgroundColor: MiraDesign.color.surfaceSoft,
-    borderRadius: MiraDesign.radius.lg,
+  description: {
+    color: MiraDesign.color.inkSoft,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  productMetaGrid: {
     flexDirection: 'row',
-    gap: MiraDesign.space.md,
-    padding: MiraDesign.space.md,
+    flexWrap: 'wrap',
+    gap: MiraDesign.space.sm,
   },
-  matchCircle: {
-    alignItems: 'center',
-    backgroundColor: MiraDesign.color.surface,
-    borderRadius: MiraDesign.radius.pill,
-    height: 72,
-    justifyContent: 'center',
-    width: 72,
+  metaCell: {
+    backgroundColor: MiraDesign.color.surfaceSoft,
+    borderColor: MiraDesign.color.line,
+    borderRadius: MiraDesign.radius.sm,
+    borderWidth: 1,
+    flexBasis: '31%',
+    flexGrow: 1,
+    gap: 3,
+    padding: MiraDesign.space.sm,
   },
-  matchValue: {
-    color: MiraDesign.color.primary,
-    fontSize: 25,
-    fontWeight: '900',
-  },
-  matchLabel: {
+  metaLabel: {
     color: MiraDesign.color.inkSoft,
     fontSize: 10,
     fontWeight: '900',
+    textTransform: 'uppercase',
   },
-  matchBars: {
-    flex: 1,
-    gap: MiraDesign.space.md,
+  metaValue: {
+    color: MiraDesign.color.ink,
+    fontSize: 13,
+    fontWeight: '900',
   },
   tagRow: {
     flexDirection: 'row',

@@ -1,25 +1,22 @@
 import { supabase, supabaseConfigStatus } from '@/lib/supabase';
+import type { CatalogCategory, ProductSummary, TenantSummary } from '@/lib/types/api';
 
-export type ProductCategory =
-  | 'health_checkup'
-  | 'imaging'
-  | 'lab_test'
-  | 'other'
-  | 'procedure'
-  | 'specialty_consult'
-  | 'vaccine'
-  | 'wellness';
+export type ProductCategory = CatalogCategory;
 
 export type HospitalProductDraft = {
+  branchInfo?: string;
+  category?: ProductCategory;
   description: string;
   hospitalAddress: string;
   hospitalLat?: number;
   hospitalLng?: number;
   hospitalMapQuery: string;
   hospitalName: string;
+  imageUrl?: string;
   productImageName?: string;
   productImagePreviewUri?: string;
   priceAmount: string;
+  requiresAppointment?: boolean;
   title: string;
 };
 
@@ -53,6 +50,7 @@ export type ProductClassification = {
 
 export type HospitalProduct = {
   bookingNote?: string | null;
+  catalogKey: string;
   category: ProductCategory;
   createdAt: string;
   description: string;
@@ -64,20 +62,33 @@ export type HospitalProduct = {
   hospitalName: string;
   id: string;
   includes: string[];
+  imageUrl?: string | null;
   location?: string | null;
   preparationNotes?: string | null;
   priceAmount: number;
   productImageName?: string | null;
   productImagePreviewUri?: string | null;
   ragChunkId?: string | null;
-  status: 'active' | 'archived' | 'draft';
+  requiresAppointment: boolean;
+  status: 'active' | 'archived';
   tags: string[];
+  tenantId: string;
   title: string;
 };
 
 export type HospitalProductStatus = HospitalProduct['status'];
 
+export type ProductImageUploadResult = {
+  path: string;
+  publicUrl: string;
+};
+
+export type TenantMemberContext = TenantSummary & {
+  role: 'superadmin' | 'tenant_admin' | 'tenant_staff' | string;
+};
+
 export type SaveHospitalProductResult = {
+  catalogKey: string;
   classification: ProductClassification;
   embedding: RagEmbeddingResult;
   product: HospitalProduct;
@@ -91,95 +102,41 @@ export type RagEmbeddingResult = {
   status: 'embedded' | 'error' | 'skipped';
 };
 
-type HospitalProductRow = {
-  booking_note: string | null;
-  category: ProductCategory;
+type ProductRow = {
+  active: boolean;
+  branch_info: string | null;
+  catalog_key: string;
+  category: string;
   created_at: string;
   description: string;
-  duration: string | null;
-  hospital_address: string | null;
-  hospital_lat: number | null;
-  hospital_lng: number | null;
-  hospital_map_query: string | null;
-  hospital_name: string;
   id: string;
-  includes: string[] | null;
-  location: string | null;
-  metadata: {
-    product_image_name?: string | null;
-    product_image_preview_uri?: string | null;
-  } | null;
-  preparation_notes: string | null;
-  price_amount: number;
-  rag_chunk_id: string | null;
-  status: HospitalProduct['status'];
-  tags: string[] | null;
-  title: string;
+  image_url: string | null;
+  name: string;
+  price_baht: number;
+  requires_appointment: boolean;
+  tenant_id: string;
+  tenants?: Pick<TenantSummary, 'display_name'> | Pick<TenantSummary, 'display_name'>[] | null;
+  updated_at: string;
 };
 
-const categoryRules: {
-  category: ProductCategory;
-  confidence: number;
-  tags: string[];
-  terms: string[];
-}[] = [
-  {
-    category: 'lab_test',
-    confidence: 0.9,
-    tags: ['Lab', 'Blood test'],
-    terms: ['ตรวจเลือด', 'เจาะเลือด', 'lab', 'blood', 'cbc', 'hba1c', 'ldl', 'ไขมัน', 'น้ำตาล'],
-  },
-  {
-    category: 'imaging',
-    confidence: 0.88,
-    tags: ['Imaging'],
-    terms: ['x-ray', 'xray', 'mri', 'ct', 'ultrasound', 'อัลตราซาวด์', 'เอกซเรย์', 'mammogram'],
-  },
-  {
-    category: 'vaccine',
-    confidence: 0.86,
-    tags: ['Vaccine'],
-    terms: ['vaccine', 'วัคซีน', 'ฉีดวัคซีน', 'influenza', 'hpv', 'flu'],
-  },
-  {
-    category: 'specialty_consult',
-    confidence: 0.82,
-    tags: ['Consult'],
-    terms: ['ปรึกษาแพทย์', 'consult', 'แพทย์เฉพาะทาง', 'doctor', 'clinic'],
-  },
-  {
-    category: 'procedure',
-    confidence: 0.8,
-    tags: ['Procedure'],
-    terms: ['procedure', 'หัตถการ', 'ผ่าตัด', 'ส่องกล้อง', 'endoscopy'],
-  },
-  {
-    category: 'wellness',
-    confidence: 0.78,
-    tags: ['Wellness'],
-    terms: ['wellness', 'วิตามิน', 'nutrition', 'sleep', 'stress', 'longevity', 'ฟื้นฟู'],
-  },
-  {
-    category: 'health_checkup',
-    confidence: 0.84,
-    tags: ['Checkup'],
-    terms: ['ตรวจสุขภาพ', 'checkup', 'screening', 'ตรวจประจำปี', 'executive'],
-  },
-];
+type TenantRow = TenantSummary;
+
+export const defaultTenantSlug = process.env.EXPO_PUBLIC_MIRA_TENANT_SLUG?.trim() || 'demo-hospital';
 
 const categoryLabels: Record<ProductCategory, string> = {
-  health_checkup: 'ตรวจสุขภาพ',
-  imaging: 'เอกซเรย์/ภาพวินิจฉัย',
-  lab_test: 'ตรวจแล็บ/ตรวจเลือด',
-  other: 'อื่นๆ',
-  procedure: 'หัตถการ',
-  specialty_consult: 'ปรึกษาแพทย์',
-  vaccine: 'วัคซีน',
-  wellness: 'Wellness',
+  checkup: 'Checkup',
+  general: 'General',
+  vaccine: 'Vaccine',
 };
+
+const productCategories = Object.keys(categoryLabels) as ProductCategory[];
 
 function compactText(value: string) {
   return value.replace(/\s+/g, ' ').trim();
+}
+
+function parsePriceBaht(value: string) {
+  return Math.max(0, Math.round(Number(value.replace(/,/g, '')) || 0));
 }
 
 function splitList(value: string) {
@@ -187,127 +144,219 @@ function splitList(value: string) {
     .split(/[\n,;]/)
     .map((item) => compactText(item))
     .filter(Boolean)
-    .slice(0, 16);
+    .slice(0, 12);
 }
 
 function unique(values: string[]) {
   return [...new Set(values.map((value) => compactText(value)).filter(Boolean))];
 }
 
-function toSearchText(draft: HospitalProductDraft) {
+function asCategory(value: string): ProductCategory {
+  return productCategories.includes(value as ProductCategory) ? (value as ProductCategory) : 'general';
+}
+
+function tenantNameFromJoin(value: ProductRow['tenants']) {
+  if (Array.isArray(value)) {
+    return value[0]?.display_name ?? 'Tenant catalog';
+  }
+
+  return value?.display_name ?? 'Tenant catalog';
+}
+
+function sanitizeStorageName(value: string) {
+  const sanitized = value
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80);
+
+  return sanitized || 'product-image';
+}
+
+function productSelectColumns() {
   return [
-    draft.title,
-    draft.description,
-    draft.hospitalAddress,
-  ]
-    .join(' ')
-    .toLowerCase();
+    'id',
+    'tenant_id',
+    'catalog_key',
+    'name',
+    'description',
+    'price_baht',
+    'category',
+    'image_url',
+    'branch_info',
+    'requires_appointment',
+    'active',
+    'created_at',
+    'updated_at',
+    'tenants(display_name)',
+  ].join(',');
 }
 
-function splitSentences(value: string) {
-  return value
-    .split(/[\n.!?。]+/)
-    .map((item) => compactText(item))
-    .filter((item) => item.length > 2)
-    .slice(0, 12);
+function inferCategory(draft: HospitalProductDraft): ProductCategory {
+  if (draft.category) {
+    return draft.category;
+  }
+
+  const searchText = `${draft.title} ${draft.description}`.toLowerCase();
+
+  if (searchText.includes('vaccine') || searchText.includes('vaccination')) {
+    return 'vaccine';
+  }
+
+  if (searchText.includes('checkup') || searchText.includes('screening') || searchText.includes('blood') || searchText.includes('lab')) {
+    return 'checkup';
+  }
+
+  return 'general';
 }
 
-function extractKeywordHits(text: string, terms: string[]) {
-  const normalizedText = text.toLowerCase();
-
-  return terms.filter((term) => normalizedText.includes(term.toLowerCase()));
+function deriveIncludes(description: string) {
+  return splitList(description)
+    .filter((item) => item.length <= 80)
+    .slice(0, 6);
 }
 
-export function analyzeProductDescription(draft: HospitalProductDraft, category: ProductCategory = 'other'): ProductDescriptionAnalysis {
+function toHospitalProduct(row: ProductRow): HospitalProduct {
+  const category = asCategory(row.category);
+  const tags = unique([categoryLabels[category], row.requires_appointment ? 'Appointment' : 'Walk-in']);
+
+  return {
+    bookingNote: row.requires_appointment ? 'Requires appointment' : 'Walk-in allowed',
+    catalogKey: row.catalog_key,
+    category,
+    createdAt: row.created_at,
+    description: row.description,
+    duration: null,
+    hospitalAddress: row.branch_info,
+    hospitalLat: null,
+    hospitalLng: null,
+    hospitalMapQuery: row.branch_info,
+    hospitalName: tenantNameFromJoin(row.tenants),
+    id: row.id,
+    includes: deriveIncludes(row.description),
+    imageUrl: row.image_url,
+    location: row.branch_info,
+    preparationNotes: null,
+    priceAmount: row.price_baht,
+    productImageName: null,
+    productImagePreviewUri: row.image_url,
+    ragChunkId: null,
+    requiresAppointment: row.requires_appointment,
+    status: row.active ? 'active' : 'archived',
+    tags,
+    tenantId: row.tenant_id,
+    title: row.name,
+  };
+}
+
+async function loadTenant(slug = defaultTenantSlug): Promise<TenantRow | null> {
+  if (!supabaseConfigStatus.isConfigured) {
+    return null;
+  }
+
+  const { data, error } = await supabase
+    .from('tenants')
+    .select('id,slug,display_name,logo_url')
+    .eq('slug', slug)
+    .maybeSingle();
+
+  if (error) {
+    return null;
+  }
+
+  return data as TenantRow | null;
+}
+
+async function requireTenant(slug = defaultTenantSlug): Promise<TenantRow> {
+  const tenant = await loadTenant(slug);
+
+  if (!tenant) {
+    throw new Error(`Tenant "${slug}" is not available for this user.`);
+  }
+
+  return tenant;
+}
+
+async function requireAuthenticatedUser() {
+  const { data, error } = await supabase.auth.getUser();
+
+  if (error || !data.user) {
+    throw new Error('Sign in with a tenant admin account to manage the catalog.');
+  }
+
+  return data.user;
+}
+
+export async function loadTenantMemberContext(slug = defaultTenantSlug): Promise<TenantMemberContext | null> {
+  if (!supabaseConfigStatus.isConfigured) {
+    return null;
+  }
+
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+
+  if (userError || !userData.user) {
+    return null;
+  }
+
+  const tenant = await loadTenant(slug);
+
+  if (!tenant) {
+    throw new Error(`Tenant "${slug}" is not available for this user.`);
+  }
+
+  const { data: member, error: memberError } = await supabase
+    .from('tenant_members')
+    .select('role')
+    .eq('tenant_id', tenant.id)
+    .eq('auth_user_id', userData.user.id)
+    .maybeSingle();
+
+  if (memberError || !member) {
+    throw new Error('Your account is not a member of this tenant.');
+  }
+
+  return {
+    ...tenant,
+    role: String((member as { role: string }).role),
+  };
+}
+
+export function canWriteTenantCatalog(context: TenantMemberContext | null) {
+  return context?.role === 'superadmin' || context?.role === 'tenant_admin';
+}
+
+export function analyzeProductDescription(draft: HospitalProductDraft, category: ProductCategory = inferCategory(draft)): ProductDescriptionAnalysis {
   const description = compactText(draft.description);
-  const searchText = `${draft.title} ${description}`.toLowerCase();
-  const sentences = splitSentences(draft.description);
-  const allRuleTerms = categoryRules.flatMap((rule) => rule.terms);
-  const keywordHits = extractKeywordHits(searchText, allRuleTerms);
-  const includeTerms = [
-    'รวม',
-    'ตรวจ',
-    'panel',
-    'profile',
-    'cbc',
-    'hba1c',
-    'ldl',
-    'hdl',
-    'ultrasound',
-    'x-ray',
-    'mri',
-    'ct',
-    'vaccine',
-    'วัคซีน',
-    'doctor',
-    'report',
-  ];
-  const preparationTerms = [
-    'งดอาหาร',
-    'ดื่มน้ำ',
-    'fasting',
-    'ยา',
-    'medication',
-    'ตั้งครรภ์',
-    'pregnant',
-    'แพ้',
-    'allergy',
-    'ก่อนตรวจ',
-    'ก่อนรับบริการ',
-  ];
-  const extractedIncludes = unique(
-    sentences
-      .filter((sentence) => includeTerms.some((term) => sentence.toLowerCase().includes(term.toLowerCase())))
-      .flatMap((sentence) => splitList(sentence.replace(/^(รวม|includes?)\s*[:：-]?\s*/i, '')))
-      .slice(0, 12),
-  );
-  const extractedPreparationNotes = unique(
-    sentences.filter((sentence) => preparationTerms.some((term) => sentence.toLowerCase().includes(term.toLowerCase()))),
-  ).slice(0, 6);
-  const suggestedTags = unique([
-    categoryLabels[category],
-    ...keywordHits.slice(0, 8),
-    ...extractedIncludes.slice(0, 4),
-  ]).slice(0, 12);
+  const extractedIncludes = deriveIncludes(description);
+  const extractedPreparationNotes = splitList(description).filter((item) => /fast|prepare|appointment|งด|ยา|แพ้/.test(item.toLowerCase()));
   const summary = description.length > 180 ? `${description.slice(0, 177).trim()}...` : description;
-  const bookingGuidance =
-    'หลังชำระเงิน ให้ลูกค้าใช้ order number ติดต่อ call center ของโรงพยาบาลเพื่อยืนยันวันเวลา ราคา เงื่อนไขล่าสุด และการเตรียมตัวก่อนรับบริการ.';
-  const warnings = [
-    ...(extractedPreparationNotes.length > 0 ? ['พบข้อความเกี่ยวกับการเตรียมตัว/ข้อควรระวัง ควรให้ hospital reviewer ตรวจทานก่อน production'] : []),
-    ...(description.length < 80 ? ['Description สั้นเกินไป อาจทำให้ RAG ตอบรายละเอียดสินค้าได้ไม่ครบ'] : []),
-  ];
+  const suggestedTags = unique([categoryLabels[category], ...extractedIncludes.slice(0, 4)]).slice(0, 8);
+  const bookingGuidance = draft.requiresAppointment === false ? 'Walk-in allowed if the tenant confirms availability.' : 'Appointment is required before service.';
+  const warnings = description.length < 60 ? ['Description is short; confirm medical and booking details before publishing.'] : [];
   const ragSections: DescriptionRagSection[] = [
     {
-      confidence: description.length >= 80 ? 0.86 : 0.62,
-      content: summary || `${draft.title} ของ ${draft.hospitalName}`,
+      confidence: description.length >= 60 ? 0.82 : 0.55,
+      content: summary || draft.title,
       key: 'overview',
-      label: 'ภาพรวมสินค้า',
+      label: 'Overview',
     },
     {
-      confidence: extractedIncludes.length ? 0.78 : 0.45,
-      content: extractedIncludes.length ? extractedIncludes.join(', ') : 'ยังไม่พบรายการที่รวมอย่างชัดเจนใน description',
+      confidence: extractedIncludes.length > 0 ? 0.72 : 0.4,
+      content: extractedIncludes.length ? extractedIncludes.join(', ') : 'No included items were detected from the description.',
       key: 'included_items',
-      label: 'รายการที่รวม',
-    },
-    {
-      confidence: extractedPreparationNotes.length ? 0.74 : 0.42,
-      content: extractedPreparationNotes.length
-        ? extractedPreparationNotes.join(' ')
-        : 'ให้ลูกค้ายืนยันการเตรียมตัวกับ call center ก่อนเข้ารับบริการ',
-      key: 'medical_preparation',
-      label: 'การเตรียมตัว',
+      label: 'Included items',
     },
     {
       confidence: 0.82,
       content: bookingGuidance,
       key: 'booking',
-      label: 'ขั้นตอนจอง',
+      label: 'Booking',
     },
   ];
 
   if (warnings.length > 0) {
     ragSections.push({
-      confidence: 0.7,
+      confidence: 0.68,
       content: warnings.join(' '),
       key: 'safety_review',
       label: 'Review flag',
@@ -318,7 +367,7 @@ export function analyzeProductDescription(draft: HospitalProductDraft, category:
     bookingGuidance,
     extractedIncludes,
     extractedPreparationNotes,
-    keywords: unique([draft.title, draft.hospitalName, ...keywordHits, ...suggestedTags]).slice(0, 24),
+    keywords: unique([draft.title, categoryLabels[category], ...suggestedTags, ...extractedIncludes]).slice(0, 16),
     ragSections,
     suggestedTags,
     summary,
@@ -327,38 +376,17 @@ export function analyzeProductDescription(draft: HospitalProductDraft, category:
 }
 
 export function classifyHospitalProduct(draft: HospitalProductDraft): ProductClassification {
-  const searchText = toSearchText(draft);
-  const matchedRule = categoryRules.find((rule) => rule.terms.some((term) => searchText.includes(term.toLowerCase())));
-  const category = matchedRule?.category ?? 'other';
+  const category = inferCategory(draft);
   const analysis = analyzeProductDescription(draft, category);
-  const generatedTags = unique([
-    ...(matchedRule?.tags ?? []),
-    categoryLabels[category],
-    ...analysis.suggestedTags,
-    ...analysis.extractedIncludes.slice(0, 4),
-  ]);
-  const keywords = unique([
-    draft.title,
-    draft.hospitalName,
-    categoryLabels[category],
-    ...generatedTags,
-    ...analysis.keywords,
-    ...analysis.extractedIncludes,
-    'แพ็กเกจ',
-    'package',
-    'ราคา',
-    'booking',
-  ]).slice(0, 24);
-  const riskLevel = analysis.extractedPreparationNotes.length > 0 ? 'medium' : 'low';
 
   return {
     analysis,
     category,
-    confidence: matchedRule?.confidence ?? 0.55,
-    keywords,
+    confidence: draft.category ? 0.95 : category === 'general' ? 0.62 : 0.82,
+    keywords: analysis.keywords,
     ragCategory: 'marketplace.product',
-    riskLevel,
-    tags: generatedTags,
+    riskLevel: analysis.warnings.length > 0 ? 'medium' : 'low',
+    tags: analysis.suggestedTags,
   };
 }
 
@@ -366,85 +394,34 @@ export function getProductCategoryLabel(category: ProductCategory) {
   return categoryLabels[category];
 }
 
+export function getProductCategories() {
+  return productCategories;
+}
+
 export function buildProductRagPreview(draft: HospitalProductDraft, classification = classifyHospitalProduct(draft)) {
-  const price = Number(draft.priceAmount.replace(/,/g, '')) || 0;
-  const { analysis } = classification;
-  const parts = [
-    `${draft.title} เป็นสินค้า/แพ็กเกจของ ${draft.hospitalName}.`,
-    draft.hospitalAddress ? `ที่อยู่โรงพยาบาล: ${compactText(draft.hospitalAddress)}.` : '',
-    `หมวดหมู่: ${categoryLabels[classification.category]}.`,
-    `ราคา: ${price.toLocaleString('th-TH')} THB.`,
-    analysis.summary ? `รายละเอียดหลัก: ${analysis.summary}.` : '',
-    analysis.extractedIncludes.length ? `รายการที่ระบบวิเคราะห์ว่าอาจรวมอยู่: ${analysis.extractedIncludes.join(', ')}.` : '',
-    analysis.extractedPreparationNotes.length
-      ? `การเตรียมตัว/ข้อควรระวังที่พบใน description: ${analysis.extractedPreparationNotes.join(' ')}.`
-      : '',
-    `การจอง: ${analysis.bookingGuidance}`,
+  const price = parsePriceBaht(draft.priceAmount);
+  const lines = [
+    `${compactText(draft.title)} (${categoryLabels[classification.category]})`,
+    `Price: ${price.toLocaleString('th-TH')} THB`,
+    draft.branchInfo || draft.hospitalAddress ? `Branch: ${compactText(draft.branchInfo || draft.hospitalAddress)}` : '',
+    classification.analysis.summary ? `Description: ${classification.analysis.summary}` : '',
   ];
 
-  return parts.filter(Boolean).join('\n');
-}
-
-function toHospitalProduct(row: HospitalProductRow): HospitalProduct {
-  return {
-    bookingNote: row.booking_note,
-    category: row.category,
-    createdAt: row.created_at,
-    description: row.description,
-    duration: row.duration,
-    hospitalAddress: row.hospital_address,
-    hospitalLat: row.hospital_lat,
-    hospitalLng: row.hospital_lng,
-    hospitalMapQuery: row.hospital_map_query,
-    hospitalName: row.hospital_name,
-    id: row.id,
-    includes: row.includes ?? [],
-    location: row.location,
-    preparationNotes: row.preparation_notes,
-    priceAmount: row.price_amount,
-    productImageName: row.metadata?.product_image_name ?? null,
-    productImagePreviewUri: row.metadata?.product_image_preview_uri ?? null,
-    ragChunkId: row.rag_chunk_id,
-    status: row.status,
-    tags: row.tags ?? [],
-    title: row.title,
-  };
-}
-
-function productSelectColumns() {
-  return [
-    'id',
-    'hospital_name',
-    'title',
-    'description',
-    'category',
-    'price_amount',
-    'duration',
-    'hospital_address',
-    'hospital_map_query',
-    'hospital_lat',
-    'hospital_lng',
-    'location',
-    'metadata',
-    'includes',
-    'tags',
-    'preparation_notes',
-    'booking_note',
-    'status',
-    'rag_chunk_id',
-    'created_at',
-  ].join(',');
+  return lines.filter(Boolean).join('\n');
 }
 
 export async function loadActiveHospitalProducts(limit = 20): Promise<HospitalProduct[]> {
-  if (!supabaseConfigStatus.isConfigured) {
+  const tenant = await loadTenant();
+
+  if (!tenant) {
     return [];
   }
 
   const { data, error } = await supabase
-    .from('hospital_products')
+    .from('products')
     .select(productSelectColumns())
-    .eq('status', 'active')
+    .eq('tenant_id', tenant.id)
+    .eq('active', true)
     .order('created_at', { ascending: false })
     .limit(limit);
 
@@ -452,17 +429,20 @@ export async function loadActiveHospitalProducts(limit = 20): Promise<HospitalPr
     return [];
   }
 
-  return (data as unknown as HospitalProductRow[]).map(toHospitalProduct);
+  return (data as unknown as ProductRow[]).map(toHospitalProduct);
 }
 
 export async function loadManagedHospitalProducts(limit = 80): Promise<HospitalProduct[]> {
-  if (!supabaseConfigStatus.isConfigured) {
+  const tenant = await loadTenant();
+
+  if (!tenant) {
     return [];
   }
 
   const { data, error } = await supabase
-    .from('hospital_products')
+    .from('products')
     .select(productSelectColumns())
+    .eq('tenant_id', tenant.id)
     .order('created_at', { ascending: false })
     .limit(limit);
 
@@ -470,24 +450,16 @@ export async function loadManagedHospitalProducts(limit = 80): Promise<HospitalP
     return [];
   }
 
-  return (data as unknown as HospitalProductRow[]).map(toHospitalProduct);
+  return (data as unknown as ProductRow[]).map(toHospitalProduct);
 }
 
 export async function updateHospitalProductStatus(product: HospitalProduct, status: HospitalProductStatus): Promise<HospitalProduct> {
-  if (!supabaseConfigStatus.isConfigured) {
-    throw new Error('Supabase is not configured.');
-  }
-
-  const { data: userData, error: userError } = await supabase.auth.getUser();
-
-  if (userError || !userData.user) {
-    throw new Error('ต้อง login ก่อนจัดการสินค้าโรงพยาบาล');
-  }
+  await requireAuthenticatedUser();
 
   const { data, error } = await supabase
-    .from('hospital_products')
+    .from('products')
     .update({
-      status,
+      active: status === 'active',
       updated_at: new Date().toISOString(),
     })
     .eq('id', product.id)
@@ -495,167 +467,100 @@ export async function updateHospitalProductStatus(product: HospitalProduct, stat
     .single();
 
   if (error || !data) {
-    throw new Error(error?.message ?? 'Unable to update hospital product status.');
+    throw new Error(error?.message ?? 'Unable to update product status.');
   }
 
-  if (product.ragChunkId) {
-    const isActive = status === 'active';
-    const { error: ragError } = await supabase
-      .from('rag_chunks')
-      .update({
-        is_active: isActive,
-        review_status: isActive ? 'approved' : 'archived',
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', product.ragChunkId);
-
-    if (ragError) {
-      throw new Error(ragError.message);
-    }
-  }
-
-  return toHospitalProduct(data as unknown as HospitalProductRow);
+  return toHospitalProduct(data as unknown as ProductRow);
 }
 
-async function embedRagChunk(chunkId: string): Promise<RagEmbeddingResult> {
-  const { data, error } = await supabase.functions.invoke('rag-embed', {
-    body: {
-      chunkId,
-    },
+export async function uploadProductImage(file: Blob & { name?: string; type?: string }, productId?: string): Promise<ProductImageUploadResult> {
+  await requireAuthenticatedUser();
+  const tenant = await requireTenant();
+  const originalName = file.name || 'product-image';
+  const extension = originalName.includes('.') ? originalName.split('.').pop() : file.type?.split('/').pop();
+  const safeBase = sanitizeStorageName(originalName.replace(/\.[^.]+$/, ''));
+  const safeExtension = sanitizeStorageName(extension || 'jpg');
+  const path = `${tenant.slug}/${productId ?? 'drafts'}/${Date.now()}-${safeBase}.${safeExtension}`;
+
+  const { error } = await supabase.storage.from('product-images').upload(path, file, {
+    cacheControl: '3600',
+    contentType: file.type || 'application/octet-stream',
+    upsert: false,
   });
 
   if (error) {
-    return {
-      message: error.message,
-      status: 'error',
-    };
+    throw new Error(error.message || 'Unable to upload product image.');
   }
 
-  const result = data as Partial<RagEmbeddingResult> | null;
+  const { data } = supabase.storage.from('product-images').getPublicUrl(path);
+
+  if (!data.publicUrl) {
+    throw new Error('Product image uploaded but no public URL was returned.');
+  }
 
   return {
-    dimensions: typeof result?.dimensions === 'number' ? result.dimensions : undefined,
-    message: result?.message,
-    model: result?.model,
-    status: result?.status === 'embedded' ? 'embedded' : 'error',
+    path,
+    publicUrl: data.publicUrl,
   };
 }
 
-export async function saveHospitalProductWithRag(draft: HospitalProductDraft): Promise<SaveHospitalProductResult> {
-  if (!supabaseConfigStatus.isConfigured) {
-    throw new Error('Supabase is not configured.');
-  }
-
-  const { data: userData, error: userError } = await supabase.auth.getUser();
-
-  if (userError || !userData.user) {
-    throw new Error('ต้อง login ก่อนเพิ่มสินค้าโรงพยาบาล');
-  }
-
+export async function saveHospitalProductWithRag(draft: HospitalProductDraft, productId?: string): Promise<SaveHospitalProductResult> {
+  await requireAuthenticatedUser();
+  const tenant = await requireTenant();
   const classification = classifyHospitalProduct(draft);
-  const priceAmount = Math.max(0, Math.round(Number(draft.priceAmount.replace(/,/g, '')) || 0));
-  const includes = classification.analysis.extractedIncludes;
-  const tags = classification.tags;
-  const { data: productData, error: productError } = await supabase
-    .from('hospital_products')
-    .insert({
-      auto_category_confidence: classification.confidence,
-      booking_note: classification.analysis.bookingGuidance,
-      category: classification.category,
-      created_by: userData.user.id,
-      description: compactText(draft.description),
-      duration: null,
-      hospital_address: compactText(draft.hospitalAddress),
-      hospital_lat: draft.hospitalLat ?? null,
-      hospital_lng: draft.hospitalLng ?? null,
-      hospital_map_query: compactText(draft.hospitalMapQuery || draft.hospitalName),
-      hospital_name: compactText(draft.hospitalName),
-      includes,
-      location: compactText(draft.hospitalAddress),
-      metadata: {
-        description_analysis: {
-          rag_sections: classification.analysis.ragSections,
-          warnings: classification.analysis.warnings,
-        },
-        classifier: 'client-rule-v1',
-        product_image_name: draft.productImageName ?? null,
-        product_image_preview_uri: draft.productImagePreviewUri ?? null,
-        rag_auto_publish: true,
-      },
-      preparation_notes: classification.analysis.extractedPreparationNotes.join(' '),
-      price_amount: priceAmount,
-      status: 'active',
-      tags,
-      title: compactText(draft.title),
-    })
-    .select(productSelectColumns())
-    .single();
+  const branchInfo = compactText(draft.branchInfo || draft.hospitalAddress || draft.hospitalMapQuery || '');
+  const imageUrl = compactText(draft.imageUrl || draft.productImagePreviewUri || '');
+  const payload = {
+    active: true,
+    branch_info: branchInfo || null,
+    category: classification.category,
+    description: compactText(draft.description),
+    image_url: imageUrl || null,
+    name: compactText(draft.title),
+    price_baht: parsePriceBaht(draft.priceAmount),
+    requires_appointment: draft.requiresAppointment ?? true,
+    tenant_id: tenant.id,
+    updated_at: new Date().toISOString(),
+  };
+  const query = productId
+    ? supabase.from('products').update(payload).eq('id', productId)
+    : supabase.from('products').insert(payload);
+  const { data, error } = await query.select(productSelectColumns()).single();
 
-  if (productError || !productData) {
-    throw new Error(productError?.message ?? 'Unable to save hospital product.');
+  if (error || !data) {
+    throw new Error(error?.message ?? 'Unable to save product.');
   }
 
-  const product = toHospitalProduct(productData as unknown as HospitalProductRow);
-  const ragChunkId = `hospital-product-${product.id}`;
-  const now = new Date();
-  const expiresAt = new Date(now);
-  expiresAt.setFullYear(expiresAt.getFullYear() + 1);
-
-  const { error: ragError } = await supabase.from('rag_chunks').upsert({
-    audience: 'patient',
-    category: classification.ragCategory,
-    content: buildProductRagPreview(draft, classification),
-    expires_at: expiresAt.toISOString(),
-    id: ragChunkId,
-    is_active: true,
-    keywords: classification.keywords,
-    language: 'th',
-    last_reviewed_at: now.toISOString(),
-    priority: 42,
-    review_status: 'approved',
-    risk_level: classification.riskLevel,
-    source: `${product.hospitalName} product portal`,
-    source_type: 'hospital_operational',
-    source_url: `mira://hospital-products/${product.id}`,
-    summary: `${product.title} ของ ${product.hospitalName} ราคา ${product.priceAmount.toLocaleString('th-TH')} THB หมวด ${categoryLabels[product.category]}`,
-    title: product.title,
-    token_budget: 260,
-    topic: product.category,
-  });
-
-  if (ragError) {
-    throw new Error(ragError.message);
-  }
-
-  const { data: updatedProduct, error: updateError } = await supabase
-    .from('hospital_products')
-    .update({
-      rag_chunk_id: ragChunkId,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', product.id)
-    .select(productSelectColumns())
-    .single();
-
-  if (updateError || !updatedProduct) {
-    throw new Error(updateError?.message ?? 'Unable to attach RAG chunk to product.');
-  }
-
-  let embedding: RagEmbeddingResult = { status: 'skipped' };
-
-  try {
-    embedding = await embedRagChunk(ragChunkId);
-  } catch (embeddingError) {
-    embedding = {
-      message: embeddingError instanceof Error ? embeddingError.message : 'Unable to embed RAG chunk.',
-      status: 'error',
-    };
-  }
+  const product = toHospitalProduct(data as unknown as ProductRow);
 
   return {
+    catalogKey: product.catalogKey,
     classification,
-    embedding,
-    product: toHospitalProduct(updatedProduct as unknown as HospitalProductRow),
-    ragChunkId,
+    embedding: {
+      message: 'Phase 1 stores catalog rows only; chat/RAG integration moves to Phase 2.',
+      status: 'skipped',
+    },
+    product,
+    ragChunkId: product.catalogKey,
+  };
+}
+
+export async function saveCatalogProduct(draft: HospitalProductDraft, productId?: string) {
+  return saveHospitalProductWithRag(draft, productId);
+}
+
+export function toProductSummary(product: HospitalProduct): ProductSummary {
+  return {
+    active: product.status === 'active',
+    branch_info: product.hospitalAddress ?? null,
+    catalog_key: product.catalogKey,
+    category: product.category,
+    description: product.description,
+    id: product.id,
+    image_url: product.imageUrl ?? null,
+    name: product.title,
+    price_baht: product.priceAmount,
+    requires_appointment: product.requiresAppointment,
+    tenant_id: product.tenantId,
   };
 }

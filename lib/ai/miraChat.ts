@@ -1,5 +1,16 @@
 import type { RagMatch } from '@/lib/rag/retriever';
+import { invokeFunction } from '@/lib/api/client';
 import { supabase, supabaseConfigStatus } from '@/lib/supabase';
+import type {
+  ChatAction,
+  ChatMessageRow,
+  ChatOrchestratorRequest,
+  ChatOrchestratorResponse,
+  ChatProduct,
+  OrderPanelState,
+  ProductSummary,
+} from '@/lib/types/api';
+import { readStoredReferralCode } from '@/lib/referrals/attribution';
 import type {
   ChatContextAssessment,
   ChatMemoryWrite,
@@ -12,13 +23,14 @@ import type {
 } from './healthChatTypes';
 import { createNaturalHealthFallbackAnswer } from './prototypeConversationPolicy';
 
-export type ChatRole = 'user' | 'assistant';
+export type ChatRole = 'user' | 'assistant' | 'system_notice';
 
 export type ChatMessage = {
   id: string;
   role: ChatRole;
   content: string;
   createdAt: string;
+  order?: OrderPanelState;
   sources?: ChatSource[];
   uiCards?: ChatUiCard[];
 };
@@ -44,7 +56,10 @@ export type AskAiResult = {
   requestId?: string;
   routerMeta?: ChatRouterMeta;
   searchSources: ChatSearchSource[];
+  sessionId?: string | null;
+  responseRole?: ChatRole;
   text: string;
+  order?: OrderPanelState;
   uiCards: ChatUiCard[];
 };
 
@@ -65,13 +80,219 @@ export const aiChatConfig = {
 
 const hasExternalProxy = Boolean(aiChatConfig.proxyUrl);
 const hasSupabaseProxy = supabaseConfigStatus.isConfigured;
+export const defaultTenantSlug = process.env.EXPO_PUBLIC_MIRA_TENANT_SLUG?.trim() || 'demo-hospital';
+let orchestratorSessionId: string | null = null;
 
 export const aiChatConfigStatus = {
   model: aiChatConfig.model,
   hasProxy: hasExternalProxy || hasSupabaseProxy,
   hasSupabaseProxy,
-  mode: hasExternalProxy ? 'external-proxy' : hasSupabaseProxy ? 'supabase-edge-function' : 'offline',
+  mode: hasSupabaseProxy ? 'supabase-edge-function' : hasExternalProxy ? 'external-proxy' : 'offline',
 };
+
+const chatMessageSelect = 'id,session_id,role,content,marker_product_ids,openai_response_id,client_msg_id,created_at';
+const chatHistoryPageSize = 40;
+
+type LatestChatSessionRow = {
+  created_at: string;
+  id: string;
+  last_message_at: string | null;
+};
+
+type ConsentRow = {
+  created_at: string;
+  granted: boolean;
+  id: string;
+};
+
+export type ChatHistoryPage = {
+  hasMore: boolean;
+  messages: ChatMessage[];
+  nextBefore: string | null;
+  sessionId: string | null;
+};
+
+export type HealthDataConsentState = {
+  checkedAt: string | null;
+  consentId: string | null;
+  granted: boolean;
+};
+
+export const chatHistoryQueryKeys = {
+  consent: () => ['mira-chat', defaultTenantSlug, 'health-data-consent'] as const,
+  latest: () => ['mira-chat', defaultTenantSlug, 'latest-history'] as const,
+  page: (sessionId: string, before: string | null) => ['mira-chat', defaultTenantSlug, 'history-page', sessionId, before ?? 'latest'] as const,
+};
+
+export function getCurrentChatSessionId() {
+  return orchestratorSessionId;
+}
+
+export function setCurrentChatSessionId(sessionId: string | null) {
+  orchestratorSessionId = sessionId;
+}
+
+export async function loadLatestChatHistoryPage(pageSize = chatHistoryPageSize): Promise<ChatHistoryPage> {
+  if (!hasSupabaseProxy) {
+    return {
+      hasMore: false,
+      messages: [],
+      nextBefore: null,
+      sessionId: null,
+    };
+  }
+
+  const { data, error } = await supabase
+    .from('chat_sessions')
+    .select('id,last_message_at,created_at')
+    .eq('channel', 'app')
+    .order('last_message_at', { ascending: false, nullsFirst: false })
+    .order('created_at', { ascending: false })
+    .limit(1);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const [session] = ((data ?? []) as LatestChatSessionRow[]);
+
+  if (!session) {
+    setCurrentChatSessionId(null);
+
+    return {
+      hasMore: false,
+      messages: [],
+      nextBefore: null,
+      sessionId: null,
+    };
+  }
+
+  setCurrentChatSessionId(session.id);
+
+  return loadChatHistoryPage(session.id, { pageSize });
+}
+
+export async function loadChatHistoryPage(
+  sessionId: string,
+  {
+    before,
+    pageSize = chatHistoryPageSize,
+  }: {
+    before?: string | null;
+    pageSize?: number;
+  } = {},
+): Promise<ChatHistoryPage> {
+  let query = supabase
+    .from('chat_messages')
+    .select(chatMessageSelect)
+    .eq('session_id', sessionId)
+    .order('created_at', { ascending: false })
+    .limit(pageSize + 1);
+
+  if (before) {
+    query = query.lt('created_at', before);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const rows = ((data ?? []) as ChatMessageRow[]);
+  const visibleRows = rows.slice(0, pageSize).reverse();
+  const messages = await rowsToChatMessages(visibleRows);
+  const oldestVisible = visibleRows[0]?.created_at ?? null;
+
+  return {
+    hasMore: rows.length > pageSize,
+    messages,
+    nextBefore: rows.length > pageSize ? oldestVisible : null,
+    sessionId,
+  };
+}
+
+export async function loadHealthDataConsent(): Promise<HealthDataConsentState> {
+  if (!hasSupabaseProxy) {
+    return {
+      checkedAt: null,
+      consentId: null,
+      granted: false,
+    };
+  }
+
+  const { data, error } = await supabase
+    .from('consents')
+    .select('id,granted,created_at')
+    .eq('kind', 'health_data_collection')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const consent = data as ConsentRow | null;
+
+  return {
+    checkedAt: consent?.created_at ?? null,
+    consentId: consent?.id ?? null,
+    granted: consent?.granted === true,
+  };
+}
+
+async function callSupabaseOrchestrator({
+  action,
+  question,
+  sessionId,
+}: {
+  action?: ChatAction | null;
+  question: string;
+  sessionId?: string | null;
+}): Promise<AskAiResult> {
+  const startedAt = Date.now();
+
+  const result = await invokeFunction<ChatOrchestratorRequest, ChatOrchestratorResponse>('chat-orchestrator', {
+    action: action ?? null,
+    channel: 'app',
+    client_msg_id: crypto.randomUUID(),
+    message: question,
+    ref_code: readStoredReferralCode() ?? undefined,
+    session_id: sessionId ?? orchestratorSessionId,
+    tenant_slug: defaultTenantSlug,
+  });
+  orchestratorSessionId = result.session_id;
+  const text = result.text.trim();
+
+  if (!text) {
+    throw new Error('AI proxy returned an empty response.');
+  }
+
+  return {
+    contextAssessment: undefined,
+    finishReason: undefined,
+    intent: result.products.length ? 'product_recommendation' : result.order ? 'checkout' : undefined,
+    latencyMs: Date.now() - startedAt,
+    memoryWrites: [],
+    mode: 'supabase-edge-function',
+    model: aiChatConfig.model,
+    nextActions: [],
+    order: result.order,
+    promptVersion: {
+      id: 'pmpt_6a29c7e353b88196a6e648b24c54849e0f6204e24d65c021',
+      versionKey: 'platform-default',
+    },
+    ragMatches: [],
+    requestId: undefined,
+    routerMeta: undefined,
+    searchSources: [],
+    sessionId: result.session_id,
+    responseRole: action?.type === 'order_form_submit' || action?.type === 'payment_done' ? 'system_notice' : 'assistant',
+    text,
+    uiCards: productsToUiCards(result.products),
+  };
+}
 
 async function callProxy({
   messages,
@@ -89,41 +310,7 @@ async function callProxy({
     userNickname: DEFAULT_USER_NICKNAME,
   };
 
-  if (!aiChatConfig.proxyUrl) {
-    const { data, error } = await supabase.functions.invoke('mira-chat', {
-      body: payload,
-    });
-
-    if (error) {
-      throw new Error(error.message);
-    }
-
-    const text = String(data?.text ?? data?.answer ?? '').trim();
-
-    if (!text) {
-      throw new Error('AI proxy returned an empty response.');
-    }
-
-    return {
-      contextAssessment: parseContextAssessment(data?.contextAssessment),
-      finishReason: typeof data?.finishReason === 'string' ? data.finishReason : undefined,
-      intent: parseIntent(data?.intent),
-      latencyMs: Date.now() - startedAt,
-      memoryWrites: parseMemoryWrites(data?.memoryWrites),
-      mode: 'supabase-edge-function',
-      model: String(data?.model ?? aiChatConfig.model),
-      nextActions: parseNextActions(data?.nextActions),
-      promptVersion: parsePromptVersion(data?.promptVersion),
-      ragMatches: parseChatSources(data?.ragMatches),
-      requestId: typeof data?.requestId === 'string' ? data.requestId : undefined,
-      routerMeta: parseRouterMeta(data?.routerMeta),
-      searchSources: parseSearchSources(data?.searchSources),
-      text,
-      uiCards: parseUiCards(data?.uiCards),
-    };
-  }
-
-  const response = await fetch(aiChatConfig.proxyUrl, {
+  const response = await fetch(aiChatConfig.proxyUrl!, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -152,6 +339,7 @@ async function callProxy({
     mode: 'external-proxy',
     model: String(data?.model ?? aiChatConfig.model),
     nextActions: parseNextActions(data?.nextActions),
+    order: undefined,
     promptVersion: parsePromptVersion(data?.promptVersion),
     ragMatches: parseChatSources(data?.ragMatches),
     requestId: typeof data?.requestId === 'string' ? data.requestId : undefined,
@@ -160,6 +348,84 @@ async function callProxy({
     text,
     uiCards: parseUiCards(data?.uiCards),
   };
+}
+
+async function rowsToChatMessages(rows: ChatMessageRow[]): Promise<ChatMessage[]> {
+  const catalogKeys = Array.from(
+    new Set(
+      rows.flatMap((row) => (Array.isArray(row.marker_product_ids) ? row.marker_product_ids : [])),
+    ),
+  );
+  const products = await loadProductsByCatalogKeys(catalogKeys);
+  const productByKey = new Map(products.map((product) => [product.catalog_key, product]));
+
+  return rows.map((row) => {
+    const rowProducts = (Array.isArray(row.marker_product_ids) ? row.marker_product_ids : [])
+      .map((key) => productByKey.get(key))
+      .filter((product): product is ProductSummary => Boolean(product))
+      .map(productSummaryToChatProduct);
+
+    return {
+      content: row.content,
+      createdAt: row.created_at,
+      id: row.id,
+      role: row.role,
+      uiCards: row.role === 'assistant' ? productsToUiCards(rowProducts) : [],
+    };
+  });
+}
+
+async function loadProductsByCatalogKeys(catalogKeys: string[]) {
+  if (catalogKeys.length === 0) {
+    return [];
+  }
+
+  const { data, error } = await supabase
+    .from('products')
+    .select('id,tenant_id,catalog_key,name,description,price_baht,category,image_url,branch_info,requires_appointment,active')
+    .in('catalog_key', catalogKeys);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []) as ProductSummary[];
+}
+
+function productSummaryToChatProduct(row: ProductSummary): ChatProduct {
+  return {
+    catalog_key: row.catalog_key,
+    description: row.description,
+    image_url: row.image_url,
+    name: row.name,
+    price_baht: row.price_baht,
+  };
+}
+
+function productsToUiCards(products: ChatProduct[]): ChatUiCard[] {
+  if (products.length === 0) {
+    return [];
+  }
+
+  return [
+    {
+      id: `products-${products.map((product) => product.catalog_key).join('-')}`,
+      products: products.map((product) => ({
+        category: 'catalog',
+        description: product.description,
+        hospitalName: defaultTenantSlug,
+        id: product.catalog_key,
+        includes: [],
+        priceAmount: product.price_baht,
+        productImagePreviewUri: product.image_url,
+        ragChunkId: null,
+        tags: ['Catalog'],
+        title: product.name,
+      })),
+      title: 'Recommended products',
+      type: 'product_grid',
+    },
+  ];
 }
 
 function parseIntent(value: unknown): HealthChatIntent | undefined {
@@ -338,15 +604,24 @@ function parseStringRecord(value: unknown): Record<string, string> | undefined {
 }
 
 export async function askAiWithRag({
+  action,
   messages,
   question,
+  sessionId,
 }: {
+  action?: ChatAction | null;
   messages: ChatMessage[];
   question: string;
+  sessionId?: string | null;
 }) {
-  if (aiChatConfigStatus.hasProxy) {
+  if (hasSupabaseProxy) {
+    return callSupabaseOrchestrator({ action, question, sessionId });
+  }
+
+  if (hasExternalProxy) {
     return callProxy({ messages, question });
   }
+
   throw new Error('Missing AI proxy. Configure Supabase or EXPO_PUBLIC_AI_PROXY_URL.');
 }
 

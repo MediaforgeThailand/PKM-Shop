@@ -1,8 +1,8 @@
 import { Link } from 'expo-router';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -17,10 +17,15 @@ import {
 import {
   aiChatConfigStatus,
   askAiWithRag,
+  chatHistoryQueryKeys,
   createSmallTalkAnswer,
   createOfflineRagAnswer,
   DEFAULT_USER_NICKNAME,
   formatUserDisplayName,
+  loadChatHistoryPage,
+  loadHealthDataConsent,
+  loadLatestChatHistoryPage,
+  setCurrentChatSessionId,
   type ChatMessage,
 } from '@/lib/ai/miraChat';
 import {
@@ -28,17 +33,17 @@ import {
   type AppRole,
 } from '@/lib/ai/promptGovernance';
 import { useAuthSession } from '@/lib/auth/useAuthSession';
-import {
-  getHealthFactTypeLabel,
-  getHealthMemoryStatus,
-  persistConfirmedHealthFacts,
-  type HealthMemoryStatus,
-} from '@/lib/health/healthDataVault';
+import { getHealthFactTypeLabel } from '@/lib/health/healthDataVault';
 import { extractHealthFactsFromText, type ExtractedHealthFact } from '@/lib/health/healthFactExtractor';
 import { localHealthKnowledge, type RagChunk } from '@/lib/rag/healthKnowledge';
 import { retrieveRagContext } from '@/lib/rag/retriever';
 import { loadRagChunks } from '@/lib/rag/supabaseRag';
 import type { ChatUiCard } from '@/lib/ai/healthChatTypes';
+import { ConsentSheet } from '@/components/chat/ConsentSheet';
+import { MessageBubble, messageBubbleStyles } from '@/components/chat/MessageBubble';
+import { OrderPanel } from '@/components/chat/OrderPanel';
+import { ProductCarousel } from '@/components/chat/ProductCarousel';
+import type { ChatAction, ChatProduct } from '@/lib/types/api';
 
 const starterPrompts = [
   'อยากตรวจสุขภาพต้องเตรียมตัวยังไง',
@@ -81,51 +86,22 @@ type OpsLog = {
   title: string;
 };
 
-function createMessage(role: ChatMessage['role'], content: string, sources?: ChatMessage['sources'], uiCards?: ChatMessage['uiCards']): ChatMessage {
+function createMessage(
+  role: ChatMessage['role'],
+  content: string,
+  sources?: ChatMessage['sources'],
+  uiCards?: ChatMessage['uiCards'],
+  order?: ChatMessage['order'],
+): ChatMessage {
   return {
     id: `${role}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     role,
     content,
     createdAt: new Date().toISOString(),
+    order,
     sources,
     uiCards,
   };
-}
-
-function formatProductMoney(amount: number) {
-  return `${amount.toLocaleString('th-TH')} THB`;
-}
-
-function ProductGridCard({ card }: { card: Extract<ChatUiCard, { type: 'product_grid' }> }) {
-  return (
-    <View style={styles.productCardGroup}>
-      {card.products.map((product) => (
-        <View key={product.id} style={styles.productCard}>
-          {product.productImagePreviewUri ? (
-            <Image source={{ uri: product.productImagePreviewUri }} resizeMode="cover" style={styles.productImage} />
-          ) : (
-            <View style={styles.productImageFallback}>
-              <Text style={styles.productImageFallbackText}>M</Text>
-            </View>
-          )}
-          <View style={styles.productCardBody}>
-            <Text numberOfLines={2} style={styles.productTitle}>
-              {product.title}
-            </Text>
-            <Text numberOfLines={1} style={styles.productHospital}>
-              {product.hospitalName}
-            </Text>
-            <Text style={styles.productPrice}>{formatProductMoney(product.priceAmount)}</Text>
-            <Link href={`/checkout?productId=${encodeURIComponent(product.id)}`} asChild>
-              <Pressable style={styles.productCta}>
-                <Text style={styles.productCtaText}>{'\u0e08\u0e2d\u0e07'}</Text>
-              </Pressable>
-            </Link>
-          </View>
-        </View>
-      ))}
-    </View>
-  );
 }
 
 function MemorySavedCard({ card }: { card: Extract<ChatUiCard, { type: 'memory_saved' }> }) {
@@ -139,9 +115,27 @@ function MemorySavedCard({ card }: { card: Extract<ChatUiCard, { type: 'memory_s
   );
 }
 
-function ChatUiCardRenderer({ card }: { card: ChatUiCard }) {
+function productGridToChatProducts(card: Extract<ChatUiCard, { type: 'product_grid' }>): ChatProduct[] {
+  return card.products.map((product) => ({
+    catalog_key: product.id,
+    description: product.description,
+    image_url: product.productImagePreviewUri ?? null,
+    name: product.title,
+    price_baht: product.priceAmount,
+  }));
+}
+
+function ChatUiCardRenderer({
+  card,
+  disabled,
+  onSelectProduct,
+}: {
+  card: ChatUiCard;
+  disabled?: boolean;
+  onSelectProduct: (product: ChatProduct) => void;
+}) {
   if (card.type === 'product_grid') {
-    return <ProductGridCard card={card} />;
+    return <ProductCarousel disabled={disabled} onSelectProduct={onSelectProduct} products={productGridToChatProducts(card)} />;
   }
 
   if (card.type === 'memory_saved') {
@@ -185,16 +179,19 @@ function formatLogTime(value: string) {
 
 export default function ChatbotScreen() {
   const scrollRef = useRef<ScrollView>(null);
-  const lastHealthStatusLogKeyRef = useRef<string | null>(null);
+  const historyHydrationKeyRef = useRef<string | null>(null);
+  const queryClient = useQueryClient();
   const { width } = useWindowDimensions();
   const auth = useAuthSession();
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [historyCursor, setHistoryCursor] = useState<string | null>(null);
+  const [hasMoreHistory, setHasMoreHistory] = useState(false);
   const [ragChunks, setRagChunks] = useState<RagChunk[]>(localHealthKnowledge);
   const [activeLogTab, setActiveLogTab] = useState<LogCategory>('ai');
   const [appRole, setAppRole] = useState<AppRole>('user');
   const [activePromptVersionKey, setActivePromptVersionKey] = useState<string | null>(null);
-  const [healthMemoryStatus, setHealthMemoryStatus] = useState<HealthMemoryStatus | null>(null);
   const [opsLogs, setOpsLogs] = useState<OpsLog[]>(() => [
     createOpsLog({
       category: 'api',
@@ -204,12 +201,14 @@ export default function ChatbotScreen() {
     }),
   ]);
   const [isLoadingKnowledge, setIsLoadingKnowledge] = useState(true);
+  const [isLoadingMoreHistory, setIsLoadingMoreHistory] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const isWideLayout = width >= 1100;
-  const authUserId = auth.user?.id ?? null;
   const canUseAi = aiChatConfigStatus.hasProxy && Boolean(auth.session);
+  const canUseOrderActions = aiChatConfigStatus.hasSupabaseProxy && Boolean(auth.session);
+  const canUsePersistedChat = aiChatConfigStatus.hasSupabaseProxy && Boolean(auth.session);
   const modeLabel = !aiChatConfigStatus.hasProxy
     ? 'Local fallback only'
     : auth.session
@@ -234,6 +233,91 @@ export default function ChatbotScreen() {
   const appendLog = useCallback((entry: Omit<OpsLog, 'createdAt' | 'id'>) => {
     setOpsLogs((current) => [createOpsLog(entry), ...current].slice(0, 160));
   }, []);
+
+  const chatHistoryQuery = useQuery({
+    enabled: canUsePersistedChat,
+    queryFn: () => loadLatestChatHistoryPage(),
+    queryKey: chatHistoryQueryKeys.latest(),
+  });
+
+  const consentQuery = useQuery({
+    enabled: canUsePersistedChat,
+    queryFn: loadHealthDataConsent,
+    queryKey: chatHistoryQueryKeys.consent(),
+  });
+
+  useEffect(() => {
+    if (canUsePersistedChat) {
+      return;
+    }
+
+    setActiveSessionId(null);
+    setCurrentChatSessionId(null);
+    setHasMoreHistory(false);
+    setHistoryCursor(null);
+    historyHydrationKeyRef.current = null;
+    setMessages(initialMessages);
+  }, [canUsePersistedChat]);
+
+  useEffect(() => {
+    if (!canUsePersistedChat || !chatHistoryQuery.data || isSending) {
+      return;
+    }
+
+    const page = chatHistoryQuery.data;
+    const lastMessageId = page.messages[page.messages.length - 1]?.id ?? 'empty';
+    const hydrationKey = `${page.sessionId ?? 'none'}:${page.nextBefore ?? 'none'}:${lastMessageId}:${page.messages.length}`;
+
+    if (historyHydrationKeyRef.current === hydrationKey) {
+      return;
+    }
+
+    historyHydrationKeyRef.current = hydrationKey;
+    setActiveSessionId(page.sessionId);
+    setCurrentChatSessionId(page.sessionId);
+    setHasMoreHistory(page.hasMore);
+    setHistoryCursor(page.nextBefore);
+    setMessages(page.messages.length ? page.messages : initialMessages);
+
+    if (page.sessionId) {
+      appendLog({
+        category: 'api',
+        detail: 'Loaded the latest persisted chat session from Supabase.',
+        meta: [
+          { label: 'messages', value: String(page.messages.length) },
+          { label: 'older page', value: page.hasMore ? 'available' : 'none' },
+        ],
+        status: 'success',
+        title: 'Chat history loaded',
+      });
+    }
+  }, [appendLog, canUsePersistedChat, chatHistoryQuery.data, isSending]);
+
+  useEffect(() => {
+    if (!chatHistoryQuery.error) {
+      return;
+    }
+
+    appendLog({
+      category: 'api',
+      detail: chatHistoryQuery.error instanceof Error ? chatHistoryQuery.error.message : 'Unable to load chat history.',
+      status: 'warning',
+      title: 'Chat history unavailable',
+    });
+  }, [appendLog, chatHistoryQuery.error]);
+
+  useEffect(() => {
+    if (!consentQuery.error) {
+      return;
+    }
+
+    appendLog({
+      category: 'api',
+      detail: consentQuery.error instanceof Error ? consentQuery.error.message : 'Unable to load health data consent.',
+      status: 'warning',
+      title: 'Consent status unavailable',
+    });
+  }, [appendLog, consentQuery.error]);
 
   useEffect(() => {
     let isMounted = true;
@@ -290,60 +374,6 @@ export default function ChatbotScreen() {
   useEffect(() => {
     let isMounted = true;
 
-    getHealthMemoryStatus()
-      .then((status) => {
-        if (isMounted) {
-          setHealthMemoryStatus(status);
-          const nextStatusKey = `${status.reason}:${status.userId ?? 'none'}:${
-            status.consentGranted ? 'granted' : 'not_granted'
-          }`;
-
-          if (lastHealthStatusLogKeyRef.current !== nextStatusKey) {
-            lastHealthStatusLogKeyRef.current = nextStatusKey;
-            appendLog({
-              category: 'api',
-              detail:
-                status.reason === 'ready'
-                  ? status.consentGranted
-                    ? 'User is authenticated and health memory consent is granted.'
-                    : 'User is authenticated but health memory consent is not granted yet.'
-                  : status.reason === 'not_authenticated'
-                    ? 'No authenticated user session is available.'
-                    : 'Supabase is not configured for health memory.',
-              meta: [
-                { label: 'reason', value: status.reason },
-                { label: 'consent', value: status.consentGranted ? 'granted' : 'not granted' },
-              ],
-              status: status.reason === 'ready' && status.consentGranted ? 'success' : 'warning',
-              title: 'Health memory status updated',
-            });
-          }
-        }
-      })
-      .catch(() => {
-        if (isMounted) {
-          setHealthMemoryStatus({
-            consentGranted: false,
-            reason: 'not_authenticated',
-            userId: null,
-          });
-          appendLog({
-            category: 'api',
-            detail: 'Unable to read health memory status, so the app treated the session as unauthenticated.',
-            status: 'error',
-            title: 'Health memory status failed',
-          });
-        }
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, [appendLog, authUserId]);
-
-  useEffect(() => {
-    let isMounted = true;
-
     appendLog({
       category: 'rag',
       detail: 'Loading local fallback health knowledge for offline preview.',
@@ -394,7 +424,7 @@ export default function ChatbotScreen() {
     scrollRef.current?.scrollToEnd({ animated: true });
   }, [messages, isSending]);
 
-  async function sendMessage(prompt?: string) {
+  async function sendMessage(prompt?: string, action?: ChatAction | null) {
     const question = (prompt ?? input).trim();
 
     if (!question || isSending) {
@@ -472,6 +502,8 @@ export default function ChatbotScreen() {
 
     try {
       let answer: string;
+      let answerOrder: ChatMessage['order'] = null;
+      let answerRole: ChatMessage['role'] = 'assistant';
       let answerSources: ChatMessage['sources'] = [];
       let answerUiCards: ChatMessage['uiCards'] = [];
 
@@ -487,13 +519,21 @@ export default function ChatbotScreen() {
           title: 'OpenAI API call started',
         });
         const result = await askAiWithRag({
+          action,
           messages,
           question,
+          sessionId: activeSessionId,
         });
+        if (result.sessionId) {
+          setActiveSessionId(result.sessionId);
+          setCurrentChatSessionId(result.sessionId);
+        }
         if (result.promptVersion) {
           setActivePromptVersionKey(result.promptVersion.versionKey);
         }
         answer = result.text;
+        answerOrder = result.order ?? null;
+        answerRole = result.responseRole ?? 'assistant';
         answerSources = result.ragMatches;
         answerUiCards = result.uiCards;
         appendLog({
@@ -544,8 +584,14 @@ export default function ChatbotScreen() {
         });
       }
 
-      setMessages((current) => [...current, createMessage('assistant', answer, answerSources, answerUiCards)]);
-      void handleHealthFactsAfterAnswer(question, answer, answerSources.map((match) => match.id), extractedFacts);
+      setMessages((current) => [...current, createMessage(answerRole, answer, answerSources, answerUiCards, answerOrder)]);
+      if (canUsePersistedChat) {
+        void queryClient.invalidateQueries({ queryKey: chatHistoryQueryKeys.latest() });
+      }
+      if (action?.type === 'consent_granted') {
+        void queryClient.invalidateQueries({ queryKey: chatHistoryQueryKeys.consent() });
+      }
+      handleHealthFactsAfterAnswer(extractedFacts);
     } catch (sendError) {
       const message = sendError instanceof Error ? sendError.message : 'Unable to reach OpenAI.';
       const offlineAnswer = createOfflineRagAnswer(question, fallbackRagMatches);
@@ -563,62 +609,101 @@ export default function ChatbotScreen() {
         title: 'Fallback answer rendered',
       });
       setMessages((current) => [...current, createMessage('assistant', offlineAnswer, fallbackRagMatches)]);
-      void handleHealthFactsAfterAnswer(
-        question,
-        offlineAnswer,
-        fallbackRagMatches.map((match) => match.id),
-        extractedFacts,
-      );
+      handleHealthFactsAfterAnswer(extractedFacts);
     } finally {
       setIsSending(false);
     }
   }
 
-  async function handleHealthFactsAfterAnswer(
-    question: string,
-    assistantAnswer: string,
-    ragChunkIds: string[],
-    facts: ExtractedHealthFact[],
-  ) {
+  function handleHealthFactsAfterAnswer(facts: ExtractedHealthFact[]) {
     if (facts.length === 0) {
       return;
     }
 
-    if (!auth.session) {
-      appendLog({
-        category: 'health',
-        detail: 'Detected health facts were not saved because there is no authenticated user session.',
-        meta: facts.map((fact) => ({
-          label: getHealthFactTypeLabel(fact.factType),
-          value: fact.value,
-        })),
-        status: 'warning',
-        title: 'Auto-save skipped',
-      });
+    appendLog({
+      category: 'health',
+      detail: 'Detected possible facts locally for operator visibility. Canonical extraction now runs server-side after the user message is saved.',
+      meta: facts.map((fact) => ({
+        label: getHealthFactTypeLabel(fact.factType),
+        value: fact.value,
+      })),
+      status: 'info',
+      title: 'Server extraction delegated',
+    });
+  }
+
+  function handleSelectProduct(product: ChatProduct) {
+    void sendMessage(`ต้องการจอง ${product.name}`, {
+      catalog_key: product.catalog_key,
+      type: 'select_product',
+    });
+  }
+
+  function handleOrderFormSubmit(payload: { buyer_name: string; buyer_phone: string; order_id: string; preferred_date?: string }) {
+    void sendMessage('ส่งข้อมูลผู้ซื้อแล้ว', {
+      ...payload,
+      type: 'order_form_submit',
+    });
+  }
+
+  function handlePaymentDone(orderId: string) {
+    void sendMessage('จ่ายแล้ว', {
+      order_id: orderId,
+      type: 'payment_done',
+    });
+  }
+
+  function handleGrantConsent() {
+    void sendMessage('Health data consent granted.', {
+      type: 'consent_granted',
+    });
+  }
+
+  async function loadEarlierHistory() {
+    if (!activeSessionId || !historyCursor || isLoadingMoreHistory) {
       return;
     }
 
+    setIsLoadingMoreHistory(true);
+
     try {
-      appendLog({
-        category: 'health',
-        detail: 'Detected facts are being auto-saved into the personal health data vault.',
-        meta: facts.map((fact) => ({
-          label: getHealthFactTypeLabel(fact.factType),
-          value: fact.value,
-        })),
-        status: 'info',
-        title: 'Auto-save started',
-      });
-      const result = await persistConfirmedHealthFacts({
-        assistantAnswer,
-        facts,
-        model: aiChatConfigStatus.model,
-        question,
-        ragChunkIds,
+      const page = await queryClient.fetchQuery({
+        queryFn: () => loadChatHistoryPage(activeSessionId, { before: historyCursor }),
+        queryKey: chatHistoryQueryKeys.page(activeSessionId, historyCursor),
       });
 
-      if (result.status === 'skipped') {
-        const reason =
+      setMessages((current) => {
+        const existingIds = new Set(current.map((message) => message.id));
+        const olderMessages = page.messages.filter((message) => !existingIds.has(message.id));
+        const currentMessages = current.length === 1 && current[0]?.id === 'welcome' ? [] : current;
+
+        return [...olderMessages, ...currentMessages];
+      });
+      setHasMoreHistory(page.hasMore);
+      setHistoryCursor(page.nextBefore);
+      appendLog({
+        category: 'api',
+        detail: 'Loaded an older page of persisted chat messages.',
+        meta: [
+          { label: 'messages', value: String(page.messages.length) },
+          { label: 'older page', value: page.hasMore ? 'available' : 'none' },
+        ],
+        status: 'success',
+        title: 'Older history loaded',
+      });
+    } catch (historyError) {
+      appendLog({
+        category: 'api',
+        detail: historyError instanceof Error ? historyError.message : 'Unable to load older chat history.',
+        status: 'error',
+        title: 'Older history failed',
+      });
+    } finally {
+      setIsLoadingMoreHistory(false);
+    }
+  }
+
+  /*
           result.reason === 'not_authenticated'
             ? 'ต้อง login ก่อน ระบบถึงจะบันทึกข้อมูลสุขภาพส่วนตัวได้'
             : result.reason === 'supabase_not_configured'
@@ -644,7 +729,6 @@ export default function ChatbotScreen() {
         status: 'success',
         title: 'Auto-save completed',
       });
-      setHealthMemoryStatus(await getHealthMemoryStatus());
     } catch (saveError) {
       const message = saveError instanceof Error ? saveError.message : 'บันทึกข้อมูลสุขภาพไม่สำเร็จ';
       appendLog({
@@ -655,6 +739,8 @@ export default function ChatbotScreen() {
       });
     }
   }
+
+  */
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.screen}>
@@ -695,9 +781,9 @@ export default function ChatbotScreen() {
 
         {aiChatConfigStatus.hasProxy && !auth.session ? (
           <View style={styles.notice}>
-            <Text style={styles.noticeTitle}>ต้อง login ก่อนใช้ OpenAI และ Health Memory</Text>
+            <Text style={styles.noticeTitle}>ต้อง login ก่อนใช้ OpenAI</Text>
             <Text style={styles.noticeBody}>
-              Edge Function เปิด JWT verification แล้ว จึงต้องมี user session ก่อนเรียก AI และก่อนบันทึกข้อมูลสุขภาพ
+              Edge Function เปิด JWT verification แล้ว จึงต้องมี user session ก่อนเรียก AI
             </Text>
             <Link href="/" asChild>
               <Pressable style={styles.noticeButton}>
@@ -714,6 +800,12 @@ export default function ChatbotScreen() {
           </View>
         ) : null}
 
+        {canUsePersistedChat && consentQuery.data && !consentQuery.data.granted ? (
+          <View style={styles.consentSheetWrap}>
+            <ConsentSheet disabled={isSending || consentQuery.isFetching} onGrant={handleGrantConsent} />
+          </View>
+        ) : null}
+
         <View style={styles.promptRow}>
           {starterPrompts.map((prompt) => (
             <Pressable key={prompt} disabled={isSending} onPress={() => sendMessage(prompt)} style={styles.promptChip}>
@@ -723,15 +815,25 @@ export default function ChatbotScreen() {
         </View>
 
         <View style={styles.chatList}>
+          {canUsePersistedChat && chatHistoryQuery.isLoading ? (
+            <View style={styles.historyStatus}>
+              <ActivityIndicator color="#3C7864" />
+              <Text style={styles.historyStatusText}>Loading chat history...</Text>
+            </View>
+          ) : null}
+
+          {canUsePersistedChat && activeSessionId && hasMoreHistory ? (
+            <Pressable disabled={isLoadingMoreHistory} onPress={loadEarlierHistory} style={styles.loadHistoryButton}>
+              <Text style={styles.loadHistoryButtonText}>{isLoadingMoreHistory ? 'Loading...' : 'Load earlier messages'}</Text>
+            </Pressable>
+          ) : null}
+
           {messages.map((message) => (
-            <View key={message.id} style={[styles.bubble, message.role === 'user' ? styles.userBubble : styles.assistantBubble]}>
-              <Text style={[styles.bubbleText, message.role === 'user' ? styles.userBubbleText : styles.assistantBubbleText]}>
-                {message.content}
-              </Text>
-              {message.sources?.length ? (
+            <MessageBubble key={message.id} message={message}>
+              {false && message.sources?.length ? (
                 <View style={styles.sources}>
                   <Text style={styles.sourcesTitle}>Sources</Text>
-                  {message.sources.map((source) => (
+                  {message.sources?.map((source) => (
                     <Text key={source.id} style={styles.sourceText}>
                       {source.title} · {source.category} · {source.source}
                     </Text>
@@ -741,15 +843,30 @@ export default function ChatbotScreen() {
               {message.role === 'assistant' && message.uiCards?.length ? (
                 <View style={styles.uiCardStack}>
                   {message.uiCards.map((card) => (
-                    <ChatUiCardRenderer key={card.id} card={card} />
+                    <ChatUiCardRenderer
+                      key={card.id}
+                      card={card}
+                      disabled={isSending || !canUseOrderActions}
+                      onSelectProduct={handleSelectProduct}
+                    />
                   ))}
                 </View>
               ) : null}
-            </View>
+              {message.role === 'assistant' && message.order ? (
+                <View style={styles.uiCardStack}>
+                  <OrderPanel
+                    disabled={isSending || !canUseOrderActions}
+                    onPaymentDone={handlePaymentDone}
+                    onSubmitForm={handleOrderFormSubmit}
+                    order={message.order}
+                  />
+                </View>
+              ) : null}
+            </MessageBubble>
           ))}
 
           {isSending ? (
-            <View style={[styles.bubble, styles.assistantBubble, styles.loadingBubble]}>
+            <View style={[styles.loadingBubble, messageBubbleStyles.loadingBubble]}>
               <ActivityIndicator color="#3C7864" />
                 <Text style={styles.loadingText}>Preparing backend context and asking OpenAI...</Text>
             </View>
@@ -1025,6 +1142,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
   },
+  consentSheetWrap: {
+    gap: 8,
+  },
   promptRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -1149,6 +1269,34 @@ const styles = StyleSheet.create({
   },
   chatList: {
     gap: 12,
+  },
+  historyStatus: {
+    alignItems: 'center',
+    alignSelf: 'center',
+    flexDirection: 'row',
+    gap: 8,
+    paddingVertical: 6,
+  },
+  historyStatusText: {
+    color: '#587069',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  loadHistoryButton: {
+    alignItems: 'center',
+    alignSelf: 'center',
+    backgroundColor: '#FFFFFF',
+    borderColor: '#DCE8E2',
+    borderRadius: 8,
+    borderWidth: 1,
+    minHeight: 38,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+  },
+  loadHistoryButtonText: {
+    color: '#3C7864',
+    fontSize: 12,
+    fontWeight: '900',
   },
   bubble: {
     borderRadius: 8,

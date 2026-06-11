@@ -1,18 +1,47 @@
 import { Link } from 'expo-router';
+import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ActionButton, Card, Pill, Screen, SectionHeader } from '@/components/MiraUI';
 import { BiomarkerBar, FreshnessDots, MiniTrend, StatusRing } from '@/components/HealthVisuals';
 import { MiraDesign, softShadow } from '@/constants/Design';
-import { currentUser, featuredPackage, formatMoney } from '@/services/mockBackend';
+import { DEFAULT_USER_NICKNAME, formatUserDisplayName } from '@/lib/ai/miraChat';
+import { loadActiveHospitalProducts, type HospitalProduct } from '@/lib/marketplace/hospitalProducts';
+
+function formatMoney(amount: number) {
+  return `${amount.toLocaleString('th-TH')} THB`;
+}
 
 export default function HomeScreen() {
+  const [featuredProduct, setFeaturedProduct] = useState<HospitalProduct | null>(null);
+  const [isLoadingProduct, setIsLoadingProduct] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    loadActiveHospitalProducts(1)
+      .then((products) => {
+        if (isMounted) {
+          setFeaturedProduct(products[0] ?? null);
+        }
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsLoadingProduct(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   return (
     <Screen>
       <View style={styles.header}>
         <View>
           <Text style={styles.eyebrow}>Mira Health</Text>
-          <Text style={styles.title}>สวัสดี {currentUser.name}</Text>
+          <Text style={styles.title}>Hello {formatUserDisplayName(DEFAULT_USER_NICKNAME)}</Text>
         </View>
         <View style={styles.avatar}>
           <Text style={styles.avatarText}>M</Text>
@@ -22,62 +51,79 @@ export default function HomeScreen() {
       <View style={styles.statusHero}>
         <View style={styles.statusCopy}>
           <Pill label="AI health status" tone="mint" />
-          <Text style={styles.statusTitle}>พร้อมเลือกแพ็กเกจตรวจสุขภาพ</Text>
+          <Text style={styles.statusTitle}>Ready to compare active hospital products</Text>
           <FreshnessDots active={3} />
         </View>
         <StatusRing value={78} label="Ready" size={128} />
       </View>
 
-      <SectionHeader title="แพ็กเกจที่ AI แนะนำ" meta="best match" />
+      <SectionHeader title="Featured product" meta={isLoadingProduct ? 'syncing catalog' : featuredProduct ? 'live catalog' : 'none active'} />
       <Card style={styles.packageCard}>
-        <View style={styles.packageTop}>
-          <View style={styles.iconTile}>
-            <Text style={styles.iconText}>+</Text>
-          </View>
-          <View style={styles.packageCopy}>
-            <Text style={styles.packageTitle}>{featuredPackage.title}</Text>
-            <Text style={styles.packageMeta}>{featuredPackage.hospital}</Text>
-          </View>
-          <Text style={styles.price}>{formatMoney(featuredPackage.price)}</Text>
-        </View>
-        <View style={styles.visualPanel}>
-          <BiomarkerBar label="Heart fit" value="82%" percent={82} tone={MiraDesign.color.primary} />
-          <BiomarkerBar label="Metabolic need" value="68%" percent={68} tone={MiraDesign.color.amber} />
-          <MiniTrend color={MiraDesign.color.primary} />
-        </View>
-        <Link href="/package-detail" asChild>
-          <ActionButton label="ดูรายละเอียดแพ็กเกจ" />
-        </Link>
+        {featuredProduct ? (
+          <>
+            <View style={styles.packageTop}>
+              <View style={styles.iconTile}>
+                <Text style={styles.iconText}>+</Text>
+              </View>
+              <View style={styles.packageCopy}>
+                <Text style={styles.packageTitle}>{featuredProduct.title}</Text>
+                <Text style={styles.packageMeta}>{featuredProduct.hospitalName}</Text>
+              </View>
+              <Text style={styles.price}>{formatMoney(featuredProduct.priceAmount)}</Text>
+            </View>
+            <View style={styles.visualPanel}>
+              <BiomarkerBar label="Catalog status" value="Active" percent={100} tone={MiraDesign.color.primary} />
+              <BiomarkerBar
+                label="Booking"
+                value={featuredProduct.requiresAppointment ? 'Appointment' : 'Walk-in'}
+                percent={featuredProduct.requiresAppointment ? 72 : 58}
+                tone={MiraDesign.color.amber}
+              />
+              <MiniTrend color={MiraDesign.color.primary} />
+            </View>
+            <Link href={`/package-detail?productId=${encodeURIComponent(featuredProduct.id)}`} asChild>
+              <ActionButton label="View product" />
+            </Link>
+          </>
+        ) : (
+          <>
+            <Text style={styles.packageTitle}>No active products yet</Text>
+            <Text style={styles.emptyBody}>Publish products from the tenant catalog or ask Mira to help with general checkup planning.</Text>
+            <Link href="/packages" asChild>
+              <ActionButton label="Open marketplace" variant="secondary" />
+            </Link>
+          </>
+        )}
       </Card>
 
-      <SectionHeader title="ทางลัด" meta="marketplace + health" />
+      <SectionHeader title="Shortcuts" meta="marketplace + health" />
       <View style={styles.quickGrid}>
         <Link href="/packages" asChild>
           <Pressable style={styles.quickCard}>
             <View style={[styles.quickIcon, styles.tealIcon]} />
             <Text style={styles.quickTitle}>Marketplace</Text>
-            <Text style={styles.quickBody}>เลือกบริการตรวจสุขภาพ</Text>
+            <Text style={styles.quickBody}>Browse active hospital products</Text>
           </Pressable>
         </Link>
         <Link href="/agent" asChild>
           <Pressable style={styles.quickCard}>
             <View style={[styles.quickIcon, styles.blueIcon]} />
             <Text style={styles.quickTitle}>AI Advisor</Text>
-            <Text style={styles.quickBody}>ถามและให้ AI จัดอันดับ</Text>
+            <Text style={styles.quickBody}>Ask Mira for recommendation context</Text>
           </Pressable>
         </Link>
         <Link href="/health" asChild>
           <Pressable style={styles.quickCard}>
             <View style={[styles.quickIcon, styles.coralIcon]} />
             <Text style={styles.quickTitle}>Dashboard</Text>
-            <Text style={styles.quickBody}>ดูผลตรวจแบบ visual</Text>
+            <Text style={styles.quickBody}>Review health results visually</Text>
           </Pressable>
         </Link>
         <Link href="/partner" asChild>
           <Pressable style={styles.quickCard}>
             <View style={[styles.quickIcon, styles.amberIcon]} />
             <Text style={styles.quickTitle}>Referral</Text>
-            <Text style={styles.quickBody}>ลิงก์หมอ/creator</Text>
+            <Text style={styles.quickBody}>Partner-assisted purchase flow</Text>
           </Pressable>
         </Link>
       </View>
@@ -176,6 +222,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '900',
   },
+  emptyBody: {
+    color: MiraDesign.color.inkSoft,
+    fontSize: 14,
+    lineHeight: 20,
+  },
   visualPanel: {
     backgroundColor: MiraDesign.color.surfaceSoft,
     borderRadius: MiraDesign.radius.lg,
@@ -222,7 +273,7 @@ const styles = StyleSheet.create({
   quickBody: {
     color: MiraDesign.color.inkSoft,
     fontSize: 12,
-    fontWeight: '800',
+    fontWeight: '700',
     lineHeight: 17,
   },
 });

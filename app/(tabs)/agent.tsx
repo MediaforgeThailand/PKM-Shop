@@ -1,28 +1,52 @@
 import { Link } from 'expo-router';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { ActionButton, BrandHeader, Card, Pill, Screen, SectionHeader } from '@/components/MiraUI';
 import { MiraDesign } from '@/constants/Design';
-import { currentUser, packageRecommendations } from '@/services/mockBackend';
+import { loadActiveHospitalProducts, type HospitalProduct } from '@/lib/marketplace/hospitalProducts';
 
 const memoryEvents = [
-  { label: 'Lifestyle intake', date: '2026-06-04', body: 'High stress, late dinners, no recent lipid report.' },
-  { label: 'Purchase intent', date: '2026-06-04', body: 'Prefers half-day checkups and clear doctor summary.' },
-  { label: 'Latest lab context', date: currentUser.latestHealthDataAt, body: 'Metabolic data is usable but will age out soon.' },
+  { label: 'Lifestyle intake', date: 'Active session', body: 'Context captured through the chat-orchestrator profile flow.' },
+  { label: 'Purchase intent', date: 'Active session', body: 'Catalog recommendations are selected from tenant products.' },
+  { label: 'Latest lab context', date: 'Imported data', body: 'Lab and wearable signals appear after the v2 ingest functions run.' },
 ];
 
 export default function AgentScreen() {
+  const [products, setProducts] = useState<HospitalProduct[]>([]);
+  const [isLoadingProducts, setIsLoadingProducts] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    loadActiveHospitalProducts(3)
+      .then((items) => {
+        if (isMounted) {
+          setProducts(items);
+        }
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsLoadingProducts(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   return (
     <Screen>
       <BrandHeader
         eyebrow="AI agent"
         title="The agent remembers what matters."
-        subtitle="This is the moat: user context, health record freshness, package matching, and next-best-action guidance."
+        subtitle="Context, health record freshness, product matching, and next-best-action guidance."
         compact
       />
 
       <Card>
-        <Pill label={currentUser.agentStatus} tone="amber" />
+        <Pill label="Context first" tone="amber" />
         <Text style={styles.cardTitle}>Ask Mira</Text>
         <TextInput
           multiline
@@ -30,24 +54,35 @@ export default function AgentScreen() {
           placeholderTextColor={MiraDesign.color.muted}
           style={styles.promptBox}
         />
-        <ActionButton label="Generate recommendation" />
+        <Link href="/chatbot" asChild>
+          <ActionButton label="Open chat" />
+        </Link>
       </Card>
 
-      <SectionHeader title="AI package matches" meta="mock result" />
-      {packageRecommendations.map((item) => (
-        <Card key={item.packageId}>
+      <SectionHeader title="Catalog matches" meta={isLoadingProducts ? 'syncing catalog' : `${products.length} active`} />
+      {products.length === 0 && !isLoadingProducts ? (
+        <Card>
+          <Text style={styles.cardTitle}>No active products</Text>
+          <Text style={styles.body}>Publish tenant products before showing catalog matches.</Text>
+          <Link href="/admin/catalog" asChild>
+            <ActionButton label="Open catalog admin" variant="secondary" />
+          </Link>
+        </Card>
+      ) : null}
+      {products.map((product, index) => (
+        <Card key={product.id}>
           <View style={styles.matchTop}>
-            <Text style={styles.rank}>#{item.rank}</Text>
-            <Text style={styles.matchTitle}>{item.title}</Text>
+            <Text style={styles.rank}>#{index + 1}</Text>
+            <Text style={styles.matchTitle}>{product.title}</Text>
           </View>
-          <Text style={styles.body}>{item.reason}</Text>
-          <Link href="/package-detail" asChild>
-            <ActionButton label="View recommended service" variant="secondary" />
+          <Text style={styles.body}>{product.description}</Text>
+          <Link href={`/package-detail?productId=${encodeURIComponent(product.id)}`} asChild>
+            <ActionButton label="View service" variant="secondary" />
           </Link>
         </Card>
       ))}
 
-      <SectionHeader title="Agent memory" meta="dated records" />
+      <SectionHeader title="Agent memory" meta="v2 sources" />
       {memoryEvents.map((item) => (
         <View key={item.label} style={styles.memoryRow}>
           <View style={styles.memoryDot} />

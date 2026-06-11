@@ -39,6 +39,7 @@ import {
   hasProductGridCard as hasPrototypeProductGridCard,
   inferActiveProductRequestKind as inferPrototypeActiveProductRequestKind,
   sanitizeAssistantDisplayText,
+  type PrototypePolicyMessage,
 } from '@/lib/ai/prototypeConversationPolicy';
 import { useAuthSession } from '@/lib/auth/useAuthSession';
 import { loadActiveHospitalProducts } from '@/lib/marketplace/hospitalProducts';
@@ -64,6 +65,15 @@ function createMessage(role: ChatMessage['role'], content: string, sources?: Cha
     sources,
     uiCards,
   };
+}
+
+function toPrototypePolicyMessages(messages: PrototypeChatMessage[]): PrototypePolicyMessage[] {
+  return messages
+    .filter((message): message is PrototypeChatMessage & { role: 'assistant' | 'user' } => message.role === 'assistant' || message.role === 'user')
+    .map((message) => ({
+      content: message.content,
+      role: message.role,
+    }));
 }
 
 function withProductGridCard(cards: ChatUiCard[] | undefined, sourceProducts: ChatProductCard[]) {
@@ -923,8 +933,9 @@ export function PrototypeChatPanel() {
     setVoiceStatus(null);
 
     const productRequestKind = classifyPrototypeProductRequest(question);
-    const activeProductRequestKind = inferPrototypeActiveProductRequestKind(nextMessages, productRequestKind);
-    const prototypeContext = createPrototypePolicyContextAssessment(question, activeProductRequestKind, nextMessages, prototypeUserNickname);
+    const policyMessages = toPrototypePolicyMessages(nextMessages);
+    const activeProductRequestKind = inferPrototypeActiveProductRequestKind(policyMessages, productRequestKind);
+    const prototypeContext = createPrototypePolicyContextAssessment(question, activeProductRequestKind, policyMessages, prototypeUserNickname);
 
     try {
       if (activeProductRequestKind !== 'none' && !canUseLiveAi) {
