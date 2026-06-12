@@ -208,7 +208,8 @@ async function seedBookedOrder({ customerId, product, sessionId, tenantId }) {
         session_id: sessionId,
         tenant_id: tenantId,
       })
-      .select('id'),
+      .select('id')
+      .single(),
     'Unable to seed v3 regression order.',
   );
 
