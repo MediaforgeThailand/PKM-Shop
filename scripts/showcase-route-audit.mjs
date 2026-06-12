@@ -16,7 +16,7 @@ const EXCLUDED_ROUTES = new Map([
   ['/showcase/[module]', 'module tour shell generated from registry'],
   ['/more', 'tab navigation hub; S3 regenerates its rows from registry'],
   ['/checkout', 'legacy checkout kept out of the tour until chat checkout cleanup'],
-  ['/order-status', 'legacy Stripe return redirect to /orders'],
+  ['/order-status', 'legacy Stripe return redirect to /user-profile'],
   ['/ai-body-overview', 'legacy redirect to /body-overview'],
 ]);
 

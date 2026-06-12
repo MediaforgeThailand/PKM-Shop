@@ -1,6 +1,9 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useLocalSearchParams } from 'expo-router';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { OrderStatusCard } from '@/components/chat/OrderStatusCard';
 import { FreshnessDots, MiniTrend, StatusRing } from '@/components/HealthVisuals';
 import { ActionButton, Card, Pill, Screen, SectionHeader } from '@/components/MiraUI';
 import { MiraDesign, softShadow } from '@/constants/Design';
@@ -20,18 +23,106 @@ import {
   type StoredAgentMemory,
   type StoredHealthFact,
 } from '@/lib/health/healthDataVault';
-import { showcaseDemoAgentMemory, showcaseDemoHealthMemoryStatus, showcaseDemoStoredFacts } from '@/lib/showcase/demoFixtures';
+import { showcaseDemoAgentMemory, showcaseDemoHealthMemoryStatus, showcaseDemoOrders, showcaseDemoStoredFacts } from '@/lib/showcase/demoFixtures';
+import { supabase } from '@/lib/supabase';
+import type { OrderStatus, OrderStatusInfo } from '@/lib/types/api';
+
+type OrderListRow = {
+  amount_baht: number;
+  booking_at: string | null;
+  branches?: {
+    name: string;
+  } | {
+    name: string;
+  }[] | null;
+  created_at: string;
+  id: string;
+  products?: {
+    name: string;
+  } | {
+    name: string;
+  }[] | null;
+  status: OrderStatus;
+};
+
+function firstJoin<T>(value: T | T[] | null | undefined) {
+  return Array.isArray(value) ? value[0] ?? null : value ?? null;
+}
+
+function toStatusInfo(row: OrderListRow): OrderStatusInfo {
+  return {
+    amount_baht: row.amount_baht,
+    booking_at: row.booking_at,
+    branch_name: firstJoin(row.branches)?.name ?? null,
+    created_at: row.created_at,
+    id: row.id,
+    product_name: firstJoin(row.products)?.name ?? 'แพ็กเกจ',
+    status: row.status,
+  };
+}
+
+async function loadCustomerOrders() {
+  const { data, error } = await supabase
+    .from('orders')
+    .select('id,status,amount_baht,booking_at,created_at,products(name),branches(name)')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return ((data ?? []) as OrderListRow[]).map(toStatusInfo);
+}
+
+function profileOrderStatusLabel(status: OrderStatus) {
+  if (status === 'submitted') {
+    return 'รอตรวจสอบ';
+  }
+
+  if (status === 'confirmed') {
+    return 'ยืนยันแล้ว';
+  }
+
+  if (status === 'booked') {
+    return 'ลงคิวแล้ว';
+  }
+
+  if (status === 'done') {
+    return 'เสร็จสิ้น';
+  }
+
+  if (status === 'cancelled') {
+    return 'ยกเลิก';
+  }
+
+  if (status === 'awaiting_payment') {
+    return 'รอชำระ';
+  }
+
+  return 'กำลังดำเนินการ';
+}
 
 export default function UserProfileScreen() {
+  const params = useLocalSearchParams();
+  const focus = Array.isArray(params.focus) ? params.focus[0] : params.focus;
   const auth = useAuthSession();
   const signOut = useSignOut();
   const [facts, setFacts] = useState<StoredHealthFact[]>([]);
   const [agentMemory, setAgentMemory] = useState<StoredAgentMemory[]>([]);
   const [healthMemoryStatus, setHealthMemoryStatus] = useState<HealthMemoryStatus | null>(null);
   const [snapshot, setSnapshot] = useState<HealthDataSnapshot | null>(null);
+  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(focus ?? null);
   const [isBusy, setIsBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const isDemoMode = !auth.user;
+  const ordersQuery = useQuery({
+    enabled: Boolean(auth.session),
+    queryFn: loadCustomerOrders,
+    queryKey: ['miracare-profile-orders', auth.user?.id ?? 'demo'],
+  });
+  const orders = ordersQuery.data ?? (isDemoMode ? showcaseDemoOrders : []);
+  const activeOrderCount = orders.filter((order) => !['cancelled', 'done'].includes(order.status)).length;
+  const focusedOrder = useMemo(() => orders.find((order) => order.id === expandedOrderId) ?? null, [expandedOrderId, orders]);
 
   const refreshProfile = useCallback(async () => {
     if (!auth.user) {
@@ -53,6 +144,12 @@ export default function UserProfileScreen() {
       setMessage(error instanceof Error ? error.message : 'โหลด Health Profile ไม่สำเร็จ');
     });
   }, [refreshProfile]);
+
+  useEffect(() => {
+    if (focus) {
+      setExpandedOrderId(focus);
+    }
+  }, [focus]);
 
   async function handleDeleteFact(factId: string) {
     if (isDemoMode) {
@@ -239,6 +336,52 @@ export default function UserProfileScreen() {
         </Card>
       ) : null}
 
+      <SectionHeader title="คำสั่งซื้อและสถานะคิว" meta={ordersQuery.isFetching ? 'กำลังอัปเดต' : `${activeOrderCount} active`} />
+      {auth.session && ordersQuery.error ? (
+        <Card style={styles.orderNoticeCard}>
+          <Text style={styles.cardTitle}>โหลดสถานะคำสั่งซื้อไม่สำเร็จ</Text>
+          <Text style={styles.cardBody}>{ordersQuery.error instanceof Error ? ordersQuery.error.message : 'ลองรีเฟรชอีกครั้งค่ะ'}</Text>
+          <ActionButton disabled={ordersQuery.isFetching} label="รีเฟรชสถานะ" onPress={() => void ordersQuery.refetch()} variant="secondary" />
+        </Card>
+      ) : null}
+
+      {orders.length === 0 && !ordersQuery.isLoading ? (
+        <Card style={styles.orderNoticeCard}>
+          <Text style={styles.cardTitle}>ยังไม่มีคำสั่งซื้อ</Text>
+          <Text style={styles.cardBody}>หลังชำระเงินหรือส่งข้อมูลจองแล้ว สถานะคำสั่งซื้อของคุณจะมาอยู่ในโปรไฟล์นี้</Text>
+        </Card>
+      ) : null}
+
+      {orders.length > 0 ? (
+        <View style={styles.profileOrderList}>
+          {orders.map((order) => {
+            const expanded = order.id === expandedOrderId || (focusedOrder?.id === order.id && Boolean(focus));
+            const isFinished = order.status === 'done';
+            const isCancelled = order.status === 'cancelled';
+
+            return (
+              <View key={order.id} style={styles.profileOrderShell}>
+                <Pressable onPress={() => setExpandedOrderId(expanded ? null : order.id)} style={styles.profileOrderHeader}>
+                  <View style={styles.profileOrderCopy}>
+                    <Text numberOfLines={1} style={styles.profileOrderTitle}>
+                      {order.product_name}
+                    </Text>
+                    <Text style={styles.profileOrderMeta}>
+                      {order.branch_name ?? 'ไม่ระบุสาขา'} · {order.amount_baht.toLocaleString('th-TH')} บาท
+                    </Text>
+                  </View>
+                  <View style={[styles.profileOrderChip, isFinished ? styles.profileOrderChipDone : null, isCancelled ? styles.profileOrderChipCancelled : null]}>
+                    <Text style={[styles.profileOrderChipText, isCancelled ? styles.profileOrderChipTextCancelled : null]}>{profileOrderStatusLabel(order.status)}</Text>
+                  </View>
+                </Pressable>
+                {expanded ? <OrderStatusCard orders={[order]} /> : null}
+              </View>
+            );
+          })}
+          {auth.session ? <ActionButton disabled={ordersQuery.isFetching} label="รีเฟรชสถานะคำสั่งซื้อ" onPress={() => void ordersQuery.refetch()} variant="secondary" /> : null}
+        </View>
+      ) : null}
+
       <SectionHeader title="Consent status" />
       <View style={styles.consentRow}>
         <View style={styles.consentCard}>
@@ -415,6 +558,63 @@ const styles = StyleSheet.create({
     color: MiraDesign.color.primaryDeep,
     fontSize: 13,
     fontWeight: '900',
+  },
+  orderNoticeCard: {
+    backgroundColor: MiraDesign.color.surface,
+  },
+  profileOrderList: {
+    gap: MiraDesign.space.md,
+  },
+  profileOrderShell: {
+    gap: MiraDesign.space.sm,
+  },
+  profileOrderHeader: {
+    alignItems: 'center',
+    backgroundColor: MiraDesign.color.surface,
+    borderColor: MiraDesign.color.line,
+    borderRadius: MiraDesign.radius.md,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: MiraDesign.space.md,
+    justifyContent: 'space-between',
+    minHeight: 76,
+    padding: MiraDesign.space.md,
+    ...softShadow,
+  },
+  profileOrderCopy: {
+    flex: 1,
+    gap: MiraDesign.space.xs,
+    minWidth: 0,
+  },
+  profileOrderTitle: {
+    color: MiraDesign.color.ink,
+    fontSize: 15,
+    fontWeight: '900',
+  },
+  profileOrderMeta: {
+    color: MiraDesign.color.inkSoft,
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  profileOrderChip: {
+    backgroundColor: MiraDesign.color.primarySoft,
+    borderRadius: MiraDesign.radius.pill,
+    paddingHorizontal: MiraDesign.space.md,
+    paddingVertical: MiraDesign.space.xs,
+  },
+  profileOrderChipDone: {
+    backgroundColor: '#E1F8EF',
+  },
+  profileOrderChipCancelled: {
+    backgroundColor: '#FFE2E2',
+  },
+  profileOrderChipText: {
+    color: MiraDesign.color.primaryDeep,
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  profileOrderChipTextCancelled: {
+    color: MiraDesign.color.danger,
   },
   consentRow: {
     flexDirection: 'row',

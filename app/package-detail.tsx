@@ -113,7 +113,7 @@ export default function PackageDetailScreen() {
         </View>
       ))}
 
-      <Link href="/orders" asChild>
+      <Link href="/user-profile" asChild>
         <ActionButton label="View my orders" />
       </Link>
       <Link href="/" asChild>

@@ -6,7 +6,7 @@ import { MiraDesign } from '@/constants/Design';
 
 const menuItems = [
   { title: 'Product overview', body: 'Client-facing tour for the four MiraCare product systems.', href: '/' },
-  { title: 'Order and booking', body: 'Post-payment instruction and booking status.', href: '/orders' },
+  { title: 'Order and booking', body: 'Post-payment instruction and booking status inside the user profile.', href: '/user-profile' },
   { title: 'Partner referral', body: 'Referral links, commission, and payouts.', href: '/partner' },
   { title: 'Hospital admin', body: 'Live orders queue, booking actions, and transcript review.', href: '/admin/orders' },
   { title: 'Referrer admin', body: 'Manage referrers, commission schemes, and payout states.', href: '/admin/referrers' },

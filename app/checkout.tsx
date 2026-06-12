@@ -92,7 +92,7 @@ export default function CheckoutScreen() {
             <Pill label={product.catalogKey} tone="blue" />
             <Pill label={getProductCategoryLabel(product.category)} tone="mint" />
           </View>
-          <Link href="/orders" asChild>
+          <Link href="/user-profile" asChild>
             <ActionButton label="View orders" />
           </Link>
         </Card>
