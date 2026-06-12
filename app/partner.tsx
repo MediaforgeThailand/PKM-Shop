@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { BranchOptionRow } from '@/components/chat/BranchOptionRow';
 import { OrderPanel } from '@/components/chat/OrderPanel';
@@ -77,7 +77,6 @@ function buyerAgeError(value: string) {
 
 export default function PartnerScreen() {
   const auth = useAuthSession();
-  const { width } = useWindowDimensions();
   const [tenant, setTenant] = useState<TenantInfo | null>(null);
   const [referrer, setReferrer] = useState<ReferrerRow | null>(null);
   const [products, setProducts] = useState<HospitalProduct[]>([]);
@@ -96,7 +95,6 @@ export default function PartnerScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const isWide = width >= 1080;
   const isDemoMode = !auth.session || !supabaseConfigStatus.isConfigured;
   const buyerAgeNumber = Number(buyerAge.trim());
   const hasValidBuyerAge = Number.isInteger(buyerAgeNumber) && buyerAgeNumber >= 1 && buyerAgeNumber <= 120;
@@ -333,7 +331,7 @@ export default function PartnerScreen() {
   return (
     <View style={styles.screen}>
       <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-        <View style={[styles.topBar, !isWide ? styles.topBarStack : null]}>
+        <View style={styles.topBar}>
           <View style={styles.titleBlock}>
             <Text style={styles.eyebrow}>Referral Program</Text>
             <Text style={styles.title}>Assisted Purchase</Text>
@@ -366,7 +364,7 @@ export default function PartnerScreen() {
           <Metric label="Paid" value={formatMoney(totals.paid)} />
         </View>
 
-        <View style={[styles.workspace, !isWide ? styles.workspaceStack : null]}>
+        <View style={styles.workspace}>
           <View style={styles.productPane}>
             <SectionTitle title="Catalog" subtitle={tenant?.display_name ?? defaultTenantSlug} />
             <View style={styles.productGrid}>
@@ -546,15 +544,15 @@ const styles = StyleSheet.create({
   topBar: {
     alignItems: 'flex-start',
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 16,
     justifyContent: 'space-between',
   },
-  topBarStack: {
-    flexDirection: 'column',
-  },
   titleBlock: {
+    flexBasis: 320,
     flex: 1,
     gap: 6,
+    minWidth: 0,
   },
   eyebrow: {
     color: MiraDesign.color.primaryDeep,
@@ -673,26 +671,27 @@ const styles = StyleSheet.create({
   workspace: {
     alignItems: 'flex-start',
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 16,
   },
-  workspaceStack: {
-    flexDirection: 'column',
-  },
   productPane: {
-    flex: 1.2,
+    flexBasis: 520,
+    flexGrow: 1.2,
+    flexShrink: 1,
     gap: 12,
-    width: '100%',
+    minWidth: 0,
   },
   checkoutPane: {
     backgroundColor: '#FFFFFF',
     borderColor: MiraDesign.color.line,
     borderRadius: 8,
     borderWidth: 1,
-    flex: 0.8,
+    flexBasis: 380,
+    flexGrow: 0.8,
+    flexShrink: 1,
     gap: 12,
-    minWidth: 340,
+    minWidth: 320,
     padding: 16,
-    width: '100%',
     ...softShadow,
   },
   partnerOrderStack: {
