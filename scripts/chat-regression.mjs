@@ -1,12 +1,20 @@
-import { createRegressionTestJwt } from './create-test-jwt.mjs';
+import { createAuthUserSession, REGRESSION_TEST_EMAIL } from './create-test-jwt.mjs';
+import { cleanupAuthUserCustomerData } from './regression-cleanup.mjs';
 
 const supabaseUrl = process.env.SUPABASE_URL ?? process.env.EXPO_PUBLIC_SUPABASE_URL;
 const anonKey = process.env.SUPABASE_ANON_KEY ?? process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 let jwt = process.env.TEST_SUPABASE_JWT;
+let regressionAuthUserId = null;
 const tenantSlug = process.env.MIRA_DEMO_TENANT_SLUG ?? 'demo-hospital';
 
 if (!jwt && hasInlineBootstrapEnv()) {
-  jwt = await createRegressionTestJwt();
+  const session = await createAuthUserSession({
+    email: REGRESSION_TEST_EMAIL,
+    purpose: 'miracare-v2-regression',
+  });
+
+  jwt = session.accessToken;
+  regressionAuthUserId = session.user.id;
 }
 
 if (!supabaseUrl || !anonKey || !jwt) {
@@ -16,6 +24,10 @@ if (!supabaseUrl || !anonKey || !jwt) {
 }
 
 const endpoint = `${supabaseUrl.replace(/\/$/, '')}/functions/v1/chat-orchestrator`;
+await cleanupAuthUserCustomerData({
+  authUserId: regressionAuthUserId,
+  label: 'chat-regression',
+});
 const seededCatalogKeys = new Set([
   'chk-basic',
   'chk-basic-plus',

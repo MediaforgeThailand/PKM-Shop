@@ -48,8 +48,12 @@ import type { ChatUiCard } from '@/lib/ai/healthChatTypes';
 import { ConsentSheet } from '@/components/chat/ConsentSheet';
 import { MessageBubble, messageBubbleStyles } from '@/components/chat/MessageBubble';
 import { OrderPanel } from '@/components/chat/OrderPanel';
-import { ProductCarousel } from '@/components/chat/ProductCarousel';
-import type { ChatAction, ChatProduct } from '@/lib/types/api';
+import { ProductGrid } from '@/components/chat/ProductGrid';
+import { CategoryGrid } from '@/components/chat/CategoryGrid';
+import { BranchPicker } from '@/components/chat/BranchPicker';
+import { BookingSheet } from '@/components/chat/BookingSheet';
+import { OrderStatusCard } from '@/components/chat/OrderStatusCard';
+import type { ChatAction, ChatCard, ChatProduct, OrderPanelState } from '@/lib/types/api';
 
 const starterPrompts = [
   'อยากตรวจสุขภาพต้องเตรียมตัวยังไง',
@@ -98,8 +102,10 @@ function createMessage(
   sources?: ChatMessage['sources'],
   uiCards?: ChatMessage['uiCards'],
   order?: ChatMessage['order'],
+  cards?: ChatMessage['cards'],
 ): ChatMessage {
   return {
+    cards,
     id: `${role}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     role,
     content,
@@ -150,21 +156,75 @@ function slipContentType(file: SlipUploadFile): 'image/jpeg' | 'image/png' | nul
   return null;
 }
 
+function shouldOpenSheetForOrder(order: OrderPanelState) {
+  return Boolean(order && (order.step === 'form' || order.step === 'qr'));
+}
+
 function ChatUiCardRenderer({
   card,
   disabled,
+  onBrowseCategory,
   onSelectProduct,
 }: {
   card: ChatUiCard;
   disabled?: boolean;
+  onBrowseCategory: (payload: { category: string; label?: string; offset?: number }) => void;
   onSelectProduct: (product: ChatProduct) => void;
 }) {
   if (card.type === 'product_grid') {
-    return <ProductCarousel disabled={disabled} onSelectProduct={onSelectProduct} products={productGridToChatProducts(card)} />;
+    const products = productGridToChatProducts(card);
+
+    return (
+      <ProductGrid
+        card={{
+          category: products.length === 1 ? products[0]?.category ?? null : null,
+          products,
+          source: 'recommendation',
+          total_available: products.length,
+          type: 'product_grid',
+        }}
+        disabled={disabled}
+        onBrowseCategory={({ category, offset }) => onBrowseCategory({ category, offset })}
+        onSelectProduct={onSelectProduct}
+      />
+    );
   }
 
   if (card.type === 'memory_saved') {
     return <MemorySavedCard card={card} />;
+  }
+
+  return null;
+}
+
+function ChatCardRenderer({
+  card,
+  disabled,
+  onBrowseCategory,
+  onSelectProduct,
+}: {
+  card: ChatCard;
+  disabled?: boolean;
+  onBrowseCategory: (payload: { category: string; label?: string; offset?: number }) => void;
+  onSelectProduct: (product: ChatProduct) => void;
+}) {
+  if (card.type === 'product_grid') {
+    return (
+      <ProductGrid
+        card={card}
+        disabled={disabled}
+        onBrowseCategory={({ category, offset }) => onBrowseCategory({ category, offset })}
+        onSelectProduct={onSelectProduct}
+      />
+    );
+  }
+
+  if (card.type === 'category_grid') {
+    return <CategoryGrid card={card} disabled={disabled} onBrowseCategory={({ category, label }) => onBrowseCategory({ category, label })} />;
+  }
+
+  if (card.type === 'order_status') {
+    return <OrderStatusCard orders={card.orders} />;
   }
 
   return null;
@@ -215,6 +275,7 @@ export default function ChatbotScreen() {
   const [historyCursor, setHistoryCursor] = useState<string | null>(null);
   const [hasMoreHistory, setHasMoreHistory] = useState(false);
   const [restoredOrder, setRestoredOrder] = useState<ChatMessage['order']>(null);
+  const [sheetOrder, setSheetOrder] = useState<OrderPanelState>(null);
   const [ragChunks, setRagChunks] = useState<RagChunk[]>(localHealthKnowledge);
   const [activeLogTab, setActiveLogTab] = useState<LogCategory>('ai');
   const [appRole, setAppRole] = useState<AppRole>('user');
@@ -289,6 +350,7 @@ export default function ChatbotScreen() {
     setHasMoreHistory(false);
     setHistoryCursor(null);
     setRestoredOrder(null);
+    setSheetOrder(null);
     orderRefreshKeyRef.current = null;
     historyHydrationKeyRef.current = null;
     setMessages(initialMessages);
@@ -327,6 +389,9 @@ export default function ChatbotScreen() {
           setActiveSessionId(result.session_id);
           setCurrentChatSessionId(result.session_id);
           setRestoredOrder(result.order ?? null);
+          if (shouldOpenSheetForOrder(result.order ?? null)) {
+            setSheetOrder(result.order);
+          }
 
           if (result.order) {
             appendLog({
@@ -344,6 +409,7 @@ export default function ChatbotScreen() {
           }
 
           setRestoredOrder(null);
+          setSheetOrder(null);
           appendLog({
             category: 'api',
             detail: refreshError instanceof Error ? refreshError.message : 'Unable to refresh active order.',
@@ -364,6 +430,7 @@ export default function ChatbotScreen() {
       });
     } else {
       setRestoredOrder(null);
+      setSheetOrder(null);
       orderRefreshKeyRef.current = null;
     }
   }, [appendLog, canUsePersistedChat, chatHistoryQuery.data, isSending]);
@@ -581,6 +648,7 @@ export default function ChatbotScreen() {
       let answerRole: ChatMessage['role'] = 'assistant';
       let answerSources: ChatMessage['sources'] = [];
       let answerUiCards: ChatMessage['uiCards'] = [];
+      let answerCards: ChatMessage['cards'] = [];
 
       if (canUseAi) {
         appendLog({
@@ -609,9 +677,13 @@ export default function ChatbotScreen() {
         answer = result.text;
         answerOrder = result.order ?? null;
         setRestoredOrder(answerOrder);
+        if (shouldOpenSheetForOrder(answerOrder)) {
+          setSheetOrder(answerOrder);
+        }
         answerRole = result.responseRole ?? 'assistant';
         answerSources = result.ragMatches;
         answerUiCards = result.uiCards;
+        answerCards = result.cards;
         appendLog({
           category: 'rag',
           detail: result.ragMatches.length
@@ -660,7 +732,7 @@ export default function ChatbotScreen() {
         });
       }
 
-      setMessages((current) => [...current, createMessage(answerRole, answer, answerSources, answerUiCards, answerOrder)]);
+      setMessages((current) => [...current, createMessage(answerRole, answer, answerSources, answerUiCards, answerOrder, answerCards)]);
       if (canUsePersistedChat) {
         void queryClient.invalidateQueries({ queryKey: chatHistoryQueryKeys.latest() });
       }
@@ -715,7 +787,23 @@ export default function ChatbotScreen() {
     });
   }
 
-  function handleOrderFormSubmit(payload: { buyer_name: string; buyer_phone: string; order_id: string; preferred_date?: string }) {
+  function handleBrowseCategory({ category, label, offset = 0 }: { category: string; label?: string; offset?: number }) {
+    void sendMessage(label ? `ดูหมวด${label}` : 'ดูเพิ่มเติม', {
+      category,
+      limit: 12,
+      offset,
+      type: 'browse_category',
+    });
+  }
+
+  function handleSelectBranch(payload: { branch_id: string; order_id: string }) {
+    void sendMessage('เลือกสาขาแล้ว', {
+      ...payload,
+      type: 'select_branch',
+    });
+  }
+
+  function handleOrderFormSubmit(payload: { buyer_age: number; buyer_name: string; buyer_phone: string; order_id: string }) {
     void sendMessage('ส่งข้อมูลผู้ซื้อแล้ว', {
       ...payload,
       type: 'order_form_submit',
@@ -723,10 +811,15 @@ export default function ChatbotScreen() {
   }
 
   function handlePaymentDone(orderId: string) {
-    void sendMessage('จ่ายแล้ว', {
-      order_id: orderId,
-      type: 'payment_done',
-    });
+    void (async () => {
+      await sendMessage('จ่ายแล้ว', {
+        order_id: orderId,
+        type: 'payment_done',
+      });
+      await sendMessage('สถานะคิว', {
+        type: 'get_order_status',
+      });
+    })();
   }
 
   async function handleStripeCheckout(orderId: string) {
@@ -813,6 +906,9 @@ export default function ChatbotScreen() {
         order_id,
         slip_path: upload.storage_path,
         type: 'payment_done',
+      });
+      await sendMessage('สถานะคิว', {
+        type: 'get_order_status',
       });
     } catch (uploadError) {
       const message = uploadError instanceof Error ? uploadError.message : 'Unable to upload payment slip.';
@@ -1015,28 +1111,39 @@ export default function ChatbotScreen() {
                   ))}
                 </View>
               ) : null}
-              {message.role === 'assistant' && message.uiCards?.length ? (
+              {message.role !== 'user' && message.cards?.length ? (
+                <View style={styles.uiCardStack}>
+                  {message.cards.map((card, index) => (
+                    <ChatCardRenderer
+                      key={`${card.type}-${index}`}
+                      card={card}
+                      disabled={isSending || !canUseOrderActions}
+                      onBrowseCategory={handleBrowseCategory}
+                      onSelectProduct={handleSelectProduct}
+                    />
+                  ))}
+                </View>
+              ) : null}
+              {message.role !== 'user' && !message.cards?.length && message.uiCards?.length ? (
                 <View style={styles.uiCardStack}>
                   {message.uiCards.map((card) => (
                     <ChatUiCardRenderer
                       key={card.id}
                       card={card}
                       disabled={isSending || !canUseOrderActions}
+                      onBrowseCategory={handleBrowseCategory}
                       onSelectProduct={handleSelectProduct}
                     />
                   ))}
                 </View>
               ) : null}
-              {message.role === 'assistant' && message.order ? (
+              {message.role !== 'user' && message.order ? (
                 <View style={styles.uiCardStack}>
-                  <OrderPanel
-                    disabled={isSending || isUploadingSlip || isStartingStripeCheckout || !canUseOrderActions}
-                    onPaymentDone={handlePaymentDone}
-                    onSlipSelected={(payload) => void handleSlipSelected(payload)}
-                    onStripeCheckout={(orderId) => void handleStripeCheckout(orderId)}
-                    onSubmitForm={handleOrderFormSubmit}
-                    order={message.order}
-                  />
+                  {message.order.step === 'branch' ? (
+                    <BranchPicker disabled={isSending || !canUseOrderActions} onSelectBranch={handleSelectBranch} order={message.order} />
+                  ) : (
+                    <OrderPanel disabled={isSending || !canUseOrderActions} onOpenDetails={setSheetOrder} order={message.order} />
+                  )}
                 </View>
               ) : null}
             </MessageBubble>
@@ -1044,14 +1151,11 @@ export default function ChatbotScreen() {
 
           {shouldRenderRestoredOrder && restoredOrder ? (
             <View style={styles.restoredOrderPanel}>
-              <OrderPanel
-                disabled={isSending || isUploadingSlip || isStartingStripeCheckout || !canUseOrderActions}
-                onPaymentDone={handlePaymentDone}
-                onSlipSelected={(payload) => void handleSlipSelected(payload)}
-                onStripeCheckout={(orderId) => void handleStripeCheckout(orderId)}
-                onSubmitForm={handleOrderFormSubmit}
-                order={restoredOrder}
-              />
+              {restoredOrder.step === 'branch' ? (
+                <BranchPicker disabled={isSending || !canUseOrderActions} onSelectBranch={handleSelectBranch} order={restoredOrder} />
+              ) : (
+                <OrderPanel disabled={isSending || !canUseOrderActions} onOpenDetails={setSheetOrder} order={restoredOrder} />
+              )}
             </View>
           ) : null}
 
@@ -1186,6 +1290,15 @@ export default function ChatbotScreen() {
         </View>
       </View>
 
+      <BookingSheet
+        disabled={isSending || isUploadingSlip || !canUseOrderActions}
+        onClose={() => setSheetOrder(null)}
+        onPaymentDone={handlePaymentDone}
+        onSlipSelected={(payload) => void handleSlipSelected(payload)}
+        onSubmitForm={handleOrderFormSubmit}
+        order={sheetOrder?.step === 'branch' ? null : sheetOrder}
+        visible={Boolean(sheetOrder && sheetOrder.step !== 'branch')}
+      />
     </KeyboardAvoidingView>
   );
 }

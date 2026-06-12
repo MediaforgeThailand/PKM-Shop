@@ -55,6 +55,7 @@ function RootLayoutNav() {
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="package-detail" options={{ headerShown: false }} />
           <Stack.Screen name="checkout" options={{ headerShown: false }} />
+          <Stack.Screen name="orders" options={{ headerShown: false }} />
           <Stack.Screen name="order-status" options={{ headerShown: false }} />
           <Stack.Screen name="partner" options={{ headerShown: false }} />
           <Stack.Screen name="admin/branches" options={{ headerShown: false }} />

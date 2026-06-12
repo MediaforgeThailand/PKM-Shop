@@ -15,9 +15,11 @@ import { filterKnownProductMarkerKeys, parseChatMarker } from './marker.ts';
 import {
   assertOrderBelongsToSession,
   assertPaymentSlipPathForOrder,
-  formatActiveOrderContext,
+  formatOrderContextLines,
   loadActiveOrder,
+  loadOrderForPanel,
   missingOrderFields,
+  ORDER_WITH_PRODUCT_SELECT,
   paymentSlipStoragePath,
   toOrderPanel,
   transition,
@@ -39,6 +41,9 @@ import type {
   CustomerRow,
   OrderRow,
   OrderWithProductRow,
+  BranchRow,
+  ProductBranchRow,
+  ProductCategoryRow,
   ProductSummary,
   OrderStatusInfo,
   ReferrerRow,
@@ -54,8 +59,14 @@ const actionSchema = z.discriminatedUnion('type', [
     type: z.literal('select_product'),
   }),
   z.object({
+    branch_id: z.string().uuid(),
+    order_id: z.string().uuid(),
+    type: z.literal('select_branch'),
+  }),
+  z.object({
+    buyer_age: z.number().int().min(1).max(120),
     buyer_name: z.string().min(1),
-    buyer_phone: z.string().min(1),
+    buyer_phone: z.string().regex(/^0[689]\d{8}$/),
     order_id: z.string().uuid(),
     preferred_date: z.string().optional(),
     type: z.literal('order_form_submit'),
@@ -73,6 +84,18 @@ const actionSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('refresh_order'),
   }),
+  z.object({
+    type: z.literal('browse_categories'),
+  }),
+  z.object({
+    category: z.string().min(1).max(80),
+    limit: z.number().int().min(1).max(24).optional(),
+    offset: z.number().int().min(0).max(500).optional(),
+    type: z.literal('browse_category'),
+  }),
+  z.object({
+    type: z.literal('get_order_status'),
+  }),
 ]);
 
 export const chatRequestSchema = z.object({
@@ -86,12 +109,11 @@ export const chatRequestSchema = z.object({
 });
 
 const CHAT_MESSAGE_SELECT = 'id,session_id,role,content,marker_product_ids,cards,openai_response_id,client_msg_id,created_at';
-const ORDER_PANEL_SELECT =
-  'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,channel,referrer_id,commission_scheme_snapshot,status,slip_url,booking_at,branch_id,buyer_age,admin_note,created_at,updated_at,products(name,catalog_key,category,price_baht)';
+const ORDER_PANEL_SELECT = ORDER_WITH_PRODUCT_SELECT;
 const CATEGORY_FALLBACK_LABELS: Record<string, { icon: string | null; label_th: string; sort: number }> = {
-  checkup: { icon: '??', label_th: '??????????', sort: 10 },
-  vaccine: { icon: '??', label_th: '??????', sort: 20 },
-  general: { icon: '??', label_th: '????????????', sort: 30 },
+  checkup: { icon: '🩺', label_th: 'ตรวจสุขภาพ', sort: 10 },
+  vaccine: { icon: '💉', label_th: 'วัคซีน', sort: 20 },
+  general: { icon: '✨', label_th: 'บริการทั่วไป', sort: 30 },
 };
 
 function nowIso() {
@@ -138,14 +160,6 @@ type ActionResult = {
   response?: ChatOrchestratorResponse;
 };
 
-async function loadOrderForPanel(orderId: string, tenantId: string) {
-  return selectOne<OrderWithProductRow>('orders', {
-    id: `eq.${orderId}`,
-    select: ORDER_PANEL_SELECT,
-    tenant_id: `eq.${tenantId}`,
-  });
-}
-
 async function productByCatalogKey(tenantId: string, catalogKey: string) {
   return selectOne<ProductSummary>('products', {
     active: 'eq.true',
@@ -153,6 +167,47 @@ async function productByCatalogKey(tenantId: string, catalogKey: string) {
     select: 'id,tenant_id,catalog_key,name,description,price_baht,category,image_url,branch_info,requires_appointment,active',
     tenant_id: `eq.${tenantId}`,
   });
+}
+
+type ProductBranchWithBranchRow = ProductBranchRow & {
+  branches?: Pick<BranchRow, 'active' | 'address' | 'district' | 'id' | 'name' | 'sort' | 'tenant_id'> | Pick<
+    BranchRow,
+    'active' | 'address' | 'district' | 'id' | 'name' | 'sort' | 'tenant_id'
+  >[] | null;
+};
+
+function branchFromProductBranchJoin(row: ProductBranchWithBranchRow) {
+  if (Array.isArray(row.branches)) {
+    return row.branches[0] ?? null;
+  }
+
+  return row.branches ?? null;
+}
+
+async function activeBranchesForProduct(tenantId: string, productId: string) {
+  const rows = await selectMany<ProductBranchWithBranchRow>('product_branches', {
+    'branches.active': 'eq.true',
+    'branches.tenant_id': `eq.${tenantId}`,
+    product_id: `eq.${productId}`,
+    select: 'product_id,branch_id,branches!inner(id,tenant_id,name,address,district,active,sort)',
+  });
+
+  return rows
+    .map(branchFromProductBranchJoin)
+    .filter((branch): branch is NonNullable<ReturnType<typeof branchFromProductBranchJoin>> => Boolean(branch))
+    .sort((a, b) => a.sort - b.sort || a.name.localeCompare(b.name, 'th'))
+    .map((branch) => ({
+      address: branch.address,
+      district: branch.district,
+      id: branch.id,
+      name: branch.name,
+    }));
+}
+
+async function activeBranchForProduct(tenantId: string, productId: string, branchId: string) {
+  const branches = await activeBranchesForProduct(tenantId, productId);
+
+  return branches.find((branch) => branch.id === branchId) ?? null;
 }
 
 async function maybeApplyReferralCode(customer: CustomerRow, tenant: TenantRow, refCode?: string) {
@@ -208,8 +263,11 @@ async function createOrderFromProduct({
       tenant_id: `eq.${tenant.id}`,
     })
     : null;
+  const branches = await activeBranchesForProduct(tenant.id, product.id);
+  const singleBranch = branches.length === 1 ? branches[0] : null;
   const order = await insertRow<OrderRow>('orders', {
     amount_baht: product.price_baht,
+    branch_id: singleBranch?.id ?? null,
     buyer_phone: customer.phone,
     channel: channel === 'app' ? 'chat_app' : channel === 'line' ? 'chat_line' : 'chat_pwa',
     commission_scheme_snapshot: referrer?.commission_scheme ?? null,
@@ -218,6 +276,7 @@ async function createOrderFromProduct({
     qty: 1,
     referrer_id: referrerId,
     session_id: sessionId,
+    status: branches.length > 1 ? 'selecting_branch' : 'collecting_info',
     tenant_id: tenant.id,
   }, {
     select: ORDER_PANEL_SELECT,
@@ -226,14 +285,22 @@ async function createOrderFromProduct({
   return loadOrderForPanel(order.id, tenant.id);
 }
 
-async function maybeAdvanceCollectingOrder(order: OrderWithProductRow | null) {
+async function maybeAdvanceCollectingOrder(order: OrderWithProductRow | null, actor: 'ai' | 'customer' = 'ai') {
   if (!order || order.status !== 'collecting_info' || missingOrderFields(order).length > 0) {
     return order;
   }
 
-  await transition(order.id, 'awaiting_payment', 'ai', { reason: 'buyer_info_complete' });
+  await transition(order.id, 'awaiting_payment', actor, { reason: 'buyer_info_complete' });
 
   return loadOrderForPanel(order.id, order.tenant_id);
+}
+
+async function orderPanelFor(order: OrderWithProductRow | null, tenant: TenantRow) {
+  const branches = order?.status === 'selecting_branch'
+    ? await activeBranchesForProduct(tenant.id, order.product_id)
+    : [];
+
+  return toOrderPanel(order, tenant, branches);
 }
 
 async function createSlipUpload({
@@ -271,11 +338,26 @@ async function refreshActiveOrder(session: ChatSessionRow, tenant: TenantRow): P
 
   return {
     cards: [],
-    order: toOrderPanel(order, tenant),
+    order: await orderPanelFor(order, tenant),
     products: [],
     session_id: session.id,
     text: '',
   };
+}
+
+async function enforceCheapActionRateLimit(customerId: string) {
+  const since = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+  const rows = await selectMany<{ id: string }>('chat_messages', {
+    created_at: `gte.${since}`,
+    limit: '61',
+    role: 'eq.user',
+    select: 'id,chat_sessions!inner(customer_id)',
+    'chat_sessions.customer_id': `eq.${customerId}`,
+  });
+
+  if (rows.length >= 60) {
+    throw new HttpError('RATE_LIMITED', 'Too many actions. Please wait a moment.', 429);
+  }
 }
 
 async function handleAction({
@@ -323,6 +405,49 @@ async function handleAction({
     };
   }
 
+  if (action.type === 'select_branch') {
+    const existingOrder = await loadOrderForPanel(action.order_id, tenant.id);
+
+    assertOrderBelongsToSession(existingOrder, {
+      customerId: customer.id,
+      sessionId,
+    });
+
+    if (existingOrder?.status !== 'selecting_branch') {
+      throw new HttpError('VALIDATION', 'This order is not waiting for branch selection.', 400);
+    }
+
+    const branch = await activeBranchForProduct(tenant.id, existingOrder.product_id, action.branch_id);
+
+    if (!branch) {
+      throw new HttpError('VALIDATION', 'Branch is not available for this product.', 400);
+    }
+
+    await updateRows<OrderRow>('orders', {
+      branch_id: branch.id,
+      updated_at: nowIso(),
+    }, {
+      customer_id: `eq.${customer.id}`,
+      id: `eq.${action.order_id}`,
+      select: ORDER_PANEL_SELECT,
+      session_id: `eq.${sessionId}`,
+      tenant_id: `eq.${tenant.id}`,
+    });
+
+    const order = await transition(action.order_id, 'collecting_info', 'customer', { branch_id: branch.id });
+    const loaded = await loadOrderForPanel(order.id, tenant.id);
+
+    return {
+      response: {
+        order: await orderPanelFor(loaded, tenant),
+        cards: [],
+        products: [],
+        session_id: sessionId,
+        text: 'เลือกสาขาเรียบร้อยค่ะ',
+      },
+    };
+  }
+
   if (action.type === 'order_form_submit') {
     const existingOrder = await loadOrderForPanel(action.order_id, tenant.id);
 
@@ -331,20 +456,25 @@ async function handleAction({
       sessionId,
     });
 
+    if (existingOrder?.status !== 'collecting_info') {
+      throw new HttpError('VALIDATION', 'This order is not waiting for buyer information.', 400);
+    }
+
     const order = await updateOrderFields(action.order_id, {
       customerId: customer.id,
       sessionId,
       tenantId: tenant.id,
     }, {
+      buyer_age: action.buyer_age,
       buyer_name: action.buyer_name,
       buyer_phone: action.buyer_phone,
       preferred_date: action.preferred_date,
     });
-    const loaded = await maybeAdvanceCollectingOrder(await loadOrderForPanel(order.id, tenant.id));
+    const loaded = await maybeAdvanceCollectingOrder(await loadOrderForPanel(order.id, tenant.id), 'customer');
 
     return {
       response: {
-        order: toOrderPanel(loaded ?? null, tenant),
+        order: await orderPanelFor(loaded ?? null, tenant),
         cards: [],
         products: [],
         session_id: sessionId,
@@ -390,11 +520,61 @@ async function handleAction({
 
     return {
       response: {
-        order: toOrderPanel(loaded, tenant),
+        order: await orderPanelFor(loaded, tenant),
         cards: [],
         products: [],
         session_id: sessionId,
         text: ORDER_PAYMENT_SUBMITTED_NOTICE_TH,
+      },
+    };
+  }
+
+  if (action.type === 'browse_categories') {
+    await enforceCheapActionRateLimit(customer.id);
+    const card = await buildCategoryGridCard(tenant.id);
+
+    return {
+      response: {
+        cards: [card],
+        order: await orderPanelFor(await loadActiveOrder(sessionId, tenant.id), tenant),
+        products: [],
+        session_id: sessionId,
+        text: 'เลือกหมวดที่สนใจได้เลยค่ะ',
+      },
+    };
+  }
+
+  if (action.type === 'browse_category') {
+    await enforceCheapActionRateLimit(customer.id);
+    const card = await buildProductGridCardForCategory({
+      category: action.category,
+      limit: action.limit ?? 12,
+      offset: action.offset ?? 0,
+      tenantId: tenant.id,
+    });
+
+    return {
+      response: {
+        cards: card ? [card] : [],
+        order: await orderPanelFor(await loadActiveOrder(sessionId, tenant.id), tenant),
+        products: card?.products ?? [],
+        session_id: sessionId,
+        text: card ? 'เลือกแพ็กเกจที่สนใจได้เลยค่ะ' : 'ยังไม่มีแพ็กเกจในหมวดนี้ค่ะ',
+      },
+    };
+  }
+
+  if (action.type === 'get_order_status') {
+    await enforceCheapActionRateLimit(customer.id);
+    const card = await buildOrderStatusCard(tenant.id, customer.id);
+
+    return {
+      response: {
+        cards: [card],
+        order: await orderPanelFor(await loadActiveOrder(sessionId, tenant.id), tenant),
+        products: [],
+        session_id: sessionId,
+        text: 'สถานะคิวล่าสุดค่ะ',
       },
     };
   }
@@ -497,6 +677,28 @@ async function countActiveProductsByCategory(tenantId: string, category: string)
   return rows.length;
 }
 
+async function lookupProductsByCategory({
+  category,
+  limit,
+  offset,
+  tenantId,
+}: {
+  category: string;
+  limit: number;
+  offset: number;
+  tenantId: string;
+}) {
+  return selectMany<ProductSummary>('products', {
+    active: 'eq.true',
+    category: `eq.${category}`,
+    limit: String(limit),
+    offset: String(offset),
+    order: 'created_at.desc',
+    select: 'id,tenant_id,catalog_key,name,description,price_baht,category,image_url,branch_info,requires_appointment,active',
+    tenant_id: `eq.${tenantId}`,
+  });
+}
+
 async function buildProductGridCard(
   tenantId: string,
   productRows: ProductSummary[],
@@ -519,6 +721,38 @@ async function buildProductGridCard(
   };
 }
 
+async function buildProductGridCardForCategory({
+  category,
+  limit,
+  offset,
+  tenantId,
+}: {
+  category: string;
+  limit: number;
+  offset: number;
+  tenantId: string;
+}): Promise<Extract<ChatCard, { type: 'product_grid' }> | null> {
+  const products = await lookupProductsByCategory({
+    category,
+    limit,
+    offset,
+    tenantId,
+  });
+  const totalAvailable = await countActiveProductsByCategory(tenantId, category);
+
+  if (products.length === 0) {
+    return null;
+  }
+
+  return {
+    category,
+    products: products.map(toChatProduct),
+    source: 'category_browse',
+    total_available: totalAvailable,
+    type: 'product_grid',
+  };
+}
+
 async function buildCategoryGridCard(tenantId: string): Promise<Extract<ChatCard, { type: 'category_grid' }>> {
   const rows = await selectMany<Pick<ProductSummary, 'category' | 'catalog_key'>>('products', {
     active: 'eq.true',
@@ -532,21 +766,29 @@ async function buildCategoryGridCard(tenantId: string): Promise<Extract<ChatCard
     counts.set(row.category, (counts.get(row.category) ?? 0) + 1);
   }
 
+  const categoryRows = await selectMany<ProductCategoryRow>('product_categories', {
+    active: 'eq.true',
+    order: 'sort.asc,key.asc',
+    select: 'tenant_id,key,label_th,icon,image_url,sort,active',
+    tenant_id: `eq.${tenantId}`,
+  });
+  const categoryByKey = new Map(categoryRows.map((row) => [row.key, row]));
   const categories: ChatCategory[] = [...counts.entries()]
     .map(([key, product_count]) => {
+      const category = categoryByKey.get(key);
       const fallback = CATEGORY_FALLBACK_LABELS[key] ?? { icon: null, label_th: key, sort: 1000 };
 
       return {
-        icon: fallback.icon,
-        image_url: null,
+        icon: category?.icon ?? fallback.icon,
+        image_url: category?.image_url ?? null,
         key,
-        label_th: fallback.label_th,
+        label_th: category?.label_th ?? fallback.label_th,
         product_count,
       };
     })
     .sort((a, b) => {
-      const sortA = CATEGORY_FALLBACK_LABELS[a.key]?.sort ?? 1000;
-      const sortB = CATEGORY_FALLBACK_LABELS[b.key]?.sort ?? 1000;
+      const sortA = categoryByKey.get(a.key)?.sort ?? CATEGORY_FALLBACK_LABELS[a.key]?.sort ?? 1000;
+      const sortB = categoryByKey.get(b.key)?.sort ?? CATEGORY_FALLBACK_LABELS[b.key]?.sort ?? 1000;
 
       return sortA - sortB || a.label_th.localeCompare(b.label_th, 'th');
     });
@@ -565,16 +807,25 @@ function productFromOrderJoin(order: OrderWithProductRow) {
   return order.products ?? null;
 }
 
+function branchFromOrderJoin(order: OrderWithProductRow) {
+  if (Array.isArray(order.branches)) {
+    return order.branches[0] ?? null;
+  }
+
+  return order.branches ?? null;
+}
+
 function toOrderStatusInfo(order: OrderWithProductRow): OrderStatusInfo {
   const product = productFromOrderJoin(order);
+  const branch = branchFromOrderJoin(order);
 
   return {
     amount_baht: order.amount_baht,
     booking_at: order.booking_at,
-    branch_name: order.preferred_branch,
+    branch_name: branch?.name ?? order.preferred_branch,
     created_at: order.created_at,
     id: order.id,
-    product_name: product?.name ?? '???????',
+    product_name: product?.name ?? 'แพ็กเกจ',
     status: order.status,
   };
 }
@@ -588,7 +839,7 @@ async function buildOrderStatusCard(tenantId: string, customerId: string): Promi
     tenant_id: `eq.${tenantId}`,
   });
   const orders = rows
-    .filter((row) => row.status !== 'collecting_info')
+    .filter((row) => row.status !== 'collecting_info' && row.status !== 'selecting_branch')
     .slice(0, 3)
     .map(toOrderStatusInfo);
 
@@ -665,8 +916,9 @@ async function persistAssistantMessage({
   });
 }
 
-async function persistSystemNotice(sessionId: string, text: string) {
+async function persistSystemNotice(sessionId: string, text: string, cards: ChatCard[] = []) {
   return insertRow<ChatMessageRow>('chat_messages', {
+    cards,
     content: text,
     role: 'system_notice',
     session_id: sessionId,
@@ -676,7 +928,7 @@ async function persistSystemNotice(sessionId: string, text: string) {
 }
 
 async function updateSessionAfterAssistant(sessionId: string, tenantId: string, text: string) {
-  const emergency = text.includes('1669') || text.includes('???????') || text.includes('???????????');
+  const emergency = text.includes('1669') || text.includes('ฉุกเฉิน') || text.includes('หายใจไม่ออก');
 
   // Never clear an existing flag: a session escalated earlier must stay visible
   // to admin oversight even after the conversation moves on.
@@ -707,8 +959,10 @@ async function completeActionResponseTurn({
   session: ChatSessionRow;
   tenant: TenantRow;
 }) {
-  await persistUserMessage(session.id, clientMsgId, message);
-  await persistSystemNotice(session.id, actionResult.response.text);
+  if (message.trim()) {
+    await persistUserMessage(session.id, clientMsgId, message);
+  }
+  await persistSystemNotice(session.id, actionResult.response.text, actionResult.response.cards);
   await updateSessionAfterAssistant(session.id, tenant.id, actionResult.response.text);
 
   return actionResult.response;
@@ -810,6 +1064,7 @@ async function resolveOrCreateLatestSession({
 // resolved upstream.
 async function completeChatTurn({
   actionResult,
+  channel,
   clientMsgId,
   customer,
   message,
@@ -817,6 +1072,7 @@ async function completeChatTurn({
   tenant,
 }: {
   actionResult: ActionResult;
+  channel: 'app' | 'line' | 'pwa';
   clientMsgId: string;
   customer: CustomerRow;
   message: string;
@@ -837,9 +1093,9 @@ async function completeChatTurn({
 
   let activeOrder = actionResult.order ?? await loadActiveOrder(session.id, tenant.id);
   const intentCategory = inferIntentCategory(message);
-  const activeOrderContext = formatActiveOrderContext(activeOrder);
+  const orderContext = await formatOrderContextLines(customer.id, session.id, tenant.id, channel);
   const [personalContext, recentChat, productCatalog] = await Promise.all([
-    buildPersonalContext(customer.id, activeOrderContext),
+    buildPersonalContext(customer.id, orderContext),
     buildRecentChat(session.id),
     buildCatalogJson(tenant.id, intentCategory),
   ]);
@@ -849,7 +1105,7 @@ async function completeChatTurn({
       personal_context: personalContext,
       product_catalog: productCatalog,
       recent_chat: recentChat,
-      user_nickname: customer.nickname ?? '??????',
+      user_nickname: customer.nickname ?? 'ลูกค้า',
     },
     message,
   );
@@ -861,11 +1117,26 @@ async function completeChatTurn({
       tenantId: tenant.id,
     });
   }
-  const productRows = await lookupProductsByCatalogKeys(tenant.id, parsed.catalogKeys);
+  // While a purchase panel is on screen (branch/form/QR steps), product and
+  // category cards are redundant CTAs that compete with the panel, so they are
+  // suppressed regardless of what the model emitted. order_status stays valid.
+  const purchaseInProgress = Boolean(
+    activeOrder && ['selecting_branch', 'collecting_info', 'awaiting_payment'].includes(activeOrder.status),
+  );
+  const suppressMarkerCards = purchaseInProgress && (parsed.type === 'products' || parsed.type === 'categories');
+  if (suppressMarkerCards) {
+    console.warn('marker_suppressed_active_order', {
+      markerType: parsed.type,
+      orderStatus: activeOrder?.status,
+      tenantId: tenant.id,
+    });
+  }
+  const effectiveMarker = suppressMarkerCards ? { ...parsed, catalogKeys: [], type: null } : parsed;
+  const productRows = await lookupProductsByCatalogKeys(tenant.id, effectiveMarker.catalogKeys);
   const resolvedKeys = productRows.map((row) => row.catalog_key);
   const cards = await buildCardsFromMarker({
     customerId: customer.id,
-    marker: parsed,
+    marker: effectiveMarker,
     productRows,
     tenantId: tenant.id,
   });
@@ -879,7 +1150,7 @@ async function completeChatTurn({
 
   await updateSessionAfterAssistant(session.id, tenant.id, parsed.text);
 
-  activeOrder = await updateCollectingOrderFromMessage(activeOrder, message);
+  activeOrder = channel === 'line' ? await updateCollectingOrderFromMessage(activeOrder, message) : activeOrder;
 
   void invokeInternalFunction('fact-extractor', { message_id: userPersist.row.id }).catch((error) => {
     console.warn('fact_extractor_invoke_failed', error instanceof Error ? error.message : error);
@@ -887,7 +1158,7 @@ async function completeChatTurn({
 
   return {
     cards,
-    order: toOrderPanel(activeOrder, tenant),
+    order: await orderPanelFor(activeOrder, tenant),
     products: productRows.map(toChatProduct),
     session_id: session.id,
     text: assistantMessage.content,
@@ -898,7 +1169,7 @@ export async function orchestrateChat(
   request: ChatOrchestratorRequest,
   authorization: string | null,
 ): Promise<ChatOrchestratorResponse | ChatSlipUploadResponse> {
-  if (!['refresh_order', 'request_slip_upload'].includes(request.action?.type ?? '') && request.message.length === 0) {
+  if (!['get_order_status', 'refresh_order', 'request_slip_upload'].includes(request.action?.type ?? '') && request.message.length === 0) {
     throw new HttpError('VALIDATION', 'Message is required.', 400);
   }
 
@@ -946,6 +1217,7 @@ export async function orchestrateChat(
 
   return completeChatTurn({
     actionResult,
+    channel: request.channel,
     clientMsgId: request.client_msg_id,
     customer,
     message: request.message,
@@ -989,6 +1261,7 @@ export async function orchestrateLine(request: {
 
   return completeChatTurn({
     actionResult,
+    channel: 'line',
     clientMsgId: request.client_msg_id,
     customer,
     message: request.message,

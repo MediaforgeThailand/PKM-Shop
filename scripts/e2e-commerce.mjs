@@ -25,7 +25,9 @@ const service = createClient(supabaseUrl, serviceRoleKey, {
 });
 const created = {
   authUserIds: [],
+  branchIds: [],
   orderIds: [],
+  productIds: [],
 };
 let adminAccessToken = null;
 let tenant = null;
@@ -121,7 +123,17 @@ async function run() {
     `commission amount should match snapshot scheme: expected ${expectedCommissionAmount}, got ${commissionEntry.amount_baht}`,
   );
 
-  console.log('e2e-commerce: PASS (direct purchase, admin confirm, referral attribution, and commission snapshot checked)');
+  if (await hasV3CommerceSchema()) {
+    await runV3ChatCommerceFlow({
+      adminAccessToken,
+      customerAccessToken: directCustomer.accessToken,
+      tenantId: tenant.id,
+    });
+  } else {
+    console.log('e2e-commerce: SKIP v3 branch UX checks (branches/product_branches schema not applied on this target)');
+  }
+
+  console.log('e2e-commerce: PASS (direct purchase, admin confirm, referral attribution, commission snapshot, and v3 commerce checks when available)');
 }
 
 async function loadTenant() {
@@ -215,12 +227,33 @@ async function runPurchaseFlow({ buyerName, buyerPhone, customerAccessToken, lab
   assert(selectedOrder?.id, `${label}: select_product should create an order panel`);
   created.orderIds.push(selectedOrder.id);
 
+  let activeOrder = selectedOrder;
+
+  if (activeOrder.step === 'branch') {
+    const branch = activeOrder.branches?.[0];
+
+    assert(branch?.id, `${label}: branch step should include selectable branches`);
+    const branchSelected = await postChat(customerAccessToken, {
+      action: {
+        branch_id: branch.id,
+        order_id: activeOrder.id,
+        type: 'select_branch',
+      },
+      message: `Select branch for ${label}.`,
+      session_id: selected.session_id,
+    });
+
+    assert(branchSelected.order?.step === 'form', `${label}: select_branch should move to form step`);
+    activeOrder = branchSelected.order;
+  }
+
   const infoBefore = await countSystemNotices(selected.session_id);
   const formSubmitted = await postChat(customerAccessToken, {
     action: {
+      buyer_age: 35,
       buyer_name: buyerName,
       buyer_phone: buyerPhone,
-      order_id: selectedOrder.id,
+      order_id: activeOrder.id,
       preferred_date: '2026-07-01',
       type: 'order_form_submit',
     },
@@ -240,7 +273,7 @@ async function runPurchaseFlow({ buyerName, buyerPhone, customerAccessToken, lab
   const paymentBefore = await countSystemNotices(selected.session_id);
   const submitted = await postChat(customerAccessToken, {
     action: {
-      order_id: selectedOrder.id,
+      order_id: activeOrder.id,
       type: 'payment_done',
     },
     message: `Payment done for ${label}.`,
@@ -256,9 +289,232 @@ async function runPurchaseFlow({ buyerName, buyerPhone, customerAccessToken, lab
   });
 
   return {
-    orderId: selectedOrder.id,
+    orderId: activeOrder.id,
     sessionId: selected.session_id,
   };
+}
+
+async function runV3ChatCommerceFlow({ customerAccessToken, tenantId }) {
+  const suffix = randomUUID().slice(0, 8);
+  const products = await seedV3ProductsAndBranches(tenantId, suffix);
+  const multi = await postChat(customerAccessToken, {
+    action: {
+      catalog_key: products.multi.catalog_key,
+      type: 'select_product',
+    },
+    message: `Select ${products.multi.catalog_key}.`,
+    session_id: null,
+  });
+
+  assert(multi.order?.status === 'selecting_branch', 'v3 multi-branch product should start selecting_branch');
+  assert(multi.order?.step === 'branch', 'v3 multi-branch product should render branch step');
+  assert(multi.order?.branches?.length === 2, `v3 branch step should expose 2 branches, got ${multi.order?.branches?.length ?? 0}`);
+  created.orderIds.push(multi.order.id);
+
+  const chosenBranch = multi.order.branches[0];
+  const branched = await postChat(customerAccessToken, {
+    action: {
+      branch_id: chosenBranch.id,
+      order_id: multi.order.id,
+      type: 'select_branch',
+    },
+    message: 'เลือกสาขาแล้ว',
+    session_id: multi.session_id,
+  });
+
+  assert(branched.order?.status === 'collecting_info', 'v3 select_branch should move order to collecting_info');
+  assert(branched.order?.step === 'form', 'v3 select_branch should return form step');
+  assert(branched.order?.branch_name === chosenBranch.name, 'v3 branch_name should match selected branch');
+
+  const formSubmitted = await postChat(customerAccessToken, {
+    action: {
+      buyer_age: 42,
+      buyer_name: 'E2E V3 Customer',
+      buyer_phone: '0833333333',
+      order_id: multi.order.id,
+      type: 'order_form_submit',
+    },
+    message: 'ส่งข้อมูลผู้ซื้อแล้ว',
+    session_id: multi.session_id,
+  });
+
+  assert(formSubmitted.order?.status === 'awaiting_payment', 'v3 form should advance to awaiting_payment');
+  assert(formSubmitted.order?.step === 'qr', 'v3 form should return QR step');
+  assertPromptPayPayload(formSubmitted.order.qr_payload, 'v3 form QR payload should be valid PromptPay');
+
+  const paid = await postChat(customerAccessToken, {
+    action: {
+      order_id: multi.order.id,
+      type: 'payment_done',
+    },
+    message: 'จ่ายแล้ว',
+    session_id: multi.session_id,
+  });
+
+  assert(paid.order?.status === 'submitted', 'v3 payment should move order to submitted');
+  assert(paid.order?.step === 'tracking', 'v3 paid order should return tracking step');
+
+  const confirmed = await postEdge('admin-order-action', adminAccessToken, {
+    action: 'confirm',
+    order_id: multi.order.id,
+  });
+
+  assert(confirmed.order?.status === 'confirmed', 'v3 admin confirm should move to confirmed');
+
+  const bookingAt = '2026-07-20T02:30:00.000Z';
+  const booked = await postEdge('admin-order-action', adminAccessToken, {
+    action: 'book',
+    booking_at: bookingAt,
+    order_id: multi.order.id,
+  });
+
+  assert(booked.order?.status === 'booked', 'v3 admin book should move to booked');
+  // booking_at round-trips through Postgres timestamptz, so the serialized
+  // offset format differs from the input string; compare instants instead.
+  assert(sameInstant(booked.order?.booking_at, bookingAt), 'v3 admin book should persist booking_at');
+
+  const accountOrder = await loadCustomerVisibleOrder(customerAccessToken, multi.order.id);
+
+  assert(accountOrder.status === 'booked', 'v3 account orders query should show booked status');
+  assert(sameInstant(accountOrder.booking_at, bookingAt), 'v3 account orders query should show booking datetime');
+
+  if (process.env.MIRA_E2E_EXPECT_PROMPT_V3 === '1') {
+    const statusAnswer = await postChat(customerAccessToken, {
+      action: null,
+      message: 'ถึงคิวหรือยัง',
+      session_id: multi.session_id,
+    });
+
+    assert(statusAnswer.text.includes('2026-07-20') || statusAnswer.text.includes('20'), 'v3 order-status answer should include booking date');
+    assert(
+      statusAnswer.cards?.some((card) => card.type === 'order_status' && card.orders.some((order) => order.id === multi.order.id)),
+      'v3 order-status answer should include [[order_status]] card',
+    );
+  } else {
+    console.log('e2e-commerce: SKIP v3 prompt order-status assertion (set MIRA_E2E_EXPECT_PROMPT_V3=1 after staging is env-pinned to prompt v3)');
+  }
+
+  const single = await postChat(customerAccessToken, {
+    action: {
+      catalog_key: products.single.catalog_key,
+      type: 'select_product',
+    },
+    message: `Select ${products.single.catalog_key}.`,
+    session_id: null,
+  });
+
+  assert(single.order?.status === 'collecting_info', 'v3 single-branch product should skip selecting_branch');
+  assert(single.order?.step === 'form', 'v3 single-branch product should open form step');
+  assert(!single.order?.branches?.length, 'v3 single-branch product should not include branch choices');
+  created.orderIds.push(single.order.id);
+}
+
+async function seedV3ProductsAndBranches(tenantId, suffix) {
+  const [branchA, branchB, branchSingle] = await mustMany(
+    service
+      .from('branches')
+      .insert([
+        {
+          active: true,
+          address: 'V3 E2E Address A',
+          district: 'คลองเตย',
+          name: `V3 E2E สาขา A ${suffix}`,
+          sort: 10,
+          tenant_id: tenantId,
+        },
+        {
+          active: true,
+          address: 'V3 E2E Address B',
+          district: 'วัฒนา',
+          name: `V3 E2E สาขา B ${suffix}`,
+          sort: 20,
+          tenant_id: tenantId,
+        },
+        {
+          active: true,
+          address: 'V3 E2E Single Address',
+          district: 'สาทร',
+          name: `V3 E2E สาขาเดี่ยว ${suffix}`,
+          sort: 30,
+          tenant_id: tenantId,
+        },
+      ])
+      .select('id,name'),
+    'Unable to seed v3 E2E branches.',
+  );
+  const [multi, single] = await mustMany(
+    service
+      .from('products')
+      .insert([
+        {
+          active: true,
+          catalog_key: `e2e-v3-multi-${suffix}`,
+          category: 'checkup',
+          description: 'E2E multi branch package',
+          name: `E2E V3 Multi ${suffix}`,
+          price_baht: 1290,
+          tenant_id: tenantId,
+        },
+        {
+          active: true,
+          catalog_key: `e2e-v3-single-${suffix}`,
+          category: 'checkup',
+          description: 'E2E single branch package',
+          name: `E2E V3 Single ${suffix}`,
+          price_baht: 990,
+          tenant_id: tenantId,
+        },
+      ])
+      .select('id,catalog_key'),
+    'Unable to seed v3 E2E products.',
+  );
+
+  created.branchIds.push(branchA.id, branchB.id, branchSingle.id);
+  created.productIds.push(multi.id, single.id);
+
+  await checked(
+    service.from('product_branches').insert([
+      { branch_id: branchA.id, product_id: multi.id },
+      { branch_id: branchB.id, product_id: multi.id },
+      { branch_id: branchSingle.id, product_id: single.id },
+    ]),
+    'seed v3 E2E product branches',
+  );
+
+  return {
+    multi,
+    single,
+  };
+}
+
+async function hasV3CommerceSchema() {
+  const { error } = await service.from('branches').select('id').limit(1);
+
+  return !isMissingRelationError(error);
+}
+
+function isMissingRelationError(error) {
+  return Boolean(error && /does not exist|schema cache|Could not find/i.test(error.message ?? ''));
+}
+
+async function loadCustomerVisibleOrder(jwt, orderId) {
+  const client = createClient(supabaseUrl, anonKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+    global: {
+      headers: {
+        Authorization: `Bearer ${jwt}`,
+      },
+    },
+  });
+  const row = await mustSingle(
+    client.from('orders').select('id,status,booking_at').eq('id', orderId).single(),
+    `Unable to load customer-visible order ${orderId}.`,
+  );
+
+  return row;
 }
 
 async function confirmOrderAndAssertNotices({ expectedCommission, label, orderId, sessionId }) {
@@ -443,6 +699,7 @@ async function cleanup() {
 
   await cancelCreatedOrders();
   await cleanupResidualTestData(tenant.id, created.authUserIds);
+  await cleanupCreatedV3Catalog();
 
   for (const userId of created.authUserIds) {
     const { error } = await service.auth.admin.deleteUser(userId);
@@ -450,6 +707,17 @@ async function cleanup() {
     if (error && !/not found/i.test(error.message)) {
       throw new Error(`Unable to delete commerce E2E auth user ${userId}: ${error.message}`);
     }
+  }
+}
+
+async function cleanupCreatedV3Catalog() {
+  if (created.productIds.length > 0) {
+    await checked(service.from('product_branches').delete().in('product_id', created.productIds), 'cleanup v3 e2e product branches');
+    await deleteByIds('products', created.productIds);
+  }
+
+  if (created.branchIds.length > 0) {
+    await deleteByIds('branches', created.branchIds);
   }
 }
 
@@ -598,4 +866,15 @@ function assert(condition, message) {
   if (!condition) {
     throw new Error(message);
   }
+}
+
+function sameInstant(actual, expected) {
+  if (!actual) {
+    return false;
+  }
+
+  const actualMs = new Date(actual).getTime();
+  const expectedMs = new Date(expected).getTime();
+
+  return Number.isFinite(actualMs) && actualMs === expectedMs;
 }

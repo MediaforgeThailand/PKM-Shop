@@ -18,6 +18,7 @@ const productionFiles = [
   'app/checkout.tsx',
   'app/health-check-results.tsx',
   'app/order-status.tsx',
+  'app/orders.tsx',
   'app/package-detail.tsx',
   'app/r/[ref_code].tsx',
   'app/wearable-health.tsx',
@@ -26,9 +27,14 @@ const productionFiles = [
   'components/admin/OrdersQueue.tsx',
   'components/admin/ReferrersAdmin.tsx',
   'components/chat/ConsentSheet.tsx',
+  'components/chat/BookingSheet.tsx',
+  'components/chat/BranchPicker.tsx',
+  'components/chat/CategoryGrid.tsx',
   'components/chat/MessageBubble.tsx',
   'components/chat/OrderPanel.tsx',
+  'components/chat/OrderStatusCard.tsx',
   'components/chat/ProductCarousel.tsx',
+  'components/chat/ProductGrid.tsx',
   'lib/ai/miraChat.ts',
   'lib/api/client.ts',
   'lib/health/labConfirm.ts',
@@ -54,9 +60,14 @@ const removedRouteFiles = [
 ];
 const presentationalChatComponents = [
   'components/chat/ConsentSheet.tsx',
+  'components/chat/BookingSheet.tsx',
+  'components/chat/BranchPicker.tsx',
+  'components/chat/CategoryGrid.tsx',
   'components/chat/MessageBubble.tsx',
   'components/chat/OrderPanel.tsx',
+  'components/chat/OrderStatusCard.tsx',
   'components/chat/ProductCarousel.tsx',
+  'components/chat/ProductGrid.tsx',
 ];
 const clientScanRoots = ['app', 'components', 'lib'];
 const clientScanExtensions = new Set(['.js', '.mjs', '.ts', '.tsx']);
@@ -249,8 +260,8 @@ const requiredSnippets = [
   },
   {
     relativePath: 'app/(tabs)/chatbot.tsx',
-    snippet: 'createMessage(answerRole, answer, answerSources, answerUiCards, answerOrder)',
-    message: 'live chat append must use the backend response role so action notices render like persisted system_notice rows',
+    snippet: 'createMessage(answerRole, answer, answerSources, answerUiCards, answerOrder, answerCards)',
+    message: 'live chat append must use the backend response role and raw cards so action notices render like persisted system_notice rows',
   },
   {
     relativePath: 'app/(tabs)/chatbot.tsx',
@@ -258,9 +269,9 @@ const requiredSnippets = [
     message: 'chat screen must request a path-scoped signed upload URL before sending payment_done with slip_path',
   },
   {
-    relativePath: 'components/chat/OrderPanel.tsx',
+    relativePath: 'components/chat/BookingSheet.tsx',
     snippet: 'onSlipSelected',
-    message: 'order panel must expose a slip picker callback without owning data access',
+    message: 'booking sheet must expose a slip picker callback without owning data access',
   },
   {
     relativePath: 'components/admin/OrdersQueue.tsx',

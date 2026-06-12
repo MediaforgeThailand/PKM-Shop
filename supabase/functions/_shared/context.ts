@@ -51,29 +51,29 @@ export async function buildRecentChat(sessionId: string) {
 
 export function renderPersonalContextRows({
   activeFacts,
-  activeOrder,
   candidateFacts,
   hasConsent,
+  orderContext,
   registry,
 }: {
   activeFacts: UserFactRow[];
-  activeOrder?: string | null;
   candidateFacts: UserFactRow[];
   hasConsent: boolean;
+  orderContext?: string | null;
   registry: FactKeyRow[];
 }) {
   const renderedFacts = renderFactsThai(activeFacts, candidateFacts, registry);
   const lines = [
     renderedFacts.activeLine,
     renderedFacts.candidateLine,
-    activeOrder ? `กำลังสั่งซื้อ: ${activeOrder}` : '',
+    orderContext ?? '',
     hasConsent ? '' : MISSING_CONSENT_LINE,
   ].filter(Boolean);
 
   return lines.length ? lines.join('\n') : EMPTY_PERSONAL_CONTEXT;
 }
 
-export async function buildPersonalContext(customerId: string, activeOrder?: string | null) {
+export async function buildPersonalContext(customerId: string, orderContext?: string | null) {
   const activeFacts = await selectMany<UserFactRow>('user_facts', {
     customer_id: `eq.${customerId}`,
     limit: '20',
@@ -100,9 +100,9 @@ export async function buildPersonalContext(customerId: string, activeOrder?: str
 
   return renderPersonalContextRows({
     activeFacts,
-    activeOrder,
     candidateFacts,
     hasConsent: Boolean(latestConsent),
+    orderContext,
     registry,
   });
 }

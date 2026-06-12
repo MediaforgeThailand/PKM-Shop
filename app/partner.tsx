@@ -305,7 +305,14 @@ export default function PartnerScreen() {
             </Pressable>
 
             {activeOrder ? (
-              <OrderPanel disabled={isSubmitting} onPaymentDone={markPaymentDone} order={activeOrder} />
+              <View style={styles.partnerOrderStack}>
+                <OrderPanel disabled={isSubmitting} onOpenDetails={() => undefined} order={activeOrder} />
+                {activeOrder.status === 'awaiting_payment' ? (
+                  <Pressable disabled={isSubmitting} onPress={() => void markPaymentDone(activeOrder.id)} style={[styles.primaryButton, isSubmitting ? styles.disabled : null]}>
+                    <Text style={styles.primaryButtonText}>{isSubmitting ? 'Submitting' : 'Mark paid'}</Text>
+                  </Pressable>
+                ) : null}
+              </View>
             ) : null}
           </View>
         </View>
@@ -527,6 +534,9 @@ const styles = StyleSheet.create({
     padding: 16,
     width: '100%',
     ...softShadow,
+  },
+  partnerOrderStack: {
+    gap: 10,
   },
   sectionHeader: {
     gap: 3,
