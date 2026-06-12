@@ -162,6 +162,14 @@ assert(
     prototypePanelSource.includes('buyer_phone') &&
     prototypePanelSource.includes('buyer_age'),
 );
+assert(
+  'prototype order form uses date range selector',
+  prototypePanelSource.includes('createPreferredDateOptions') &&
+    prototypePanelSource.includes('orderDateRangeGrid') &&
+    prototypePanelSource.includes('preferredStartTimes') &&
+    prototypePanelSource.includes('preferredEndTimes') &&
+    prototypePanelSource.includes('formatPreferredDateRange'),
+);
 assert('offline fallback has no numbered RAG list template', !miraChatSource.includes('ragMatches.slice(0, 2).map'));
 assert('offline fallback avoids repeated latest-checkup prompt', !miraChatSource.includes('ตรวจล่าสุดเมื่อไหร่คะ ถ้าจำไม่ได้ตอบคร่าวๆ ได้เลย'));
 assert('edge function does not compose local instructions', !edgeFunctionSource.includes('instructions:') && !edgeFunctionSource.includes('createSystemInstruction'));

@@ -323,6 +323,59 @@ function useWideChatCardWidth() {
   return Math.max(220, shellWidth - 26);
 }
 
+type PreferredDateOption = {
+  dayNumber: string;
+  key: string;
+  monthLabel: string;
+  shortLabel: string;
+  weekdayLabel: string;
+};
+
+const preferredDateWeekdays = ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'];
+const preferredDateMonths = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+const preferredStartTimes = ['07:00', '09:00', '13:00', '15:00'];
+const preferredEndTimes = ['11:00', '15:00', '17:00', '19:00'];
+
+function preferredDateKey(date: Date) {
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, '0');
+  const day = `${date.getDate()}`.padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function addPreferredDateDays(date: Date, days: number) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function createPreferredDateOptions() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  return Array.from({ length: 12 }, (_, index): PreferredDateOption => {
+    const date = addPreferredDateDays(today, index + 1);
+    const dayNumber = date.getDate().toLocaleString('th-TH');
+    const monthLabel = preferredDateMonths[date.getMonth()] ?? '';
+
+    return {
+      dayNumber,
+      key: preferredDateKey(date),
+      monthLabel,
+      shortLabel: `${dayNumber} ${monthLabel}`,
+      weekdayLabel: preferredDateWeekdays[date.getDay()] ?? '',
+    };
+  });
+}
+
+function formatPreferredDateRange(start: PreferredDateOption | undefined, end: PreferredDateOption | undefined, startTime: string, endTime: string) {
+  if (!start || !end) {
+    return '';
+  }
+
+  return `${start.shortLabel} ${startTime} - ${end.shortLabel} ${endTime}`;
+}
+
 function ProductGridCard({ card, onSelectProduct }: { card: Extract<ChatUiCard, { type: 'product_grid' }>; onSelectProduct: (productId: string, productTitle: string) => void }) {
   const gridWidth = useWideChatCardWidth();
   const tileWidth = (gridWidth - 8) / 2;
@@ -494,21 +547,74 @@ function PrototypeOrderFormCard({
   order: NonNullable<OrderPanelState>;
 }) {
   const cardWidth = useWideChatCardWidth();
+  const preferredDayOptions = useMemo(() => createPreferredDateOptions(), []);
   const [buyerName, setBuyerName] = useState('');
   const [buyerPhone, setBuyerPhone] = useState('');
   const [buyerAge, setBuyerAge] = useState('');
-  const [preferredDate, setPreferredDate] = useState('');
+  const [rangeStartKey, setRangeStartKey] = useState(() => preferredDayOptions[1]?.key ?? preferredDayOptions[0]?.key ?? '');
+  const [rangeEndKey, setRangeEndKey] = useState(() => preferredDayOptions[3]?.key ?? preferredDayOptions[1]?.key ?? '');
+  const [startTime, setStartTime] = useState(preferredStartTimes[1] ?? '09:00');
+  const [endTime, setEndTime] = useState(preferredEndTimes[1] ?? '15:00');
   const [formError, setFormError] = useState<string | null>(null);
   const [didSubmit, setDidSubmit] = useState(false);
   const ageDigits = buyerAge.replace(/[^\d]/g, '');
   const ageValue = Number.parseInt(ageDigits, 10);
-  const canSubmit = buyerName.trim().length > 0 && buyerPhone.trim().length > 0 && Number.isFinite(ageValue) && ageValue > 0;
+  const rangeStart = preferredDayOptions.find((day) => day.key === rangeStartKey);
+  const rangeEnd = preferredDayOptions.find((day) => day.key === rangeEndKey);
+  const preferredDateRange = formatPreferredDateRange(rangeStart, rangeEnd, startTime, endTime);
+  const rangeSummary = rangeStart && rangeEnd ? `${rangeStart.shortLabel} - ${rangeEnd.shortLabel}` : rangeStart ? `${rangeStart.shortLabel} - เลือกวันสุดท้าย` : 'เลือกช่วงวันที่';
+  const canSubmit = buyerName.trim().length > 0 && buyerPhone.trim().length > 0 && Number.isFinite(ageValue) && ageValue > 0 && Boolean(preferredDateRange) && startTime < endTime;
   const isSubmitLocked = isSending || didSubmit;
   const isButtonMuted = isSubmitLocked || !canSubmit;
 
+  function selectRangeDay(dayKey: string) {
+    if (isSubmitLocked) {
+      return;
+    }
+
+    setFormError(null);
+
+    if (!rangeStartKey || rangeEndKey) {
+      setRangeStartKey(dayKey);
+      setRangeEndKey('');
+      return;
+    }
+
+    if (dayKey < rangeStartKey) {
+      setRangeStartKey(dayKey);
+      setRangeEndKey(rangeStartKey);
+      return;
+    }
+
+    if (dayKey === rangeStartKey) {
+      setRangeEndKey('');
+      return;
+    }
+
+    setRangeEndKey(dayKey);
+  }
+
+  function selectStartTimeOption(time: string) {
+    setStartTime(time);
+
+    if (time >= endTime) {
+      const nextEndTime = preferredEndTimes.find((option) => option > time) ?? preferredEndTimes[preferredEndTimes.length - 1] ?? endTime;
+      setEndTime(nextEndTime);
+    }
+  }
+
+  function selectEndTimeOption(time: string) {
+    setEndTime(time);
+
+    if (time <= startTime) {
+      const nextStartTime = [...preferredStartTimes].reverse().find((option) => option < time) ?? preferredStartTimes[0] ?? startTime;
+      setStartTime(nextStartTime);
+    }
+  }
+
   async function submitOrderForm() {
     if (!canSubmit) {
-      setFormError('กรอกชื่อ เบอร์โทร และอายุให้ครบก่อนค่ะ');
+      setFormError('กรอกชื่อ เบอร์โทร อายุ และเลือกช่วงวันที่/เวลาให้ครบก่อนค่ะ');
       return;
     }
 
@@ -520,7 +626,7 @@ function PrototypeOrderFormCard({
         buyerName: buyerName.trim(),
         buyerPhone: buyerPhone.trim(),
         orderId: order.id,
-        preferredDate: preferredDate.trim() || undefined,
+        preferredDate: preferredDateRange,
       });
       setDidSubmit(true);
     } catch {
@@ -587,16 +693,80 @@ function PrototypeOrderFormCard({
           </View>
         </View>
 
-        <View style={styles.orderFieldFull}>
-          <Text style={styles.orderInputLabel}>วันที่สะดวก</Text>
-          <TextInput
-            editable={!didSubmit && !isSending}
-            onChangeText={setPreferredDate}
-            placeholder="เช่น พรุ่งนี้บ่าย หรือ 20 มิ.ย."
-            placeholderTextColor="rgba(78,92,132,0.48)"
-            style={styles.orderTextInput}
-            value={preferredDate}
-          />
+        <View style={styles.orderDateRangeBlock}>
+          <View style={styles.orderDateRangeHeader}>
+            <View style={styles.orderDateRangeCopy}>
+              <Text style={styles.orderInputLabel}>ช่วงวันที่สะดวก</Text>
+              <Text numberOfLines={1} style={styles.orderDateRangeSummary}>
+                {rangeSummary}
+              </Text>
+            </View>
+            <View style={styles.orderDateRangePill}>
+              <Text style={styles.orderDateRangePillText}>Range</Text>
+            </View>
+          </View>
+
+          <View style={styles.orderDateRangeGrid}>
+            {preferredDayOptions.map((day) => {
+              const isStart = day.key === rangeStartKey;
+              const isEnd = day.key === rangeEndKey;
+              const isInside = Boolean(rangeStartKey && rangeEndKey && day.key > rangeStartKey && day.key < rangeEndKey);
+              const isSelected = isStart || isEnd;
+
+              return (
+                <Pressable
+                  disabled={isSubmitLocked}
+                  key={day.key}
+                  onPress={() => selectRangeDay(day.key)}
+                  style={({ pressed }) => [
+                    styles.orderDateButton,
+                    isInside ? styles.orderDateButtonInside : null,
+                    isStart ? styles.orderDateButtonSelected : null,
+                    isEnd ? styles.orderDateButtonEndSelected : null,
+                    pressed && !isSubmitLocked ? styles.orderDateButtonPressed : null,
+                  ]}
+                >
+                  <Text style={[styles.orderDateWeekday, isSelected ? styles.orderDateTextSelected : null]}>{day.weekdayLabel}</Text>
+                  <Text style={[styles.orderDateNumber, isSelected ? styles.orderDateTextSelected : null]}>{day.dayNumber}</Text>
+                  <Text style={[styles.orderDateMonth, isSelected ? styles.orderDateTextSelected : null]}>{day.monthLabel}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
+        <View style={styles.orderTimeRangeBlock}>
+          <View style={styles.orderTimeColumn}>
+            <Text style={styles.orderInputLabel}>เวลาเริ่ม</Text>
+            <View style={styles.orderTimeChipRow}>
+              {preferredStartTimes.map((time) => (
+                <Pressable
+                  disabled={isSubmitLocked}
+                  key={time}
+                  onPress={() => selectStartTimeOption(time)}
+                  style={({ pressed }) => [styles.orderTimeChip, time === startTime ? styles.orderTimeChipStartSelected : null, pressed && !isSubmitLocked ? styles.orderTimeChipPressed : null]}
+                >
+                  <Text style={[styles.orderTimeChipText, time === startTime ? styles.orderTimeChipTextSelected : null]}>{time}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.orderTimeColumn}>
+            <Text style={styles.orderInputLabel}>เวลาสิ้นสุด</Text>
+            <View style={styles.orderTimeChipRow}>
+              {preferredEndTimes.map((time) => (
+                <Pressable
+                  disabled={isSubmitLocked}
+                  key={time}
+                  onPress={() => selectEndTimeOption(time)}
+                  style={({ pressed }) => [styles.orderTimeChip, time === endTime ? styles.orderTimeChipEndSelected : null, pressed && !isSubmitLocked ? styles.orderTimeChipPressed : null]}
+                >
+                  <Text style={[styles.orderTimeChipText, time === endTime ? styles.orderTimeChipTextSelected : null]}>{time}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
         </View>
       </View>
 
@@ -1728,6 +1898,149 @@ const styles = StyleSheet.create({
     height: 38,
     paddingHorizontal: 10,
     paddingVertical: 0,
+  },
+  orderDateRangeBlock: {
+    backgroundColor: 'rgba(255,255,255,0.32)',
+    borderColor: 'rgba(255,255,255,0.64)',
+    borderRadius: 16,
+    borderWidth: 1,
+    gap: 9,
+    padding: 9,
+  },
+  orderDateRangeHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 8,
+    justifyContent: 'space-between',
+  },
+  orderDateRangeCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  orderDateRangeSummary: {
+    color: '#31446F',
+    fontSize: 10.7,
+    fontWeight: '900',
+    lineHeight: 13.5,
+    marginTop: 1,
+  },
+  orderDateRangePill: {
+    backgroundColor: 'rgba(92,140,255,0.16)',
+    borderColor: 'rgba(255,255,255,0.72)',
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+  },
+  orderDateRangePillText: {
+    color: '#4F70EE',
+    fontSize: 8.4,
+    fontWeight: '900',
+  },
+  orderDateRangeGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  orderDateButton: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.54)',
+    borderColor: 'rgba(255,255,255,0.72)',
+    borderRadius: 13,
+    borderWidth: 1,
+    justifyContent: 'center',
+    minHeight: 57,
+    paddingVertical: 6,
+    width: '23.1%',
+  },
+  orderDateButtonInside: {
+    backgroundColor: 'rgba(92,140,255,0.14)',
+    borderColor: 'rgba(92,140,255,0.2)',
+  },
+  orderDateButtonSelected: {
+    backgroundColor: '#5B7CFF',
+    borderColor: 'rgba(255,255,255,0.82)',
+    shadowColor: '#5B7CFF',
+    shadowOffset: { height: 6, width: 0 },
+    shadowOpacity: 0.18,
+    shadowRadius: 10,
+  },
+  orderDateButtonEndSelected: {
+    backgroundColor: '#F25AA6',
+    borderColor: 'rgba(255,255,255,0.82)',
+    shadowColor: '#F25AA6',
+    shadowOffset: { height: 6, width: 0 },
+    shadowOpacity: 0.16,
+    shadowRadius: 10,
+  },
+  orderDateButtonPressed: {
+    opacity: 0.82,
+    transform: [{ scale: 0.98 }],
+  },
+  orderDateWeekday: {
+    color: '#69789E',
+    fontSize: 8.4,
+    fontWeight: '900',
+    lineHeight: 10,
+  },
+  orderDateNumber: {
+    color: '#31446F',
+    fontSize: 15.4,
+    fontWeight: '900',
+    lineHeight: 18,
+    marginTop: 1,
+  },
+  orderDateMonth: {
+    color: '#607099',
+    fontSize: 7.8,
+    fontWeight: '800',
+    lineHeight: 10,
+    marginTop: 1,
+  },
+  orderDateTextSelected: {
+    color: '#FFFFFF',
+  },
+  orderTimeRangeBlock: {
+    gap: 9,
+  },
+  orderTimeColumn: {
+    gap: 5,
+  },
+  orderTimeChipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  orderTimeChip: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.56)',
+    borderColor: 'rgba(255,255,255,0.74)',
+    borderRadius: 13,
+    borderWidth: 1,
+    justifyContent: 'center',
+    minHeight: 34,
+    minWidth: 53,
+    paddingHorizontal: 10,
+  },
+  orderTimeChipStartSelected: {
+    backgroundColor: '#5B7CFF',
+    borderColor: 'rgba(255,255,255,0.84)',
+  },
+  orderTimeChipEndSelected: {
+    backgroundColor: '#F25AA6',
+    borderColor: 'rgba(255,255,255,0.84)',
+  },
+  orderTimeChipPressed: {
+    opacity: 0.84,
+    transform: [{ scale: 0.98 }],
+  },
+  orderTimeChipText: {
+    color: '#40527B',
+    fontSize: 10,
+    fontWeight: '900',
+  },
+  orderTimeChipTextSelected: {
+    color: '#FFFFFF',
   },
   orderFormError: {
     color: '#E15B72',
