@@ -5,21 +5,21 @@ import type { ImageSourcePropType } from 'react-native';
 import { Image, ImageBackground, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { showcaseModules, type ShowcaseModule, type ShowcaseModuleId } from '@/lib/showcase/modules';
+import { showcaseModules, type ShowcaseModule, type ShowcaseModuleId } from '@/lib/showcase/registry';
 
 const logo = require('@/assets/images/mira-care-logo.png');
 
 const moduleImages: Record<ShowcaseModuleId, ImageSourcePropType> = {
   admin: require('@/assets/images/product-preview-longevity.png'),
   'ai-chat': require('@/assets/images/product-preview-heart.png'),
-  'health-dashboard': require('@/assets/images/mockup-health-check-results.png'),
+  health: require('@/assets/images/mockup-health-check-results.png'),
   referral: require('@/assets/images/mira-care-mark.png'),
 };
 
 const moduleIcons = {
   admin: { android: 'admin_panel_settings', ios: 'slider.horizontal.3', web: 'admin_panel_settings' },
   'ai-chat': { android: 'chat', ios: 'message.and.waveform.fill', web: 'chat' },
-  'health-dashboard': { android: 'monitor_heart', ios: 'heart.text.square.fill', web: 'monitor_heart' },
+  health: { android: 'monitor_heart', ios: 'heart.text.square.fill', web: 'monitor_heart' },
   referral: { android: 'link', ios: 'link', web: 'link' },
 } as const;
 

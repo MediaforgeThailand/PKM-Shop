@@ -1,17 +1,18 @@
 import { Link, Redirect, useLocalSearchParams } from 'expo-router';
+import type { Href } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { Image, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { findShowcaseModule, type ShowcasePage } from '@/lib/showcase/modules';
+import { findShowcaseModule, type ShowcasePage } from '@/lib/showcase/registry';
 
 const logo = require('@/assets/images/mira-care-logo.png');
 
 const moduleNotes = {
-  admin: 'Start with product setup, then move to orders so the client sees the operational handoff.',
-  'ai-chat': 'Start with the chat page, then open product detail, checkout, and status as the customer journey expands.',
-  'health-dashboard': 'Start with the dashboard, then open labs, wearables, and profile memory depending on the customer use case.',
-  referral: 'Start with the referral link entry, then show the partner workspace and commission admin.',
+  admin: 'เริ่มจากแค็ตตาล็อก แล้วต่อด้วยคิวออเดอร์ สาขา และ partner admin เพื่อให้เห็นงานหลังบ้านจริง.',
+  'ai-chat': 'เริ่มจากหน้าแชท แล้วเปิดคำสั่งซื้อ รายละเอียดแพ็กเกจ และ prototype เฉพาะตอนขายภาพอนาคต.',
+  health: 'เริ่มจาก dashboard สุขภาพ แล้วเปิดผลตรวจ wearable และ profile ตาม use case ของลูกค้า.',
+  referral: 'เริ่มจากลิงก์ referral แล้วเปิด workspace ของ partner และหน้า commission admin.',
 } as const;
 
 export default function ShowcaseDirectoryScreen() {
@@ -87,7 +88,7 @@ function RouteRow({ accent, index, isWide, page }: { accent: string; index: numb
         <Text style={styles.routeDescription}>{page.description}</Text>
       </View>
 
-      <Link href={page.href} asChild>
+      <Link href={page.href as Href} asChild>
         <Pressable style={StyleSheet.flatten([styles.openButton, { borderColor: accent }])}>
           <Text style={[styles.openButtonText, { color: accent }]}>Open</Text>
           <SymbolView name={{ ios: 'arrow.up.right', android: 'open_in_new', web: 'open_in_new' }} size={18} tintColor={accent} />

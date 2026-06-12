@@ -1,5 +1,5 @@
-import { HealthInsightScreen } from '@/components/HealthInsightScreens';
+import { Redirect } from 'expo-router';
 
 export default function BodyOverviewLegacyRoute() {
-  return <HealthInsightScreen screen="overview" />;
+  return <Redirect href="/body-overview" />;
 }

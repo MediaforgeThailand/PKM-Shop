@@ -4,12 +4,11 @@ import path from 'node:path';
 const repoRoot = process.cwd();
 
 const productionFiles = [
-  'app/(tabs)/agent.tsx',
   'app/(tabs)/chatbot.tsx',
   'app/(tabs)/health.tsx',
-  'app/(tabs)/home.tsx',
-  'app/(tabs)/packages.tsx',
+  'app/(tabs)/more.tsx',
   'app/_layout.tsx',
+  'app/admin/branches.tsx',
   'app/admin/catalog.tsx',
   'app/admin/orders.tsx',
   'app/admin/referrers.tsx',
@@ -20,7 +19,10 @@ const productionFiles = [
   'app/order-status.tsx',
   'app/orders.tsx',
   'app/package-detail.tsx',
+  'app/partner.tsx',
+  'app/prototype.tsx',
   'app/r/[ref_code].tsx',
+  'app/user-profile.tsx',
   'app/wearable-health.tsx',
   'components/HealthInsightScreens.tsx',
   'components/admin/CatalogCrud.tsx',
@@ -54,9 +56,13 @@ const forbidden = [
 ];
 
 const removedRouteFiles = [
+  'app/(tabs)/agent.tsx',
+  'app/(tabs)/home.tsx',
+  'app/(tabs)/packages.tsx',
   'app/admin-booking.tsx',
   'app/hospital-portal.tsx',
   'app/hospital-products.tsx',
+  'app/modal.tsx',
 ];
 const presentationalChatComponents = [
   'components/chat/ConsentSheet.tsx',

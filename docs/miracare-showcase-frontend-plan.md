@@ -205,7 +205,7 @@ Static phone frame (reuse the prototype's phone-frame styling approach, NOT its 
 
 **S0 — Registry, truth, and cleanup (no visual change).**
 Registry §3.1 (port modules.ts content, honest copy, statuses, auth); audit script §3.2 + npm script + add to `v2:verify`; delete DEAD routes (`(tabs)/home|packages|agent`, `/modal`, `/ai-body-overview`→redirect) and their layout entries; `/checkout` added to EXCLUDED_ROUTES (kept but unregistered).
-DoD: ❌ `npm run showcase:route-audit` passes and fails correctly when a fake entry/route is added (prove both in PR description); ❌ deleted routes gone from `_layout`s; ❌ `npm run v2:verify` green; ❌ typecheck green.
+DoD: ✅ 2026-06-12 `npm run showcase:route-audit` passes and fails correctly when a fake entry/route is added (prove both in PR description); ✅ 2026-06-12 deleted routes gone from `_layout`s; ✅ 2026-06-12 `npm run v2:verify` green; ✅ 2026-06-12 typecheck green.
 
 **S1 — Showcase Home + Module pages rebuild.**
 §4 + §5 exactly; branded fallback posters; poster asset slots `assets/showcase/<id>.png` (use fallback until owner drops screenshots); demo script content per module (Thai, owner reviews wording in PR).

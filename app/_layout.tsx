@@ -14,7 +14,6 @@ export {
 } from 'expo-router';
 
 export const unstable_settings = {
-  // Ensure that reloading on `/modal` keeps a back button present.
   initialRouteName: 'index',
 };
 
@@ -67,9 +66,7 @@ function RootLayoutNav() {
           <Stack.Screen name="r/[ref_code]" options={{ headerShown: false }} />
           <Stack.Screen name="body-overview" options={{ headerShown: false }} />
           <Stack.Screen name="wearable-health" options={{ headerShown: false }} />
-          <Stack.Screen name="ai-body-overview" options={{ headerShown: false }} />
           <Stack.Screen name="health-check-results" options={{ headerShown: false }} />
-          <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
         </Stack>
       </ThemeProvider>
     </QueryClientProvider>
