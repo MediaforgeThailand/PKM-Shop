@@ -20,7 +20,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Circle, Defs, LinearGradient as SvgGradient, Path, Rect, Stop } from 'react-native-svg';
 
 import { aiChatConfigStatus, askAiWithRag, DEFAULT_USER_NICKNAME, type ChatMessage } from '@/lib/ai/miraChat';
-import type { ChatUiCard } from '@/lib/ai/healthChatTypes';
+import type { ChatProductCard, ChatUiCard } from '@/lib/ai/healthChatTypes';
 import { useAuthSession } from '@/lib/auth/useAuthSession';
 import type { OrderPanelState } from '@/lib/types/api';
 
@@ -289,31 +289,50 @@ function ChatAvatar() {
   );
 }
 
-function ProductGridCard({ card, onSelectProduct }: { card: Extract<ChatUiCard, { type: 'product_grid' }>; onSelectProduct: (productId: string, productTitle: string) => void }) {
-  return (
-    <View style={styles.commerceCard}>
-      <View style={styles.commerceHeader}>
-        <Text style={styles.commerceEyebrow}>Soft recommendation</Text>
-        <Text style={styles.commerceTitle}>{card.title}</Text>
+function ProductPreviewImage({ product }: { product: ChatProductCard }) {
+  const initial = product.title.trim().slice(0, 1).toUpperCase() || 'M';
+
+  if (product.productImagePreviewUri) {
+    return (
+      <View style={styles.productPreviewFrame}>
+        <Image source={{ uri: product.productImagePreviewUri }} resizeMode="cover" style={styles.productPreviewImage} />
       </View>
-      <View style={styles.categoryGrid}>
-        {card.products.map((product, index) => (
-          <Pressable key={product.id} onPress={() => onSelectProduct(product.id, product.title)} style={({ pressed }) => [styles.categoryTile, pressed ? styles.categoryTilePressed : null]}>
-            <LinearGradient colors={['rgba(255,255,255,0.68)', 'rgba(232,244,255,0.34)']} style={styles.categoryTileGlass}>
-              <View style={styles.categoryTopLine}>
-                <Text style={styles.categoryCode}>{index + 1}</Text>
-                <Text numberOfLines={1} style={styles.categoryPopularity}>
-                  {product.tags[0] ?? product.category}
-                </Text>
-              </View>
-              <Text numberOfLines={2} style={styles.categoryTitle}>
+    );
+  }
+
+  return (
+    <View style={styles.productPreviewFrame}>
+      <LinearGradient colors={['rgba(255,255,255,0.74)', 'rgba(196,219,255,0.42)']} style={styles.productPreviewFallback}>
+        <Text style={styles.productPreviewInitial}>{initial}</Text>
+      </LinearGradient>
+    </View>
+  );
+}
+
+function ProductGridCard({ card, onSelectProduct }: { card: Extract<ChatUiCard, { type: 'product_grid' }>; onSelectProduct: (productId: string, productTitle: string) => void }) {
+  const { width } = useWindowDimensions();
+  const shellWidth = width > 0 && width < 390 ? width : 292;
+  const gridWidth = Math.max(220, shellWidth - 26);
+  const tileWidth = (gridWidth - 8) / 2;
+
+  return (
+    <View style={[styles.productGridSurface, { width: gridWidth }]}>
+      <View style={styles.productGrid}>
+        {card.products.map((product) => (
+          <Pressable
+            key={product.id}
+            onPress={() => onSelectProduct(product.id, product.title)}
+            style={({ pressed }) => [styles.productTile, { width: tileWidth }, pressed ? styles.productTilePressed : null]}
+          >
+            <ProductPreviewImage product={product} />
+            <View style={styles.productTileCopy}>
+              <Text numberOfLines={2} style={styles.productTileName}>
                 {product.title}
               </Text>
-              <Text numberOfLines={2} style={styles.categoryDescription}>
-                {product.hospitalName}
+              <Text numberOfLines={1} style={styles.productTilePrice}>
+                {formatProductMoney(product.priceAmount)}
               </Text>
-              <Text style={styles.categoryPrice}>{formatProductMoney(product.priceAmount)}</Text>
-            </LinearGradient>
+            </View>
           </Pressable>
         ))}
       </View>
@@ -1323,6 +1342,7 @@ const styles = StyleSheet.create({
     width: 205,
   },
   assistantStack: {
+    alignItems: 'flex-start',
     gap: 8,
   },
   assistantChatText: {
@@ -1343,6 +1363,69 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.12,
     shadowRadius: 18,
     width: 205,
+  },
+  productGridSurface: {
+    marginLeft: -39,
+  },
+  productGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  productTile: {
+    backgroundColor: 'rgba(255,255,255,0.5)',
+    borderColor: 'rgba(255,255,255,0.72)',
+    borderRadius: 15,
+    borderWidth: 1,
+    minHeight: 154,
+    overflow: 'hidden',
+    shadowColor: '#718DFF',
+    shadowOffset: { height: 9, width: 0 },
+    shadowOpacity: 0.12,
+    shadowRadius: 14,
+  },
+  productTilePressed: {
+    opacity: 0.78,
+    transform: [{ scale: 0.98 }],
+  },
+  productPreviewFrame: {
+    aspectRatio: 1.12,
+    backgroundColor: 'rgba(226,241,255,0.54)',
+    overflow: 'hidden',
+    width: '100%',
+  },
+  productPreviewImage: {
+    height: '100%',
+    width: '100%',
+  },
+  productPreviewFallback: {
+    alignItems: 'center',
+    height: '100%',
+    justifyContent: 'center',
+    width: '100%',
+  },
+  productPreviewInitial: {
+    color: '#5778EF',
+    fontSize: 27,
+    fontWeight: '900',
+  },
+  productTileCopy: {
+    gap: 5,
+    paddingBottom: 10,
+    paddingHorizontal: 9,
+    paddingTop: 8,
+  },
+  productTileName: {
+    color: '#31446F',
+    fontSize: 10.6,
+    fontWeight: '900',
+    lineHeight: 13.4,
+  },
+  productTilePrice: {
+    color: '#4F79F5',
+    fontSize: 10.2,
+    fontWeight: '900',
+    lineHeight: 12.8,
   },
   commerceHeader: {
     gap: 2,
