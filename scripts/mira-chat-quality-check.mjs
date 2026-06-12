@@ -168,8 +168,8 @@ assert(
     prototypePanelSource.includes('orderDatePickerButton') &&
     prototypePanelSource.includes('orderCalendarPanel') &&
     prototypePanelSource.includes('preferredMonthTitle') &&
-    prototypePanelSource.includes('preferredStartTimes') &&
-    prototypePanelSource.includes('preferredEndTimes') &&
+    prototypePanelSource.includes('preferredTimeSlots') &&
+    prototypePanelSource.includes('orderTimeSlotButton') &&
     prototypePanelSource.includes('formatPreferredDateRange'),
 );
 assert('offline fallback has no numbered RAG list template', !miraChatSource.includes('ragMatches.slice(0, 2).map'));

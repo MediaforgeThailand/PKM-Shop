@@ -331,11 +331,19 @@ type PreferredDateOption = {
   weekdayLabel: string;
 };
 
+type PreferredTimeSlot = {
+  detail: string;
+  key: 'morning' | 'afternoon';
+  label: string;
+};
+
 const preferredDateWeekdays = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
 const preferredDateMonths = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
 const preferredDateMonthTitles = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-const preferredStartTimes = ['07:00', '09:00', '13:00', '15:00'];
-const preferredEndTimes = ['11:00', '15:00', '17:00', '19:00'];
+const preferredTimeSlots: PreferredTimeSlot[] = [
+  { detail: '09:00 - 12:00', key: 'morning', label: 'ช่วงเช้า' },
+  { detail: '13:00 - 17:00', key: 'afternoon', label: 'ช่วงบ่าย' },
+];
 
 function preferredDateKey(date: Date) {
   const year = date.getFullYear();
@@ -400,12 +408,12 @@ function preferredMonthTitle(date: Date) {
   return `${preferredDateMonthTitles[date.getMonth()] ?? ''} ${date.getFullYear()}`;
 }
 
-function formatPreferredDateRange(start: PreferredDateOption | undefined, end: PreferredDateOption | undefined, startTime: string, endTime: string) {
+function formatPreferredDateRange(start: PreferredDateOption | undefined, end: PreferredDateOption | undefined, timeSlot: PreferredTimeSlot | undefined) {
   if (!start || !end) {
     return '';
   }
 
-  return `${start.shortLabel} ${startTime} - ${end.shortLabel} ${endTime}`;
+  return `${start.shortLabel} - ${end.shortLabel} · ${timeSlot?.label ?? ''} ${timeSlot?.detail ?? ''}`.trim();
 }
 
 function ProductGridCard({ card, onSelectProduct }: { card: Extract<ChatUiCard, { type: 'product_grid' }>; onSelectProduct: (productId: string, productTitle: string) => void }) {
@@ -589,17 +597,17 @@ function PrototypeOrderFormCard({
   const [rangeStartKey, setRangeStartKey] = useState(() => preferredDateKey(initialRangeStart));
   const [rangeEndKey, setRangeEndKey] = useState(() => preferredDateKey(initialRangeEnd));
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
-  const [startTime, setStartTime] = useState(preferredStartTimes[1] ?? '09:00');
-  const [endTime, setEndTime] = useState(preferredEndTimes[1] ?? '15:00');
+  const [selectedTimeSlotKey, setSelectedTimeSlotKey] = useState<PreferredTimeSlot['key']>('morning');
   const [formError, setFormError] = useState<string | null>(null);
   const [didSubmit, setDidSubmit] = useState(false);
   const ageDigits = buyerAge.replace(/[^\d]/g, '');
   const ageValue = Number.parseInt(ageDigits, 10);
   const rangeStart = preferredDateOptionFromKey(rangeStartKey);
   const rangeEnd = preferredDateOptionFromKey(rangeEndKey);
-  const preferredDateRange = formatPreferredDateRange(rangeStart, rangeEnd, startTime, endTime);
+  const selectedTimeSlot = preferredTimeSlots.find((slot) => slot.key === selectedTimeSlotKey) ?? preferredTimeSlots[0];
+  const preferredDateRange = formatPreferredDateRange(rangeStart, rangeEnd, selectedTimeSlot);
   const rangeSummary = rangeStart && rangeEnd ? `${rangeStart.shortLabel} - ${rangeEnd.shortLabel}` : rangeStart ? `${rangeStart.shortLabel} - เลือกวันสุดท้าย` : 'เลือกช่วงวันที่';
-  const canSubmit = buyerName.trim().length > 0 && buyerPhone.trim().length > 0 && Number.isFinite(ageValue) && ageValue > 0 && Boolean(preferredDateRange) && startTime < endTime;
+  const canSubmit = buyerName.trim().length > 0 && buyerPhone.trim().length > 0 && Number.isFinite(ageValue) && ageValue > 0 && Boolean(preferredDateRange);
   const isSubmitLocked = isSending || didSubmit;
   const isButtonMuted = isSubmitLocked || !canSubmit;
 
@@ -629,24 +637,6 @@ function PrototypeOrderFormCard({
 
     setRangeEndKey(dayKey);
     setIsCalendarOpen(false);
-  }
-
-  function selectStartTimeOption(time: string) {
-    setStartTime(time);
-
-    if (time >= endTime) {
-      const nextEndTime = preferredEndTimes.find((option) => option > time) ?? preferredEndTimes[preferredEndTimes.length - 1] ?? endTime;
-      setEndTime(nextEndTime);
-    }
-  }
-
-  function selectEndTimeOption(time: string) {
-    setEndTime(time);
-
-    if (time <= startTime) {
-      const nextStartTime = [...preferredStartTimes].reverse().find((option) => option < time) ?? preferredStartTimes[0] ?? startTime;
-      setStartTime(nextStartTime);
-    }
   }
 
   async function submitOrderForm() {
@@ -742,7 +732,7 @@ function PrototypeOrderFormCard({
                 {rangeSummary}
               </Text>
               <Text numberOfLines={1} style={styles.orderDatePickerMeta}>
-                {startTime} - {endTime}
+                {selectedTimeSlot?.label} · {selectedTimeSlot?.detail}
               </Text>
             </View>
             <Text style={styles.orderDatePickerChevron}>{isCalendarOpen ? '×' : '›'}</Text>
@@ -805,36 +795,23 @@ function PrototypeOrderFormCard({
         </View>
 
         <View style={styles.orderTimeRangeBlock}>
-          <View style={styles.orderTimeColumn}>
-            <Text style={styles.orderInputLabel}>เวลาเริ่ม</Text>
-            <View style={styles.orderTimeChipRow}>
-              {preferredStartTimes.map((time) => (
-                <Pressable
-                  disabled={isSubmitLocked}
-                  key={time}
-                  onPress={() => selectStartTimeOption(time)}
-                  style={({ pressed }) => [styles.orderTimeChip, time === startTime ? styles.orderTimeChipStartSelected : null, pressed && !isSubmitLocked ? styles.orderTimeChipPressed : null]}
-                >
-                  <Text style={[styles.orderTimeChipText, time === startTime ? styles.orderTimeChipTextSelected : null]}>{time}</Text>
-                </Pressable>
-              ))}
-            </View>
-          </View>
+          <Text style={styles.orderInputLabel}>เวลาที่สะดวก</Text>
+          <View style={styles.orderTimeSlotRow}>
+            {preferredTimeSlots.map((slot) => {
+              const isSelected = slot.key === selectedTimeSlotKey;
 
-          <View style={styles.orderTimeColumn}>
-            <Text style={styles.orderInputLabel}>เวลาสิ้นสุด</Text>
-            <View style={styles.orderTimeChipRow}>
-              {preferredEndTimes.map((time) => (
+              return (
                 <Pressable
                   disabled={isSubmitLocked}
-                  key={time}
-                  onPress={() => selectEndTimeOption(time)}
-                  style={({ pressed }) => [styles.orderTimeChip, time === endTime ? styles.orderTimeChipEndSelected : null, pressed && !isSubmitLocked ? styles.orderTimeChipPressed : null]}
+                  key={slot.key}
+                  onPress={() => setSelectedTimeSlotKey(slot.key)}
+                  style={({ pressed }) => [styles.orderTimeSlotButton, isSelected ? styles.orderTimeSlotButtonSelected : null, pressed && !isSubmitLocked ? styles.orderTimeSlotButtonPressed : null]}
                 >
-                  <Text style={[styles.orderTimeChipText, time === endTime ? styles.orderTimeChipTextSelected : null]}>{time}</Text>
+                  <Text style={[styles.orderTimeSlotLabel, isSelected ? styles.orderTimeSlotTextSelected : null]}>{slot.label}</Text>
+                  <Text style={[styles.orderTimeSlotDetail, isSelected ? styles.orderTimeSlotTextSelected : null]}>{slot.detail}</Text>
                 </Pressable>
-              ))}
-            </View>
+              );
+            })}
           </View>
         </View>
       </View>
@@ -2005,7 +1982,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   orderDatePickerChevron: {
-    color: '#F014C8',
+    color: '#5B7CFF',
     fontSize: 22,
     fontWeight: '900',
     lineHeight: 24,
@@ -2042,7 +2019,7 @@ const styles = StyleSheet.create({
   },
   orderCalendarNavButton: {
     alignItems: 'center',
-    backgroundColor: '#F014C8',
+    backgroundColor: '#5B91FF',
     borderRadius: 4,
     height: 34,
     justifyContent: 'center',
@@ -2089,10 +2066,10 @@ const styles = StyleSheet.create({
     width: '14.285%',
   },
   orderCalendarCellInRange: {
-    backgroundColor: 'rgba(240,20,200,0.16)',
+    backgroundColor: 'rgba(91,124,255,0.16)',
   },
   orderCalendarCellSelected: {
-    backgroundColor: '#F014C8',
+    backgroundColor: '#5B7CFF',
     borderRadius: 4,
   },
   orderCalendarCellPressed: {
@@ -2115,43 +2092,47 @@ const styles = StyleSheet.create({
   orderTimeRangeBlock: {
     gap: 9,
   },
-  orderTimeColumn: {
-    gap: 5,
-  },
-  orderTimeChipRow: {
+  orderTimeSlotRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
+    gap: 8,
   },
-  orderTimeChip: {
-    alignItems: 'center',
+  orderTimeSlotButton: {
     backgroundColor: 'rgba(255,255,255,0.56)',
     borderColor: 'rgba(255,255,255,0.74)',
-    borderRadius: 13,
+    borderRadius: 15,
     borderWidth: 1,
+    flex: 1,
     justifyContent: 'center',
-    minHeight: 34,
-    minWidth: 53,
-    paddingHorizontal: 10,
+    minHeight: 55,
+    paddingHorizontal: 11,
+    paddingVertical: 8,
   },
-  orderTimeChipStartSelected: {
+  orderTimeSlotButtonSelected: {
     backgroundColor: '#5B7CFF',
     borderColor: 'rgba(255,255,255,0.84)',
+    shadowColor: '#5B7CFF',
+    shadowOffset: { height: 7, width: 0 },
+    shadowOpacity: 0.16,
+    shadowRadius: 12,
   },
-  orderTimeChipEndSelected: {
-    backgroundColor: '#F25AA6',
-    borderColor: 'rgba(255,255,255,0.84)',
-  },
-  orderTimeChipPressed: {
+  orderTimeSlotButtonPressed: {
     opacity: 0.84,
     transform: [{ scale: 0.98 }],
   },
-  orderTimeChipText: {
+  orderTimeSlotLabel: {
     color: '#40527B',
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '900',
+    lineHeight: 15,
   },
-  orderTimeChipTextSelected: {
+  orderTimeSlotDetail: {
+    color: '#6B7FAA',
+    fontSize: 9,
+    fontWeight: '800',
+    lineHeight: 12,
+    marginTop: 3,
+  },
+  orderTimeSlotTextSelected: {
     color: '#FFFFFF',
   },
   orderFormError: {
