@@ -1117,11 +1117,26 @@ async function completeChatTurn({
       tenantId: tenant.id,
     });
   }
-  const productRows = await lookupProductsByCatalogKeys(tenant.id, parsed.catalogKeys);
+  // While a purchase panel is on screen (branch/form/QR steps), product and
+  // category cards are redundant CTAs that compete with the panel, so they are
+  // suppressed regardless of what the model emitted. order_status stays valid.
+  const purchaseInProgress = Boolean(
+    activeOrder && ['selecting_branch', 'collecting_info', 'awaiting_payment'].includes(activeOrder.status),
+  );
+  const suppressMarkerCards = purchaseInProgress && (parsed.type === 'products' || parsed.type === 'categories');
+  if (suppressMarkerCards) {
+    console.warn('marker_suppressed_active_order', {
+      markerType: parsed.type,
+      orderStatus: activeOrder?.status,
+      tenantId: tenant.id,
+    });
+  }
+  const effectiveMarker = suppressMarkerCards ? { ...parsed, catalogKeys: [], type: null } : parsed;
+  const productRows = await lookupProductsByCatalogKeys(tenant.id, effectiveMarker.catalogKeys);
   const resolvedKeys = productRows.map((row) => row.catalog_key);
   const cards = await buildCardsFromMarker({
     customerId: customer.id,
-    marker: parsed,
+    marker: effectiveMarker,
     productRows,
     tenantId: tenant.id,
   });
