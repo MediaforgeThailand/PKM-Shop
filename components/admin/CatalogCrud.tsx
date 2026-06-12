@@ -27,6 +27,7 @@ import {
   type ProductCategoryOption,
   type TenantMemberContext,
 } from '@/lib/marketplace/hospitalProducts';
+import { showcaseDemoBranches, showcaseDemoCategories, showcaseDemoProducts, showcaseDemoTenantContext } from '@/lib/showcase/demoFixtures';
 
 const emptyDraft: HospitalProductDraft = {
   branchInfo: '',
@@ -72,7 +73,8 @@ export function CatalogCrud({ title = 'Catalog CRUD' }: { title?: string }) {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const isWide = width >= 1080;
-  const canEditCatalog = canWriteTenantCatalog(tenantContext);
+  const isDemoMode = !auth.session;
+  const canEditCatalog = Boolean(auth.session) && canWriteTenantCatalog(tenantContext);
   const canSave =
     canEditCatalog &&
     draft.title.trim().length > 1 &&
@@ -146,10 +148,10 @@ export function CatalogCrud({ title = 'Catalog CRUD' }: { title?: string }) {
       setError(null);
 
       if (!auth.user) {
-        setTenantContext(null);
-        setProducts([]);
-        setBranches([]);
-        setCategories([]);
+        setTenantContext(showcaseDemoTenantContext);
+        setProducts(showcaseDemoProducts);
+        setBranches(showcaseDemoBranches);
+        setCategories(showcaseDemoCategories);
         return;
       }
 
@@ -199,6 +201,15 @@ export function CatalogCrud({ title = 'Catalog CRUD' }: { title?: string }) {
   async function refreshProducts() {
     try {
       setError(null);
+
+      if (isDemoMode) {
+        setTenantContext(showcaseDemoTenantContext);
+        setProducts(showcaseDemoProducts);
+        setBranches(showcaseDemoBranches);
+        setCategories(showcaseDemoCategories);
+        setMessage('กำลังแสดงข้อมูลตัวอย่างอยู่');
+        return;
+      }
 
       if (!tenantContext) {
         await loadCatalog();
@@ -386,15 +397,10 @@ export function CatalogCrud({ title = 'Catalog CRUD' }: { title?: string }) {
           </View>
         </View>
 
-        {!auth.session ? (
+        {isDemoMode ? (
           <View style={styles.notice}>
-            <Text style={styles.noticeTitle}>Signed-in tenant admin required</Text>
-            <Text style={styles.noticeBody}>Use a tenant admin account for catalog changes.</Text>
-            <Link href="/" asChild>
-              <Pressable style={styles.noticeButton}>
-                <Text style={styles.noticeButtonText}>Sign In</Text>
-              </Pressable>
-            </Link>
+            <Text style={styles.noticeTitle}>โหมดตัวอย่าง</Text>
+            <Text style={styles.noticeBody}>เปิดดู catalog ได้ทันทีโดยไม่ต้องล็อกอิน ปุ่มบันทึก อัปโหลด และ archive จะถูกปิดไว้</Text>
           </View>
         ) : null}
 

@@ -50,17 +50,16 @@ export const showcaseModuleMeta: Record<ShowcaseModuleId, ShowcaseModuleMeta> = 
   },
   'ai-chat': {
     accent: '#40C9A2',
-    eyebrow_en: 'Customer assistant',
+    eyebrow_en: 'Customer commerce',
     id: 'ai-chat',
     script_th: [
-      'เปิดแชทแล้วถามเรื่องตรวจสุขภาพเพื่อโชว์คำตอบและการ์ดแพ็กเกจจากระบบจริง',
       'เปิดคำสั่งซื้อของฉันเพื่อดูรายการออเดอร์และ timeline ที่ผูกกับบัญชีลูกค้า',
       'เปิดรายละเอียดแพ็กเกจเพื่อดูข้อมูลสินค้าจาก catalog จริง',
       'เปิด prototype หรือ LINE preview เฉพาะตอนต้องขายภาพอนาคตของประสบการณ์แชท',
     ],
-    story_th: 'ระบบแชทผู้ช่วยขายและดูแลลูกค้า ตั้งแต่แนะนำแพ็กเกจ เก็บข้อมูล จนถึงติดตามออเดอร์',
-    title_en: 'AI Chat',
-    title_th: 'AI Chat ผู้ช่วยขายและดูแล',
+    story_th: 'ระบบหน้าลูกค้าสำหรับดูคำสั่งซื้อ รายละเอียดแพ็กเกจ และต้นแบบประสบการณ์แชทในอนาคต',
+    title_en: 'Orders And Packages',
+    title_th: 'คำสั่งซื้อและแพ็กเกจ',
   },
   health: {
     accent: '#F26D6D',
@@ -81,7 +80,7 @@ export const showcaseModuleMeta: Record<ShowcaseModuleId, ShowcaseModuleMeta> = 
     eyebrow_en: 'Growth engine',
     id: 'referral',
     script_th: [
-      'เปิดลิงก์ referral เพื่อโชว์ว่าระบบบันทึก code ก่อนส่งลูกค้าเข้าแชท',
+      'เปิดลิงก์ referral เพื่อโชว์ว่าระบบบันทึก code ก่อนส่งลูกค้าเข้าหน้ารวม',
       'เปิด workspace ของ partner เพื่อสร้างออเดอร์ช่วยลูกค้าและดูยอด commission',
       'เปิดหน้า admin referrers เพื่อให้โรงพยาบาลเห็นการจัดการพาร์ทเนอร์และ commission',
     ],
@@ -95,7 +94,7 @@ export const showcaseEntries: readonly ShowcaseEntry[] = [
   {
     auth: 'none',
     demoOrder: 1,
-    description_th: 'หน้านี้บันทึก referral code ลงเครื่องลูกค้า แล้วพาไปเริ่มแชทพร้อม attribution.',
+    description_th: 'หน้านี้บันทึก referral code ลงเครื่องลูกค้า เพื่อผูก attribution กับการซื้อที่เข้าเงื่อนไข.',
     href: { pathname: '/r/[ref_code]', params: { ref_code: 'DRNOK2' } },
     id: 'referral-public-entry',
     label_en: 'Referral Link Entry',
@@ -108,7 +107,7 @@ export const showcaseEntries: readonly ShowcaseEntry[] = [
   {
     auth: 'customer',
     demoOrder: 2,
-    description_th: 'พื้นที่ partner ที่ล็อกอินแล้วใช้เลือกแพ็กเกจ กรอกข้อมูลผู้ซื้อ สร้างออเดอร์ และดู commission ของตัวเอง.',
+    description_th: 'พื้นที่ partner เปิดดูตัวอย่างได้ทันที ใช้เลือกแพ็กเกจ กรอกข้อมูลผู้ซื้อ สร้างออเดอร์เดโม และดู commission.',
     href: '/partner',
     id: 'referral-partner-workspace',
     label_en: 'Partner Referral Workspace',
@@ -200,19 +199,6 @@ export const showcaseEntries: readonly ShowcaseEntry[] = [
   {
     auth: 'customer',
     demoOrder: 1,
-    description_th: 'หน้าแชทจริงที่ใช้ session ลูกค้า เรียก Supabase Edge Function และแสดงการ์ดสินค้า หมวดหมู่ ออเดอร์ และ log การทำงาน.',
-    href: '/chatbot',
-    id: 'ai-chat-live',
-    label_en: 'AI Chat',
-    label_th: 'แชทผู้ช่วย MiraCare',
-    module: 'ai-chat',
-    path: '/chatbot',
-    poster: null,
-    status: 'live',
-  },
-  {
-    auth: 'customer',
-    demoOrder: 2,
     description_th: 'หน้าลูกค้าสำหรับอ่านคำสั่งซื้อจาก Supabase และกดขยายดู timeline ของแต่ละออเดอร์.',
     href: '/orders',
     id: 'ai-chat-orders',
@@ -225,8 +211,8 @@ export const showcaseEntries: readonly ShowcaseEntry[] = [
   },
   {
     auth: 'none',
-    demoOrder: 3,
-    description_th: 'หน้าอ่านรายละเอียดแพ็กเกจจาก catalog จริงตาม productId หรือ catalogKey ที่ส่งมาจากแชท.',
+    demoOrder: 2,
+    description_th: 'หน้าอ่านรายละเอียดแพ็กเกจจาก catalog จริงตาม productId หรือ catalogKey.',
     href: '/package-detail',
     id: 'ai-chat-package-detail',
     label_en: 'Package Detail',
@@ -238,7 +224,7 @@ export const showcaseEntries: readonly ShowcaseEntry[] = [
   },
   {
     auth: 'none',
-    demoOrder: 4,
+    demoOrder: 3,
     description_th: 'ต้นแบบภาพแชทที่รันในเครื่องเพื่อขาย direction ของ UI เท่านั้น ไม่ได้ต่อ backend production.',
     href: '/prototype',
     id: 'ai-chat-prototype',
@@ -251,7 +237,7 @@ export const showcaseEntries: readonly ShowcaseEntry[] = [
   },
   {
     auth: 'none',
-    demoOrder: 5,
+    demoOrder: 4,
     description_th: 'ยังไม่มี route ใน build นี้; เฟส mockup จะทำหน้าจอ concept ของ LINE OA ที่สะท้อน flow แชทเดียวกัน.',
     href: null,
     id: 'ai-chat-line-preview-planned',

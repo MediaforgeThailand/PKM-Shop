@@ -4,7 +4,6 @@ import path from 'node:path';
 const repoRoot = process.cwd();
 
 const productionFiles = [
-  'app/(tabs)/chatbot.tsx',
   'app/(tabs)/health.tsx',
   'app/(tabs)/more.tsx',
   'app/_layout.tsx',
@@ -56,6 +55,7 @@ const forbidden = [
 ];
 
 const removedRouteFiles = [
+  'app/(tabs)/chatbot.tsx',
   'app/(tabs)/agent.tsx',
   'app/(tabs)/home.tsx',
   'app/(tabs)/packages.tsx',
@@ -113,7 +113,7 @@ for (const relativePath of removedRouteFiles) {
     .catch(() => false);
 
   if (exists) {
-    violations.push(`${relativePath}: scattered legacy admin route must stay removed; use app/admin/*`);
+    violations.push(`${relativePath}: removed route file must stay removed`);
   }
 }
 
@@ -134,7 +134,7 @@ for (const relativePath of productionFiles) {
     }
   }
 
-  for (const removedRoute of ['/admin-booking', '/hospital-portal', '/hospital-products']) {
+  for (const removedRoute of ['/chatbot', '/admin-booking', '/hospital-portal', '/hospital-products']) {
     if (source.includes(removedRoute)) {
       violations.push(`${relativePath}: links to removed legacy route "${removedRoute}"`);
     }
@@ -185,16 +185,6 @@ const requiredSnippets = [
     message: 'chat client must expose latest health-data consent loading',
   },
   {
-    relativePath: 'app/(tabs)/chatbot.tsx',
-    snippet: 'sessionId: activeSessionId',
-    message: 'chat screen must pass the active persisted session to the orchestrator',
-  },
-  {
-    relativePath: 'app/(tabs)/chatbot.tsx',
-    snippet: '<ConsentSheet',
-    message: 'chat screen must render the explicit consent action surface',
-  },
-  {
     relativePath: 'app/r/[ref_code].tsx',
     snippet: 'storeReferralCode(refCode)',
     message: 'referral landing route must persist the normalized referral code before chat',
@@ -225,11 +215,6 @@ const requiredSnippets = [
     message: 'product carousel must receive API-shaped products from its container',
   },
   {
-    relativePath: 'app/(tabs)/chatbot.tsx',
-    snippet: 'productGridToChatProducts',
-    message: 'chat screen container must adapt legacy UI cards before rendering the API-typed product carousel',
-  },
-  {
     relativePath: 'lib/ai/miraChat.ts',
     snippet: "responseRole: action?.type === 'order_form_submit' || action?.type === 'payment_done' ? 'system_notice' : 'assistant'",
     message: 'typed chat client must mark backend action responses that skip the model as system notices',
@@ -245,16 +230,6 @@ const requiredSnippets = [
     message: 'typed chat client must call chat-orchestrator refresh_order for persisted order-panel reload',
   },
   {
-    relativePath: 'app/(tabs)/chatbot.tsx',
-    snippet: 'refreshActiveOrderPanel(page.sessionId)',
-    message: 'chat screen must refresh the active order panel after latest history hydration',
-  },
-  {
-    relativePath: 'app/(tabs)/chatbot.tsx',
-    snippet: 'shouldRenderRestoredOrder && restoredOrder',
-    message: 'chat screen must render refreshed order panels outside persisted chat bubbles',
-  },
-  {
     relativePath: 'lib/ai/miraChat.ts',
     snippet: 'export async function requestPaymentSlipUpload',
     message: 'typed chat client must expose the service-role signed payment-slip upload request',
@@ -263,16 +238,6 @@ const requiredSnippets = [
     relativePath: 'lib/ai/miraChat.ts',
     snippet: 'export async function uploadPaymentSlipFile',
     message: 'typed chat client must upload customer-selected slips only to a signed upload URL',
-  },
-  {
-    relativePath: 'app/(tabs)/chatbot.tsx',
-    snippet: 'createMessage(answerRole, answer, answerSources, answerUiCards, answerOrder, answerCards)',
-    message: 'live chat append must use the backend response role and raw cards so action notices render like persisted system_notice rows',
-  },
-  {
-    relativePath: 'app/(tabs)/chatbot.tsx',
-    snippet: 'requestPaymentSlipUpload',
-    message: 'chat screen must request a path-scoped signed upload URL before sending payment_done with slip_path',
   },
   {
     relativePath: 'components/chat/BookingSheet.tsx',
@@ -286,7 +251,7 @@ const requiredSnippets = [
   },
   {
     relativePath: 'components/admin/CatalogCrud.tsx',
-    snippet: 'const canEditCatalog = canWriteTenantCatalog(tenantContext)',
+    snippet: 'canWriteTenantCatalog(tenantContext)',
     message: 'catalog admin screen must derive write access from tenant role context',
   },
   {

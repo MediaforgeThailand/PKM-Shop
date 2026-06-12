@@ -22,12 +22,12 @@ export default function ReferralLandingScreen() {
         <Text style={styles.title}>{storedCode ? 'Referral saved' : 'Referral code unavailable'}</Text>
         <Text style={styles.body}>
           {storedCode
-            ? `Code ${storedCode} will be attached to eligible chat purchases during the attribution window.`
-            : 'Open a valid referral link to attach attribution before starting chat.'}
+            ? `Code ${storedCode} will be attached to eligible purchases during the attribution window.`
+            : 'Open a valid referral link to attach attribution before continuing.'}
         </Text>
-        <Link href="/(tabs)/chatbot" asChild>
+        <Link href="/" asChild>
           <Pressable style={styles.button}>
-            <Text style={styles.buttonText}>Open Chat</Text>
+            <Text style={styles.buttonText}>Open Overview</Text>
           </Pressable>
         </Link>
       </View>

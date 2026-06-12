@@ -9,6 +9,7 @@ import {
   loadActiveHospitalProducts,
   type HospitalProduct,
 } from '@/lib/marketplace/hospitalProducts';
+import { showcaseDemoProducts } from '@/lib/showcase/demoFixtures';
 
 function resolveParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
@@ -32,7 +33,12 @@ export default function CheckoutScreen() {
     loadActiveHospitalProducts(20)
       .then((items) => {
         if (isMounted) {
-          setProducts(items);
+          setProducts(items.length ? items : showcaseDemoProducts);
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          setProducts(showcaseDemoProducts);
         }
       })
       .finally(() => {
@@ -50,8 +56,8 @@ export default function CheckoutScreen() {
     <Screen>
       <BrandHeader
         eyebrow="Checkout"
-        title="Continue booking in chat"
-        subtitle="MiraCare v2 creates orders through chat-orchestrator so payment, buyer fields, and status changes stay in the shared order state machine."
+        title="Order follow-up"
+        subtitle="Customer orders now stay in the shared order workflow; use the order list, partner workspace, or admin queue to manage the next step."
         compact
       />
 
@@ -65,8 +71,8 @@ export default function CheckoutScreen() {
         <Card>
           <Text style={styles.cardTitle}>No active products</Text>
           <Text style={styles.body}>Publish a tenant product before starting checkout.</Text>
-          <Link href="/chatbot" asChild>
-            <ActionButton label="Back to chat" variant="secondary" />
+          <Link href="/" asChild>
+            <ActionButton label="Back to overview" variant="secondary" />
           </Link>
         </Card>
       ) : null}
@@ -86,8 +92,8 @@ export default function CheckoutScreen() {
             <Pill label={product.catalogKey} tone="blue" />
             <Pill label={getProductCategoryLabel(product.category)} tone="mint" />
           </View>
-          <Link href="/chatbot" asChild>
-            <ActionButton label="Start order in chat" />
+          <Link href="/orders" asChild>
+            <ActionButton label="View orders" />
           </Link>
         </Card>
       ) : null}

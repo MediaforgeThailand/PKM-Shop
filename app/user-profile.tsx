@@ -1,4 +1,3 @@
-import { Link } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -21,6 +20,7 @@ import {
   type StoredAgentMemory,
   type StoredHealthFact,
 } from '@/lib/health/healthDataVault';
+import { showcaseDemoAgentMemory, showcaseDemoHealthMemoryStatus, showcaseDemoStoredFacts } from '@/lib/showcase/demoFixtures';
 
 export default function UserProfileScreen() {
   const auth = useAuthSession();
@@ -31,12 +31,13 @@ export default function UserProfileScreen() {
   const [snapshot, setSnapshot] = useState<HealthDataSnapshot | null>(null);
   const [isBusy, setIsBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const isDemoMode = !auth.user;
 
   const refreshProfile = useCallback(async () => {
     if (!auth.user) {
-      setFacts([]);
-      setAgentMemory([]);
-      setHealthMemoryStatus(null);
+      setFacts(showcaseDemoStoredFacts);
+      setAgentMemory(showcaseDemoAgentMemory);
+      setHealthMemoryStatus(showcaseDemoHealthMemoryStatus);
       setSnapshot(null);
       return;
     }
@@ -54,6 +55,11 @@ export default function UserProfileScreen() {
   }, [refreshProfile]);
 
   async function handleDeleteFact(factId: string) {
+    if (isDemoMode) {
+      setMessage('โหมดตัวอย่าง — ยังไม่ลบข้อมูลจริง');
+      return;
+    }
+
     setIsBusy(true);
     setMessage(null);
 
@@ -69,6 +75,11 @@ export default function UserProfileScreen() {
   }
 
   async function handleDeleteAgentMemory(memoryId: string) {
+    if (isDemoMode) {
+      setMessage('โหมดตัวอย่าง — ยังไม่ลบ memory จริง');
+      return;
+    }
+
     setIsBusy(true);
     setMessage(null);
 
@@ -84,6 +95,12 @@ export default function UserProfileScreen() {
   }
 
   async function handleGrantConsent() {
+    if (isDemoMode) {
+      setHealthMemoryStatus(showcaseDemoHealthMemoryStatus);
+      setMessage('โหมดตัวอย่าง — เปิด health memory ตัวอย่างแล้ว');
+      return;
+    }
+
     setIsBusy(true);
     setMessage(null);
 
@@ -99,6 +116,11 @@ export default function UserProfileScreen() {
   }
 
   async function handleRevokeConsent() {
+    if (isDemoMode) {
+      setMessage('โหมดตัวอย่าง — ยังไม่ถอน consent จริง');
+      return;
+    }
+
     setIsBusy(true);
     setMessage(null);
 
@@ -114,6 +136,25 @@ export default function UserProfileScreen() {
   }
 
   async function handleExport() {
+    if (isDemoMode) {
+      setSnapshot({
+        agentMemory,
+        consents: [
+          {
+            createdAt: '2026-06-12T03:30:00.000Z',
+            purpose: 'chat_health_memory',
+            status: 'granted',
+            version: 'demo',
+          },
+        ],
+        contextScores: [],
+        exportedAt: new Date().toISOString(),
+        facts,
+      });
+      setMessage('โหมดตัวอย่าง — สร้าง snapshot จาก fixture แล้ว');
+      return;
+    }
+
     setIsBusy(true);
     setMessage(null);
 
@@ -128,6 +169,11 @@ export default function UserProfileScreen() {
   }
 
   async function handleSignOut() {
+    if (isDemoMode) {
+      setMessage('โหมดตัวอย่าง — ไม่มี session ให้ sign out');
+      return;
+    }
+
     setIsBusy(true);
     setMessage(null);
 
@@ -155,21 +201,7 @@ export default function UserProfileScreen() {
     );
   }
 
-  if (!auth.user) {
-    return (
-      <Screen>
-        <Card>
-          <Text style={styles.cardTitle}>ต้องเข้าสู่ระบบก่อน</Text>
-          <Text style={styles.cardBody}>Health Profile ใช้ข้อมูลส่วนตัว จึงต้องมี user session ก่อนดูหรือบันทึกข้อมูลสุขภาพ</Text>
-          <Link href="/" asChild>
-            <ActionButton label="ไปหน้าเข้าสู่ระบบ" />
-          </Link>
-        </Card>
-      </Screen>
-    );
-  }
-
-  const displayName = auth.user.user_metadata?.display_name || auth.user.email || 'Mira user';
+  const displayName = auth.user?.user_metadata?.display_name || auth.user?.email || 'บอส Demo';
   const consentGranted = healthMemoryStatus?.reason === 'ready' && healthMemoryStatus.consentGranted;
 
   return (
@@ -181,8 +213,8 @@ export default function UserProfileScreen() {
           </View>
           <View style={styles.identity}>
             <Text style={styles.name}>{displayName}</Text>
-            <Text style={styles.meta}>{auth.user.email}</Text>
-            <Text style={styles.meta}>User ID {auth.user.id.slice(0, 8)}</Text>
+            <Text style={styles.meta}>{auth.user?.email ?? 'demo@miracare.local'}</Text>
+            <Text style={styles.meta}>User ID {auth.user?.id.slice(0, 8) ?? 'demo-user'}</Text>
           </View>
         </View>
         <View style={styles.heroVisual}>
@@ -198,6 +230,12 @@ export default function UserProfileScreen() {
       {message ? (
         <Card style={styles.messageCard}>
           <Text style={styles.messageText}>{message}</Text>
+        </Card>
+      ) : null}
+
+      {isDemoMode ? (
+        <Card style={styles.messageCard}>
+          <Text style={styles.messageText}>โหมดตัวอย่าง: เปิดดู profile ได้โดยไม่ต้องล็อกอิน และปุ่มข้อมูลจริงจะไม่ส่ง backend</Text>
         </Card>
       ) : null}
 
@@ -251,7 +289,7 @@ export default function UserProfileScreen() {
       {facts.length === 0 ? (
         <Card>
           <Text style={styles.cardTitle}>ยังไม่มีข้อมูลสุขภาพที่ยืนยันแล้ว</Text>
-          <Text style={styles.cardBody}>เมื่อคุยกับ chatbot และกดยินยอมบันทึก รายการที่ยืนยันแล้วจะมาอยู่ตรงนี้</Text>
+          <Text style={styles.cardBody}>เมื่อมีข้อมูลสุขภาพที่ยืนยันแล้ว รายการจะมาอยู่ตรงนี้</Text>
         </Card>
       ) : (
         <View style={styles.factList}>

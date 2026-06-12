@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MiraDesign } from '@/constants/Design';
 import { confirmLabResults } from '@/lib/health/labConfirm';
 import { loadHealthDashboardData, type HealthDashboardData, type LabReportWithResults } from '@/lib/health/v2HealthDashboard';
+import { showcaseDemoHealthData } from '@/lib/showcase/demoFixtures';
 import type { LabResultRow, UserFactRow, WearableMetricRow } from '@/lib/types/api';
 
 type HealthInsightKind = 'overview' | 'results' | 'wearable';
@@ -110,13 +111,14 @@ export function HealthInsightScreen({ screen }: { screen: HealthInsightKind }) {
     loadHealthDashboardData()
       .then((result) => {
         if (isMounted) {
-          setData(result);
+          setData(result.customer ? result : showcaseDemoHealthData);
           setError(null);
         }
       })
       .catch((loadError) => {
         if (isMounted) {
-          setError(loadError instanceof Error ? loadError.message : 'Unable to load health dashboard.');
+          setData(showcaseDemoHealthData);
+          setError(loadError instanceof Error ? `โหมดตัวอย่าง: ใช้ fixture แทนข้อมูลจริง (${loadError.message})` : 'โหมดตัวอย่าง: ใช้ fixture แทนข้อมูลจริง');
         }
       })
       .finally(() => {
@@ -132,6 +134,7 @@ export function HealthInsightScreen({ screen }: { screen: HealthInsightKind }) {
 
   const latestReport = data.labReports[0] ?? null;
   const latestMetrics = useMemo(() => latestByMetric(data.wearableMetrics), [data.wearableMetrics]);
+  const isDemoData = data.customer?.id === showcaseDemoHealthData.customer?.id;
 
   async function handleConfirmLabReport(
     reportId: string,
@@ -142,6 +145,33 @@ export function HealthInsightScreen({ screen }: { screen: HealthInsightKind }) {
     setConfirmationNotice(null);
 
     try {
+      if (isDemoData) {
+        setData((current) => ({
+          ...current,
+          labReports: current.labReports.map((report) =>
+            report.id === reportId
+              ? {
+                  ...report,
+                  lab_results: (report.lab_results ?? []).map((result) =>
+                    confirmations.some((confirmation) => confirmation.test_code === result.test_code)
+                      ? {
+                          ...result,
+                          confirmed: true,
+                          confidence: Math.max(result.confidence, 0.9),
+                          unit: confirmations.find((confirmation) => confirmation.test_code === result.test_code)?.unit ?? result.unit,
+                          value: confirmations.find((confirmation) => confirmation.test_code === result.test_code)?.value ?? result.value,
+                        }
+                      : result,
+                  ),
+                  status: 'ready',
+                }
+              : report,
+          ),
+        }));
+        setConfirmationNotice('โหมดตัวอย่าง: ยืนยันแถวผลแลบใน fixture แล้ว');
+        return;
+      }
+
       await confirmLabResults({
         confirmations,
         report_id: reportId,
@@ -164,7 +194,7 @@ export function HealthInsightScreen({ screen }: { screen: HealthInsightKind }) {
           <Text style={styles.eyebrow}>Health Dashboard</Text>
           <Text style={styles.title}>{screen === 'results' ? 'Lab Results' : screen === 'wearable' ? 'Wearable Trends' : 'Body Overview'}</Text>
           <Text style={styles.subtitle}>
-            {data.customer ? `Customer ${data.customer.id.slice(0, 8)}` : isLoading ? 'Loading health data' : 'Sign in and import health data to populate this view.'}
+            {data.customer ? (isDemoData ? 'โหมดตัวอย่างพร้อมข้อมูล fixture' : `Customer ${data.customer.id.slice(0, 8)}`) : isLoading ? 'Loading health data' : 'โหมดตัวอย่างพร้อมข้อมูล fixture'}
           </Text>
         </View>
 

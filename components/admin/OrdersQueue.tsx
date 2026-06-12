@@ -9,6 +9,7 @@ import { useAuthSession } from '@/lib/auth/useAuthSession';
 import { supabase, supabaseConfigStatus } from '@/lib/supabase';
 import type { AdminOrderActionRequest, AdminSlipUrlResponse, ChatMessageRow, OrderRow, OrderStatus, TenantSummary } from '@/lib/types/api';
 import { defaultTenantSlug } from '@/lib/marketplace/hospitalProducts';
+import { showcaseDemoAdminOrders, showcaseDemoTenant, showcaseDemoTranscript } from '@/lib/showcase/demoFixtures';
 
 type ProductJoin = {
   catalog_key: string;
@@ -186,6 +187,7 @@ export function OrdersQueue({ title = 'Orders Queue' }: { title?: string }) {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const isWide = width >= 1080;
+  const isDemoMode = !auth.session || !supabaseConfigStatus.isConfigured;
 
   const selectedOrder = useMemo(() => orders.find((order) => order.id === selectedId) ?? orders[0] ?? null, [orders, selectedId]);
 
@@ -346,7 +348,10 @@ export function OrdersQueue({ title = 'Orders Queue' }: { title?: string }) {
     let isMounted = true;
 
     async function boot() {
-      if (!supabaseConfigStatus.isConfigured || !auth.session) {
+      if (isDemoMode) {
+        setTenant({ ...showcaseDemoTenant, role: 'demo' });
+        setOrders(showcaseDemoAdminOrders);
+        setSelectedId((current) => current ?? showcaseDemoAdminOrders[0]?.id ?? null);
         setIsLoading(false);
         return;
       }
@@ -377,10 +382,10 @@ export function OrdersQueue({ title = 'Orders Queue' }: { title?: string }) {
     return () => {
       isMounted = false;
     };
-  }, [auth.session, loadTenantContext, refreshOrders]);
+  }, [auth.session, isDemoMode, loadTenantContext, refreshOrders]);
 
   useEffect(() => {
-    if (!tenant) {
+    if (!tenant || isDemoMode) {
       return;
     }
 
@@ -403,9 +408,14 @@ export function OrdersQueue({ title = 'Orders Queue' }: { title?: string }) {
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [refreshOrders, tenant]);
+  }, [isDemoMode, refreshOrders, tenant]);
 
   useEffect(() => {
+    if (isDemoMode) {
+      setTranscript(showcaseDemoTranscript);
+      return;
+    }
+
     if (!selectedOrder?.session_id) {
       setTranscript([]);
       return;
@@ -431,7 +441,7 @@ export function OrdersQueue({ title = 'Orders Queue' }: { title?: string }) {
     return () => {
       isMounted = false;
     };
-  }, [selectedOrder?.session_id]);
+  }, [isDemoMode, selectedOrder?.session_id]);
 
   useEffect(() => {
     if (!selectedOrder) {
@@ -449,6 +459,11 @@ export function OrdersQueue({ title = 'Orders Queue' }: { title?: string }) {
 
   async function runAction(action: OrderMutationAction) {
     if (!selectedOrder || busyAction || !canAct(selectedOrder, action)) {
+      return;
+    }
+
+    if (isDemoMode) {
+      setMessage('โหมดตัวอย่าง — ปุ่มนี้ยังไม่ส่งข้อมูลจริง');
       return;
     }
 
@@ -483,6 +498,12 @@ export function OrdersQueue({ title = 'Orders Queue' }: { title?: string }) {
       return;
     }
 
+    if (isDemoMode) {
+      setNote(nextNote);
+      setMessage('โหมดตัวอย่าง — บันทึก note เฉพาะหน้าจอนี้');
+      return;
+    }
+
     const trimmedNote = nextNote.trim();
 
     if (!trimmedNote) {
@@ -506,22 +527,6 @@ export function OrdersQueue({ title = 'Orders Queue' }: { title?: string }) {
     } finally {
       setIsSavingNote(false);
     }
-  }
-
-  if (!supabaseConfigStatus.isConfigured || !auth.session) {
-    return (
-      <View style={styles.screen}>
-        <View style={styles.notice}>
-          <Text style={styles.noticeTitle}>Tenant admin sign-in required</Text>
-          <Text style={styles.noticeBody}>Connect Supabase and sign in before opening the live orders queue.</Text>
-          <Link href="/" asChild>
-            <Pressable style={styles.primaryButton}>
-              <Text style={styles.primaryButtonText}>Sign In</Text>
-            </Pressable>
-          </Link>
-        </View>
-      </View>
-    );
   }
 
   return (
@@ -549,6 +554,7 @@ export function OrdersQueue({ title = 'Orders Queue' }: { title?: string }) {
 
         {error ? <Banner tone="error" text={error} /> : null}
         {message ? <Banner tone="success" text={message} /> : null}
+        {isDemoMode ? <Banner tone="success" text="โหมดตัวอย่าง: เปิดดูคิวออเดอร์ได้โดยไม่ต้องล็อกอิน และปุ่ม action จะไม่ส่งข้อมูลจริง" /> : null}
 
         <View style={styles.metrics}>
           <Metric label="Total" value={`${summary.total}`} />

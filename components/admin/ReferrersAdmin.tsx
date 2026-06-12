@@ -1,4 +1,3 @@
-import { Link } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 
@@ -6,6 +5,7 @@ import { Pill } from '@/components/MiraUI';
 import { MiraDesign, softShadow } from '@/constants/Design';
 import { useAuthSession } from '@/lib/auth/useAuthSession';
 import { defaultTenantSlug } from '@/lib/marketplace/hospitalProducts';
+import { showcaseDemoCommissions, showcaseDemoReferrers, showcaseDemoTenant } from '@/lib/showcase/demoFixtures';
 import { supabase, supabaseConfigStatus } from '@/lib/supabase';
 import type { CommissionEntryRow, ReferrerRow, ReferrerType, TenantSummary } from '@/lib/types/api';
 
@@ -100,7 +100,8 @@ export function ReferrersAdmin({ title = 'Referrers And Commissions' }: { title?
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const isWide = width >= 1080;
-  const canEdit = tenant?.role === 'tenant_admin' || tenant?.role === 'superadmin';
+  const isDemoMode = !auth.session || !supabaseConfigStatus.isConfigured;
+  const canEdit = Boolean(auth.session) && (tenant?.role === 'tenant_admin' || tenant?.role === 'superadmin');
   const canSave =
     canEdit &&
     draft.name.trim().length > 1 &&
@@ -187,7 +188,10 @@ export function ReferrersAdmin({ title = 'Referrers And Commissions' }: { title?
     let isMounted = true;
 
     async function boot() {
-      if (!supabaseConfigStatus.isConfigured || !auth.session) {
+      if (isDemoMode) {
+        setTenant({ ...showcaseDemoTenant, role: 'demo' });
+        setReferrers(showcaseDemoReferrers);
+        setCommissions(showcaseDemoCommissions);
         setIsLoading(false);
         return;
       }
@@ -211,7 +215,7 @@ export function ReferrersAdmin({ title = 'Referrers And Commissions' }: { title?
     return () => {
       isMounted = false;
     };
-  }, [auth.session, loadData]);
+  }, [auth.session, isDemoMode, loadData]);
 
   function editReferrer(referrer: ReferrerRow) {
     setEditingId(referrer.id);
@@ -239,6 +243,11 @@ export function ReferrersAdmin({ title = 'Referrers And Commissions' }: { title?
 
   async function saveReferrer() {
     if (!tenant || !canSave || isSaving) {
+      return;
+    }
+
+    if (isDemoMode) {
+      setMessage('โหมดตัวอย่าง — ยังไม่สร้าง referrer จริง');
       return;
     }
 
@@ -281,6 +290,11 @@ export function ReferrersAdmin({ title = 'Referrers And Commissions' }: { title?
 
   async function updateCommissionStatus(entry: CommissionEntryRow, status: CommissionEntryRow['status']) {
     if (!canEdit || busyCommissionId) {
+      return;
+    }
+
+    if (isDemoMode) {
+      setMessage('โหมดตัวอย่าง — ยังไม่เปลี่ยนสถานะ commission จริง');
       return;
     }
 
@@ -335,6 +349,11 @@ export function ReferrersAdmin({ title = 'Referrers And Commissions' }: { title?
       return;
     }
 
+    if (isDemoMode) {
+      setMessage('โหมดตัวอย่าง — ยังไม่เปลี่ยนสถานะ commission จริง');
+      return;
+    }
+
     try {
       setBusyCommissionId('bulk');
       setError(null);
@@ -358,22 +377,6 @@ export function ReferrersAdmin({ title = 'Referrers And Commissions' }: { title?
     } finally {
       setBusyCommissionId(null);
     }
-  }
-
-  if (!supabaseConfigStatus.isConfigured || !auth.session) {
-    return (
-      <View style={styles.screen}>
-        <View style={styles.notice}>
-          <Text style={styles.noticeTitle}>Tenant admin sign-in required</Text>
-          <Text style={styles.noticeBody}>Connect Supabase and sign in before managing referrers.</Text>
-          <Link href="/" asChild>
-            <Pressable style={styles.primaryButton}>
-              <Text style={styles.primaryButtonText}>Sign In</Text>
-            </Pressable>
-          </Link>
-        </View>
-      </View>
-    );
   }
 
   return (
@@ -401,6 +404,7 @@ export function ReferrersAdmin({ title = 'Referrers And Commissions' }: { title?
 
         {error ? <Banner tone="error" text={error} /> : null}
         {message ? <Banner tone="success" text={message} /> : null}
+        {isDemoMode ? <Banner tone="success" text="โหมดตัวอย่าง: เปิดดู referrer และ commission ได้โดยไม่ต้องล็อกอิน ปุ่มแก้ไขข้อมูลจริงจะถูกปิดไว้" /> : null}
 
         <View style={styles.metrics}>
           <Metric label="Pending" value={formatMoney(totals.pending)} />

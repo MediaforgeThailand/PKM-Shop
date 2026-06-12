@@ -9,6 +9,7 @@ import {
   loadActiveHospitalProducts,
   type HospitalProduct,
 } from '@/lib/marketplace/hospitalProducts';
+import { showcaseDemoProducts } from '@/lib/showcase/demoFixtures';
 
 function resolveParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
@@ -26,7 +27,7 @@ export default function PackageDetailScreen() {
   const [isLoading, setIsLoading] = useState(true);
 
   const product = useMemo(
-    () => products.find((item) => item.id === productId || item.catalogKey === catalogKey) ?? null,
+    () => products.find((item) => item.id === productId || item.catalogKey === catalogKey) ?? products[0] ?? null,
     [catalogKey, productId, products],
   );
 
@@ -36,7 +37,12 @@ export default function PackageDetailScreen() {
     loadActiveHospitalProducts(80)
       .then((items) => {
         if (isMounted) {
-          setProducts(items);
+          setProducts(items.length ? items : showcaseDemoProducts);
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          setProducts(showcaseDemoProducts);
         }
       })
       .finally(() => {
@@ -62,8 +68,8 @@ export default function PackageDetailScreen() {
     return (
       <Screen>
         <BrandHeader eyebrow="Package detail" title="Product unavailable" subtitle="The product is not active in the tenant catalog." compact />
-        <Link href="/chatbot" asChild>
-          <ActionButton label="Back to chat" variant="secondary" />
+        <Link href="/" asChild>
+          <ActionButton label="Back to overview" variant="secondary" />
         </Link>
       </Screen>
     );
@@ -107,11 +113,11 @@ export default function PackageDetailScreen() {
         </View>
       ))}
 
-      <Link href="/chatbot" asChild>
-        <ActionButton label="Start booking in chat" />
+      <Link href="/orders" asChild>
+        <ActionButton label="View my orders" />
       </Link>
-      <Link href="/chatbot" asChild>
-        <ActionButton label="Back to chat" variant="secondary" />
+      <Link href="/" asChild>
+        <ActionButton label="Back to overview" variant="secondary" />
       </Link>
     </Screen>
   );

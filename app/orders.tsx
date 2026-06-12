@@ -6,6 +6,7 @@ import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, T
 import { OrderStatusCard } from '@/components/chat/OrderStatusCard';
 import { MiraDesign } from '@/constants/Design';
 import { useAuthSession } from '@/lib/auth/useAuthSession';
+import { showcaseDemoOrders } from '@/lib/showcase/demoFixtures';
 import { supabase } from '@/lib/supabase';
 import type { OrderStatusInfo, OrderStatus } from '@/lib/types/api';
 
@@ -66,7 +67,8 @@ export default function OrdersScreen() {
     queryFn: loadOrders,
     queryKey: ['miracare-orders'],
   });
-  const orders = ordersQuery.data ?? [];
+  const isDemoMode = !auth.session;
+  const orders = ordersQuery.data ?? (isDemoMode ? showcaseDemoOrders : []);
   const focusedOrder = useMemo(() => orders.find((order) => order.id === expandedId) ?? null, [expandedId, orders]);
 
   useEffect(() => {
@@ -85,14 +87,10 @@ export default function OrdersScreen() {
         <Text style={styles.title}>คำสั่งซื้อของฉัน</Text>
       </View>
 
-      {!auth.session ? (
+      {isDemoMode ? (
         <View style={styles.notice}>
-          <Text style={styles.noticeTitle}>ต้องเข้าสู่ระบบก่อนดูคำสั่งซื้อค่ะ</Text>
-          <Link href="/" asChild>
-            <Pressable style={styles.primaryButton}>
-              <Text style={styles.primaryButtonText}>ไปหน้าเข้าสู่ระบบ</Text>
-            </Pressable>
-          </Link>
+          <Text style={styles.noticeTitle}>โหมดตัวอย่าง</Text>
+          <Text style={styles.noticeBody}>เปิดดูรายการและ timeline ได้ทันทีโดยไม่ต้องล็อกอิน ข้อมูลนี้เป็น fixture สำหรับ demo เท่านั้น</Text>
         </View>
       ) : null}
 
@@ -113,15 +111,15 @@ export default function OrdersScreen() {
       {auth.session && !ordersQuery.isLoading && orders.length === 0 ? (
         <View style={styles.notice}>
           <Text style={styles.noticeTitle}>ยังไม่มีคำสั่งซื้อ</Text>
-          <Link href="/chatbot" asChild>
+          <Link href="/" asChild>
             <Pressable style={styles.primaryButton}>
-              <Text style={styles.primaryButtonText}>กลับไปแชท</Text>
+              <Text style={styles.primaryButtonText}>กลับหน้ารวม</Text>
             </Pressable>
           </Link>
         </View>
       ) : null}
 
-      {auth.session && orders.length > 0 ? (
+      {orders.length > 0 ? (
         <View style={styles.list}>
           {orders.map((order) => {
             const expanded = order.id === expandedId || (focusedOrder?.id === order.id && Boolean(focus));

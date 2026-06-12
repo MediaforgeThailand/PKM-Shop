@@ -14,6 +14,7 @@ import {
   type BranchSummary,
   type TenantMemberContext,
 } from '@/lib/marketplace/hospitalProducts';
+import { showcaseDemoBranches, showcaseDemoTenantContext } from '@/lib/showcase/demoFixtures';
 
 const emptyDraft: BranchDraft = {
   active: true,
@@ -39,7 +40,8 @@ export default function AdminBranchesScreen() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const isWide = width >= 980;
-  const canEditBranches = canWriteTenantCatalog(tenantContext);
+  const isDemoMode = !auth.session;
+  const canEditBranches = Boolean(auth.session) && canWriteTenantCatalog(tenantContext);
   const canSave = canEditBranches && draft.name.trim().length > 1;
 
   const summary = useMemo(
@@ -70,8 +72,8 @@ export default function AdminBranchesScreen() {
       setError(null);
 
       if (!auth.user) {
-        setTenantContext(null);
-        setBranches([]);
+        setTenantContext(showcaseDemoTenantContext);
+        setBranches(showcaseDemoBranches);
         return;
       }
 
@@ -112,6 +114,11 @@ export default function AdminBranchesScreen() {
   async function refreshBranches() {
     try {
       setError(null);
+      if (isDemoMode) {
+        setBranches(showcaseDemoBranches);
+        setMessage('กำลังแสดงข้อมูลตัวอย่างอยู่');
+        return;
+      }
       setBranches(await loadBranches());
     } catch (refreshError) {
       setError(refreshError instanceof Error ? refreshError.message : 'Unable to refresh branches.');
@@ -186,15 +193,10 @@ export default function AdminBranchesScreen() {
           </View>
         </View>
 
-        {!auth.session ? (
+        {isDemoMode ? (
           <View style={styles.notice}>
-            <Text style={styles.noticeTitle}>Signed-in tenant admin required</Text>
-            <Text style={styles.noticeBody}>Use a tenant admin account for branch changes.</Text>
-            <Link href="/" asChild>
-              <Pressable style={styles.noticeButton}>
-                <Text style={styles.noticeButtonText}>Sign In</Text>
-              </Pressable>
-            </Link>
+            <Text style={styles.noticeTitle}>โหมดตัวอย่าง</Text>
+            <Text style={styles.noticeBody}>เปิดดูโครงสร้างสาขาได้ทันทีโดยไม่ต้องล็อกอิน ปุ่มบันทึกข้อมูลจริงจะถูกปิดไว้</Text>
           </View>
         ) : null}
 

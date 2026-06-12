@@ -1,4 +1,3 @@
-import { Link } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 
@@ -12,6 +11,7 @@ import {
   loadActiveHospitalProducts,
   type HospitalProduct,
 } from '@/lib/marketplace/hospitalProducts';
+import { showcaseDemoBranches, showcaseDemoCommissions, showcaseDemoProducts, showcaseDemoReferrers, showcaseDemoTenant } from '@/lib/showcase/demoFixtures';
 import { supabase, supabaseConfigStatus } from '@/lib/supabase';
 import type { CommissionEntryRow, OrderPanelState, ReferrerOrderRequest, ReferrerOrderResponse, ReferrerRow } from '@/lib/types/api';
 
@@ -46,6 +46,15 @@ function formatMoney(amount: number) {
   return `${amount.toLocaleString('th-TH')} THB`;
 }
 
+function showcaseDemoBranchesForPartner() {
+  return showcaseDemoBranches.map((branch) => ({
+    address: branch.address,
+    district: branch.district,
+    id: branch.id,
+    name: branch.name,
+  }));
+}
+
 export default function PartnerScreen() {
   const auth = useAuthSession();
   const { width } = useWindowDimensions();
@@ -63,6 +72,7 @@ export default function PartnerScreen() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const isWide = width >= 1080;
+  const isDemoMode = !auth.session || !supabaseConfigStatus.isConfigured;
   const canCreateOrder = selectedProduct && buyerName.trim().length > 1 && /^0[689]\d{8}$/.test(buyerPhone.trim()) && !isSubmitting;
 
   const totals = useMemo(
@@ -127,7 +137,11 @@ export default function PartnerScreen() {
     let isMounted = true;
 
     async function boot() {
-      if (!supabaseConfigStatus.isConfigured || !auth.session) {
+      if (isDemoMode) {
+        setTenant({ display_name: showcaseDemoTenant.display_name, id: showcaseDemoTenant.id });
+        setReferrer(showcaseDemoReferrers[0] ?? null);
+        setProducts(showcaseDemoProducts);
+        setCommissions(showcaseDemoCommissions as unknown as CommissionWithOrder[]);
         setIsLoading(false);
         return;
       }
@@ -151,10 +165,26 @@ export default function PartnerScreen() {
     return () => {
       isMounted = false;
     };
-  }, [auth.session, loadPartnerData]);
+  }, [auth.session, isDemoMode, loadPartnerData]);
 
   async function createOrder() {
     if (!selectedProduct || !canCreateOrder) {
+      return;
+    }
+
+    if (isDemoMode) {
+      setActiveOrder({
+        amount_baht: selectedProduct.priceAmount,
+        booking_at: null,
+        branch_name: null,
+        branches: showcaseDemoBranchesForPartner(),
+        id: `demo-partner-order-${Date.now()}`,
+        missing_fields: [],
+        product_name: selectedProduct.title,
+        step: 'qr',
+        status: 'awaiting_payment',
+      });
+      setMessage(`โหมดตัวอย่าง — สร้างออเดอร์ให้ ${buyerName.trim()} แล้ว`);
       return;
     }
 
@@ -180,6 +210,12 @@ export default function PartnerScreen() {
   }
 
   async function markPaymentDone(orderId: string) {
+    if (isDemoMode && activeOrder) {
+      setActiveOrder({ ...activeOrder, step: 'tracking', status: 'submitted' });
+      setMessage('โหมดตัวอย่าง — ส่งสถานะชำระเงินแล้วให้แอดมินตรวจสอบ');
+      return;
+    }
+
     try {
       setIsSubmitting(true);
       setError(null);
@@ -197,22 +233,6 @@ export default function PartnerScreen() {
     } finally {
       setIsSubmitting(false);
     }
-  }
-
-  if (!supabaseConfigStatus.isConfigured || !auth.session) {
-    return (
-      <View style={styles.screen}>
-        <View style={styles.notice}>
-          <Text style={styles.noticeTitle}>Referrer login required</Text>
-          <Text style={styles.noticeBody}>Sign in with the account linked to a referrer profile.</Text>
-          <Link href="/" asChild>
-            <Pressable style={styles.primaryButton}>
-              <Text style={styles.primaryButtonText}>Sign In</Text>
-            </Pressable>
-          </Link>
-        </View>
-      </View>
-    );
   }
 
   return (
@@ -236,6 +256,7 @@ export default function PartnerScreen() {
 
         {error ? <Banner tone="error" text={error} /> : null}
         {message ? <Banner tone="success" text={message} /> : null}
+        {isDemoMode ? <Banner tone="success" text="โหมดตัวอย่าง: เปิด workspace ได้โดยไม่ต้องล็อกอิน และปุ่มออเดอร์จะไม่ส่งข้อมูลจริง" /> : null}
 
         {!referrer && !isLoading ? (
           <View style={styles.noticeInline}>

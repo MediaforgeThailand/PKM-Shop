@@ -28,8 +28,11 @@ const prototypePanelSource = await fs.readFile(prototypePanelPath, 'utf8');
 const factExtractorSource = await fs.readFile(factExtractorPath, 'utf8');
 const miraChatSource = await fs.readFile(miraChatPath, 'utf8');
 const openAiPlaybookSource = await fs.readFile(openAiPlaybookPath, 'utf8');
-const chatbotScreenSource = await fs.readFile(chatbotScreenPath, 'utf8');
 const readmeSource = await fs.readFile(path.join(repoRoot, 'README.md'), 'utf8');
+const chatbotScreenExists = await fs
+  .stat(chatbotScreenPath)
+  .then((stat) => stat.isFile())
+  .catch(() => false);
 const legacyMiraChatExists = await fs
   .access(legacyMiraChatPath)
   .then(() => true)
@@ -129,24 +132,17 @@ assert(
 assert('fact extractor is service-role internal only', factExtractorSource.includes('assertInternalServiceRoleAuthorization') && factExtractorSource.includes("req.headers.get('authorization')"));
 assert('prototype fallback has no canned numbered compactTips', !prototypePanelSource.includes('compactTips'));
 assert('prototype fallback uses shared natural helper', prototypePanelSource.includes('createNaturalHealthFallbackAnswer') && !prototypePanelSource.includes('function createNaturalDemoText'));
+assert('customer chatbot route is removed', !chatbotScreenExists);
 assert(
-  'chatbot renders backend UI cards',
-  miraChatSource.includes('apiCardsToUiCards(result.cards') &&
-    miraChatSource.includes('productsToUiCards(result.products)') &&
-    chatbotScreenSource.includes('ChatUiCardRenderer'),
+  'chat client adapts backend UI cards',
+  miraChatSource.includes('apiCardsToUiCards(result.cards') && miraChatSource.includes('productsToUiCards(result.products)'),
 );
-assert('chatbot small-talk shortcut is offline only', chatbotScreenSource.includes('smallTalkAnswer && !canUseAi'));
 assert('offline fallback has no numbered RAG list template', !miraChatSource.includes('ragMatches.slice(0, 2).map'));
 assert('offline fallback avoids repeated latest-checkup prompt', !miraChatSource.includes('ตรวจล่าสุดเมื่อไหร่คะ ถ้าจำไม่ได้ตอบคร่าวๆ ได้เลย'));
 assert('edge function does not compose local instructions', !edgeFunctionSource.includes('instructions:') && !edgeFunctionSource.includes('createSystemInstruction'));
 assert('edge function does not read local prompt_versions', !edgeFunctionSource.includes('prompt_versions?select='));
-assert('client does not send system prompt override', !miraChatSource.includes('systemPromptOverride') && !chatbotScreenSource.includes('Prompt editor'));
-assert(
-  'customer chat screen does not read local prompt_versions',
-  !chatbotScreenSource.includes('loadActivePromptVersion') &&
-    !chatbotScreenSource.includes('saveActivePromptVersion') &&
-    !chatbotScreenSource.includes('prompt_versions'),
-);
+assert('client does not send system prompt override', !miraChatSource.includes('systemPromptOverride'));
+assert('chat client does not read local prompt_versions', !miraChatSource.includes('prompt_versions'));
 assert('OpenAI chat setting playbook exists with developer message', openAiPlaybookSource.includes('## Developer Message') && openAiPlaybookSource.includes('## Test Prompts'));
 assert('OpenAI playbook includes no-repeat acceptance criteria', openAiPlaybookSource.includes('does not ask the same intake question twice'));
 assert('client calls chat-orchestrator edge function', miraChatSource.includes("'chat-orchestrator'") || miraChatSource.includes('"chat-orchestrator"'));

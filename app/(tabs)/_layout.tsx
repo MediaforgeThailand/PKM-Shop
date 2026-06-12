@@ -4,7 +4,7 @@ import { Tabs } from 'expo-router';
 import { MiraDesign, shadow } from '@/constants/Design';
 
 export const unstable_settings = {
-  initialRouteName: 'chatbot',
+  initialRouteName: 'health',
 };
 
 export default function TabLayout() {
@@ -33,23 +33,6 @@ export default function TabLayout() {
           ...shadow,
         },
       }}>
-      <Tabs.Screen
-        name="chatbot"
-        options={{
-          title: 'Chatbot',
-          tabBarIcon: ({ color }) => (
-            <SymbolView
-              name={{
-                ios: 'message.and.waveform.fill',
-                android: 'chat',
-                web: 'chat',
-              }}
-              tintColor={color}
-              size={28}
-            />
-          ),
-        }}
-      />
       <Tabs.Screen
         name="health"
         options={{
