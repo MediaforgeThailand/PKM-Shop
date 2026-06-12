@@ -602,12 +602,13 @@ function PrototypeOrderFormCard({
   const [didSubmit, setDidSubmit] = useState(false);
   const ageDigits = buyerAge.replace(/[^\d]/g, '');
   const ageValue = Number.parseInt(ageDigits, 10);
+  const phoneDigits = buyerPhone.replace(/[^\d]/g, '');
   const rangeStart = preferredDateOptionFromKey(rangeStartKey);
   const rangeEnd = preferredDateOptionFromKey(rangeEndKey);
   const selectedTimeSlot = preferredTimeSlots.find((slot) => slot.key === selectedTimeSlotKey) ?? preferredTimeSlots[0];
   const preferredDateRange = formatPreferredDateRange(rangeStart, rangeEnd, selectedTimeSlot);
   const rangeSummary = rangeStart && rangeEnd ? `${rangeStart.shortLabel} - ${rangeEnd.shortLabel}` : rangeStart ? `${rangeStart.shortLabel} - เลือกวันสุดท้าย` : 'เลือกช่วงวันที่';
-  const canSubmit = buyerName.trim().length > 0 && buyerPhone.trim().length > 0 && Number.isFinite(ageValue) && ageValue > 0 && Boolean(preferredDateRange);
+  const canSubmit = buyerName.trim().length > 0 && /^0[689]\d{8}$/.test(phoneDigits) && Number.isFinite(ageValue) && ageValue > 0 && ageValue <= 120 && Boolean(preferredDateRange);
   const isSubmitLocked = isSending || didSubmit;
   const isButtonMuted = isSubmitLocked || !canSubmit;
 
@@ -651,9 +652,9 @@ function PrototypeOrderFormCard({
       await onSubmitOrderInfo({
         buyerAge: ageValue,
         buyerName: buyerName.trim(),
-        buyerPhone: buyerPhone.trim(),
+        buyerPhone: phoneDigits,
         orderId: order.id,
-        preferredDate: preferredDateRange,
+        preferredDate: rangeStartKey || undefined,
       });
       setDidSubmit(true);
     } catch {

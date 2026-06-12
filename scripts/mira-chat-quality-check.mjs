@@ -172,6 +172,13 @@ assert(
     prototypePanelSource.includes('orderTimeSlotButton') &&
     prototypePanelSource.includes('formatPreferredDateRange'),
 );
+assert(
+  'prototype order form submits backend-safe buyer fields',
+  prototypePanelSource.includes('buyerPhone: phoneDigits') &&
+    prototypePanelSource.includes('preferredDate: rangeStartKey || undefined') &&
+    prototypePanelSource.includes('/^0[689]\\d{8}$/.test(phoneDigits)') &&
+    prototypePanelSource.includes('ageValue <= 120'),
+);
 assert('offline fallback has no numbered RAG list template', !miraChatSource.includes('ragMatches.slice(0, 2).map'));
 assert('offline fallback avoids repeated latest-checkup prompt', !miraChatSource.includes('ตรวจล่าสุดเมื่อไหร่คะ ถ้าจำไม่ได้ตอบคร่าวๆ ได้เลย'));
 assert('edge function does not compose local instructions', !edgeFunctionSource.includes('instructions:') && !edgeFunctionSource.includes('createSystemInstruction'));
