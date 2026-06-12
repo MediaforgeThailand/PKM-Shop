@@ -379,8 +379,8 @@ Every phase: separate PR, additive migrations, `npm run v2:verify` green, this f
 
 LIFF mini-form for LINE (design seam only), PSP/automatic payment verification (QR + staff confirmation stays), per-customer AI ranking model for grids (catalog `sort` + model marker order is the v3 ranking), calendar/slot picking by customers (staff call books the queue), multi-language, push notifications outside LINE (in-chat + account screen only).
 
-## 11. Open questions for the owner (Codex: do not guess)
+## 11. Open questions — DECIDED by owner 2026-06-12 (Codex: these are final, do not re-ask)
 
-1. Category set per tenant — start with `checkup` / `vaccine` only, or does the first client need more (e.g. ฝากครรภ์, กายภาพ)?
-2. Should the customer be able to cancel an order from the account screen while `submitted` (before staff confirm)? (State machine already allows customer cancel up to `awaiting_payment` only.)
-3. `อายุ` is now collected at purchase — should it also write a `user_facts` row (source `user_form`) to improve future recommendations? (Suggest yes; needs consent check.)
+1. ✅ Category set starts with `checkup` / `vaccine` only (per-tenant extensible via `product_categories` rows; no extra seed needed).
+2. ✅ Customer cancellation rules stay exactly as the existing state machine allows (customer cancel up to `awaiting_payment`; no account-screen cancel for `submitted`).
+3. ✅ `อายุ` collected at purchase IS written to `user_facts` (key `age`, source `user_form`, confidence 1.0) — only when the customer has an active `health_data_collection` consent; skip silently otherwise. **Audit note 2026-06-12: not yet implemented — the decision had not reached the repo when V3-2 was built; tracked as follow-up F1 in `docs/v3-audit-report-2026-06-12.md`.**
