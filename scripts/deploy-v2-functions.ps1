@@ -1,5 +1,12 @@
 $ErrorActionPreference = 'Stop'
 
+# Non-UTF-8 consoles corrupt every Thai/emoji literal in the uploaded bundle
+# (each non-ASCII char ships as '?') while local files and git stay clean.
+# Force UTF-8 before any supabase CLI call and verify the bundle afterwards.
+chcp 65001 | Out-Null
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
+
 function Read-DotEnv($path) {
   $vars = @{}
 
@@ -45,3 +52,27 @@ npx supabase functions deploy stripe-webhook --project-ref $projectRef --no-veri
 npx supabase functions deploy lab-ingest --project-ref $projectRef
 npx supabase functions deploy lab-confirm --project-ref $projectRef
 npx supabase functions deploy wearable-ingest --project-ref $projectRef
+
+Write-Output 'Verifying deployed bundle encoding (chat-orchestrator canary)...'
+$verifyDir = Join-Path ([IO.Path]::GetTempPath()) ("mira-deploy-verify-" + [Guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Force $verifyDir | Out-Null
+Push-Location $verifyDir
+try {
+  npx supabase functions download chat-orchestrator --project-ref $projectRef | Out-Null
+  $canary = Get-ChildItem -Recurse $verifyDir -Filter 'orchestrate.ts' | Select-Object -First 1
+
+  if (-not $canary) {
+    throw 'Bundle verification failed: downloaded source not found.'
+  }
+
+  $content = [System.Text.Encoding]::UTF8.GetString([IO.File]::ReadAllBytes($canary.FullName))
+
+  if ([regex]::IsMatch($content, '\?{3,}')) {
+    throw 'Bundle verification FAILED: deployed source contains mojibake (runs of "?"). Redeploy from a UTF-8 console.'
+  }
+
+  Write-Output 'Bundle verification passed: no mojibake in deployed source.'
+} finally {
+  Pop-Location
+  Remove-Item -Recurse -Force $verifyDir -ErrorAction SilentlyContinue
+}
