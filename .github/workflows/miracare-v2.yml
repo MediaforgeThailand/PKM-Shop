@@ -1,5 +1,11 @@
 name: MiraCare v2 verification
 
+# Live jobs share one Supabase project and one regression auth user; overlapping
+# runs reset each other's sessions/JWTs mid-suite. Queue runs instead.
+concurrency:
+  group: miracare-v2-verification
+  cancel-in-progress: false
+
 on:
   push:
     branches:
