@@ -154,6 +154,14 @@ assert(
     prototypePanelSource.includes("card.type === 'category_grid'") &&
     prototypePanelSource.includes("type: 'browse_category'"),
 );
+assert(
+  'prototype renders live order info form',
+  prototypePanelSource.includes('PrototypeOrderFormCard') &&
+    prototypePanelSource.includes("type: 'order_form_submit'") &&
+    prototypePanelSource.includes('buyer_name') &&
+    prototypePanelSource.includes('buyer_phone') &&
+    prototypePanelSource.includes('buyer_age'),
+);
 assert('offline fallback has no numbered RAG list template', !miraChatSource.includes('ragMatches.slice(0, 2).map'));
 assert('offline fallback avoids repeated latest-checkup prompt', !miraChatSource.includes('ตรวจล่าสุดเมื่อไหร่คะ ถ้าจำไม่ได้ตอบคร่าวๆ ได้เลย'));
 assert('edge function does not compose local instructions', !edgeFunctionSource.includes('instructions:') && !edgeFunctionSource.includes('createSystemInstruction'));

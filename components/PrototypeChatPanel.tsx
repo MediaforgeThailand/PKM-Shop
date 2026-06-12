@@ -35,6 +35,14 @@ type PrototypeChatMessage = ChatMessage & {
   uiCards?: ChatUiCard[];
 };
 
+type OrderInfoFormSubmit = {
+  buyerAge: number;
+  buyerName: string;
+  buyerPhone: string;
+  orderId: string;
+  preferredDate?: string;
+};
+
 function createMessage(
   role: ChatMessage['role'],
   content: string,
@@ -309,10 +317,14 @@ function ProductPreviewImage({ product }: { product: ChatProductCard }) {
   );
 }
 
-function ProductGridCard({ card, onSelectProduct }: { card: Extract<ChatUiCard, { type: 'product_grid' }>; onSelectProduct: (productId: string, productTitle: string) => void }) {
+function useWideChatCardWidth() {
   const { width } = useWindowDimensions();
   const shellWidth = width > 0 && width < 390 ? width : 292;
-  const gridWidth = Math.max(220, shellWidth - 26);
+  return Math.max(220, shellWidth - 26);
+}
+
+function ProductGridCard({ card, onSelectProduct }: { card: Extract<ChatUiCard, { type: 'product_grid' }>; onSelectProduct: (productId: string, productTitle: string) => void }) {
+  const gridWidth = useWideChatCardWidth();
   const tileWidth = (gridWidth - 8) / 2;
 
   return (
@@ -472,7 +484,144 @@ function orderHint(order: NonNullable<OrderPanelState>) {
   return 'รายการนี้ถูกยกเลิกแล้ว';
 }
 
-function PrototypeOrderCard({ order }: { order: NonNullable<OrderPanelState> }) {
+function PrototypeOrderFormCard({
+  isSending,
+  onSubmitOrderInfo,
+  order,
+}: {
+  isSending: boolean;
+  onSubmitOrderInfo: (payload: OrderInfoFormSubmit) => Promise<void>;
+  order: NonNullable<OrderPanelState>;
+}) {
+  const cardWidth = useWideChatCardWidth();
+  const [buyerName, setBuyerName] = useState('');
+  const [buyerPhone, setBuyerPhone] = useState('');
+  const [buyerAge, setBuyerAge] = useState('');
+  const [preferredDate, setPreferredDate] = useState('');
+  const [formError, setFormError] = useState<string | null>(null);
+  const [didSubmit, setDidSubmit] = useState(false);
+  const ageDigits = buyerAge.replace(/[^\d]/g, '');
+  const ageValue = Number.parseInt(ageDigits, 10);
+  const canSubmit = buyerName.trim().length > 0 && buyerPhone.trim().length > 0 && Number.isFinite(ageValue) && ageValue > 0;
+  const isSubmitLocked = isSending || didSubmit;
+  const isButtonMuted = isSubmitLocked || !canSubmit;
+
+  async function submitOrderForm() {
+    if (!canSubmit) {
+      setFormError('กรอกชื่อ เบอร์โทร และอายุให้ครบก่อนค่ะ');
+      return;
+    }
+
+    setFormError(null);
+
+    try {
+      await onSubmitOrderInfo({
+        buyerAge: ageValue,
+        buyerName: buyerName.trim(),
+        buyerPhone: buyerPhone.trim(),
+        orderId: order.id,
+        preferredDate: preferredDate.trim() || undefined,
+      });
+      setDidSubmit(true);
+    } catch {
+      setDidSubmit(false);
+    }
+  }
+
+  return (
+    <View style={[styles.orderFormCard, { width: cardWidth }]}>
+      <View style={styles.orderFormHeader}>
+        <View style={styles.orderFormHeaderCopy}>
+          <Text style={styles.orderFormEyebrow}>ข้อมูลผู้จอง</Text>
+          <Text numberOfLines={2} style={styles.orderFormTitle}>
+            {order.product_name}
+          </Text>
+          <Text numberOfLines={1} style={styles.orderFormMeta}>
+            {order.branch_name ?? 'Demo Hospital'} · {order.amount_baht.toLocaleString('th-TH')} THB
+          </Text>
+        </View>
+        <View style={styles.orderFormBadge}>
+          <Text style={styles.orderFormBadgeText}>ออก QR</Text>
+        </View>
+      </View>
+
+      <View style={styles.orderFormFields}>
+        <View style={styles.orderFieldFull}>
+          <Text style={styles.orderInputLabel}>ชื่อผู้จอง</Text>
+          <TextInput
+            autoCapitalize="words"
+            editable={!didSubmit && !isSending}
+            onChangeText={setBuyerName}
+            placeholder="เช่น คุณมิรา"
+            placeholderTextColor="rgba(78,92,132,0.48)"
+            style={styles.orderTextInput}
+            value={buyerName}
+          />
+        </View>
+
+        <View style={styles.orderFormRow}>
+          <View style={styles.orderFieldPhone}>
+            <Text style={styles.orderInputLabel}>เบอร์โทร</Text>
+            <TextInput
+              editable={!didSubmit && !isSending}
+              keyboardType="phone-pad"
+              onChangeText={setBuyerPhone}
+              placeholder="08x-xxx-xxxx"
+              placeholderTextColor="rgba(78,92,132,0.48)"
+              style={styles.orderTextInput}
+              value={buyerPhone}
+            />
+          </View>
+          <View style={styles.orderFieldAge}>
+            <Text style={styles.orderInputLabel}>อายุ</Text>
+            <TextInput
+              editable={!didSubmit && !isSending}
+              keyboardType="number-pad"
+              maxLength={3}
+              onChangeText={(text) => setBuyerAge(text.replace(/[^\d]/g, ''))}
+              placeholder="35"
+              placeholderTextColor="rgba(78,92,132,0.48)"
+              style={styles.orderTextInput}
+              value={buyerAge}
+            />
+          </View>
+        </View>
+
+        <View style={styles.orderFieldFull}>
+          <Text style={styles.orderInputLabel}>วันที่สะดวก</Text>
+          <TextInput
+            editable={!didSubmit && !isSending}
+            onChangeText={setPreferredDate}
+            placeholder="เช่น พรุ่งนี้บ่าย หรือ 20 มิ.ย."
+            placeholderTextColor="rgba(78,92,132,0.48)"
+            style={styles.orderTextInput}
+            value={preferredDate}
+          />
+        </View>
+      </View>
+
+      {formError ? <Text style={styles.orderFormError}>{formError}</Text> : null}
+
+      <Pressable disabled={isSubmitLocked} onPress={submitOrderForm} style={({ pressed }) => [styles.orderFormSubmit, isButtonMuted ? styles.orderFormSubmitDisabled : null, pressed && !isButtonMuted ? styles.orderFormSubmitPressed : null]}>
+        <Text style={styles.orderFormSubmitText}>{didSubmit ? 'ส่งข้อมูลแล้ว' : isSending ? 'กำลังส่ง...' : 'ยืนยันและออก QR'}</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+function PrototypeOrderCard({
+  isSending,
+  onSubmitOrderInfo,
+  order,
+}: {
+  isSending: boolean;
+  onSubmitOrderInfo: (payload: OrderInfoFormSubmit) => Promise<void>;
+  order: NonNullable<OrderPanelState>;
+}) {
+  if (order.step === 'form' || order.show_form) {
+    return <PrototypeOrderFormCard isSending={isSending} onSubmitOrderInfo={onSubmitOrderInfo} order={order} />;
+  }
+
   const steps: Array<NonNullable<OrderPanelState>['step']> = ['branch', 'form', 'qr', 'tracking'];
   const activeIndex = order.step === 'cancelled' ? -1 : Math.max(0, steps.indexOf(order.step));
 
@@ -611,16 +760,20 @@ function ChatUiCardRenderer({
 
 function ChatMessageBubble({
   index,
+  isSending,
   message,
   onBrowseCategory,
   onSelectBranch,
   onSelectProduct,
+  onSubmitOrderInfo,
 }: {
   index: number;
+  isSending: boolean;
   message: PrototypeChatMessage;
   onBrowseCategory: (category: string, label: string) => void;
   onSelectBranch: (productId: string, branchId: string) => void;
   onSelectProduct: (productId: string, productTitle: string) => void;
+  onSubmitOrderInfo: (payload: OrderInfoFormSubmit) => Promise<void>;
 }) {
   const opacity = useRef(new Animated.Value(0)).current;
   const translate = useRef(new Animated.Value(14)).current;
@@ -652,7 +805,7 @@ function ChatMessageBubble({
         {message.uiCards?.map((card) => (
           <ChatUiCardRenderer key={card.id} card={card} onBrowseCategory={onBrowseCategory} onSelectBranch={onSelectBranch} onSelectProduct={onSelectProduct} />
         ))}
-        {message.order ? <PrototypeOrderCard order={message.order} /> : null}
+        {message.order ? <PrototypeOrderCard isSending={isSending} onSubmitOrderInfo={onSubmitOrderInfo} order={message.order} /> : null}
       </View>
     </Animated.View>
   );
@@ -885,6 +1038,46 @@ export function PrototypeChatPanel() {
     appendSystemNotice('การเลือกสาขาต้องมาจาก order step ของ backend จริงค่ะ');
   }
 
+  async function submitOrderInfo({ buyerAge, buyerName, buyerPhone, orderId, preferredDate }: OrderInfoFormSubmit) {
+    if (isSending) {
+      return;
+    }
+
+    if (!canUseLiveAi) {
+      appendSystemNotice(liveUnavailableMessage());
+      throw new Error('Live AI chat is unavailable.');
+    }
+
+    const userText = 'ส่งข้อมูลผู้จองแล้ว';
+    const userMessage = createMessage('user', userText);
+    const nextMessages = [...messages, userMessage];
+    setViewMode('chat');
+    setMessages(nextMessages);
+    setIsSending(true);
+
+    try {
+      const result = await askAiWithRag({
+        action: {
+          buyer_age: buyerAge,
+          buyer_name: buyerName,
+          buyer_phone: buyerPhone,
+          order_id: orderId,
+          preferred_date: preferredDate,
+          type: 'order_form_submit',
+        },
+        messages: nextMessages,
+        question: userText,
+      });
+      const answer = createMessage(result.responseRole ?? 'system_notice', result.text, result.ragMatches, result.uiCards, result.order);
+      setMessages((current) => [...current, answer]);
+    } catch (error) {
+      appendSystemNotice(error instanceof Error ? `live AI chat error: ${error.message}` : 'live AI chat error');
+      throw error;
+    } finally {
+      setIsSending(false);
+    }
+  }
+
   async function sendMessage() {
     const question = input.trim();
 
@@ -984,10 +1177,12 @@ export function PrototypeChatPanel() {
                         <ChatMessageBubble
                           key={message.id}
                           index={index}
+                          isSending={isSending}
                           message={message}
                           onBrowseCategory={browseCategory}
                           onSelectBranch={selectBranch}
                           onSelectProduct={selectProduct}
+                          onSubmitOrderInfo={submitOrderInfo}
                         />
                       ))
                     )}
@@ -1443,6 +1638,128 @@ const styles = StyleSheet.create({
     fontSize: 12.4,
     fontWeight: '900',
     lineHeight: 16,
+  },
+  orderFormCard: {
+    backgroundColor: 'rgba(255,255,255,0.38)',
+    borderColor: 'rgba(255,255,255,0.72)',
+    borderRadius: 20,
+    borderWidth: 1,
+    gap: 10,
+    marginLeft: -39,
+    padding: 12,
+    shadowColor: '#718DFF',
+    shadowOffset: { height: 12, width: 0 },
+    shadowOpacity: 0.13,
+    shadowRadius: 18,
+  },
+  orderFormHeader: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: 10,
+  },
+  orderFormHeaderCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  orderFormEyebrow: {
+    color: 'rgba(63,82,125,0.72)',
+    fontSize: 8.5,
+    fontWeight: '900',
+    letterSpacing: 0,
+  },
+  orderFormTitle: {
+    color: '#31446F',
+    fontSize: 13,
+    fontWeight: '900',
+    lineHeight: 16,
+    marginTop: 2,
+  },
+  orderFormMeta: {
+    color: '#607099',
+    fontSize: 9.2,
+    fontWeight: '800',
+    lineHeight: 12,
+    marginTop: 4,
+  },
+  orderFormBadge: {
+    backgroundColor: 'rgba(92,140,255,0.16)',
+    borderColor: 'rgba(255,255,255,0.68)',
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+  },
+  orderFormBadgeText: {
+    color: '#4F70EE',
+    fontSize: 8.5,
+    fontWeight: '900',
+  },
+  orderFormFields: {
+    gap: 8,
+  },
+  orderFormRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  orderFieldFull: {
+    width: '100%',
+  },
+  orderFieldPhone: {
+    flex: 1,
+    minWidth: 0,
+  },
+  orderFieldAge: {
+    width: 70,
+  },
+  orderInputLabel: {
+    color: '#4E5C84',
+    fontSize: 8.8,
+    fontWeight: '900',
+    marginBottom: 4,
+  },
+  orderTextInput: {
+    backgroundColor: 'rgba(255,255,255,0.62)',
+    borderColor: 'rgba(255,255,255,0.78)',
+    borderRadius: 13,
+    borderWidth: 1,
+    color: '#31446F',
+    fontSize: 11.4,
+    fontWeight: '800',
+    height: 38,
+    paddingHorizontal: 10,
+    paddingVertical: 0,
+  },
+  orderFormError: {
+    color: '#E15B72',
+    fontSize: 9,
+    fontWeight: '800',
+    lineHeight: 12,
+  },
+  orderFormSubmit: {
+    alignItems: 'center',
+    backgroundColor: '#5B91FF',
+    borderColor: 'rgba(255,255,255,0.66)',
+    borderRadius: 15,
+    borderWidth: 1,
+    justifyContent: 'center',
+    minHeight: 38,
+    shadowColor: '#5B7CFF',
+    shadowOffset: { height: 8, width: 0 },
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+  },
+  orderFormSubmitPressed: {
+    opacity: 0.84,
+    transform: [{ scale: 0.99 }],
+  },
+  orderFormSubmitDisabled: {
+    backgroundColor: 'rgba(112,135,184,0.34)',
+    shadowOpacity: 0,
+  },
+  orderFormSubmitText: {
+    color: '#FFFFFF',
+    fontSize: 11.2,
+    fontWeight: '900',
   },
   orderCard: {
     backgroundColor: 'rgba(255,255,255,0.28)',
