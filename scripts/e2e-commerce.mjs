@@ -369,12 +369,14 @@ async function runV3ChatCommerceFlow({ customerAccessToken, tenantId }) {
   });
 
   assert(booked.order?.status === 'booked', 'v3 admin book should move to booked');
-  assert(booked.order?.booking_at === bookingAt, 'v3 admin book should persist booking_at');
+  // booking_at round-trips through Postgres timestamptz, so the serialized
+  // offset format differs from the input string; compare instants instead.
+  assert(sameInstant(booked.order?.booking_at, bookingAt), 'v3 admin book should persist booking_at');
 
   const accountOrder = await loadCustomerVisibleOrder(customerAccessToken, multi.order.id);
 
   assert(accountOrder.status === 'booked', 'v3 account orders query should show booked status');
-  assert(accountOrder.booking_at === bookingAt, 'v3 account orders query should show booking datetime');
+  assert(sameInstant(accountOrder.booking_at, bookingAt), 'v3 account orders query should show booking datetime');
 
   if (process.env.MIRA_E2E_EXPECT_PROMPT_V3 === '1') {
     const statusAnswer = await postChat(customerAccessToken, {
@@ -864,4 +866,15 @@ function assert(condition, message) {
   if (!condition) {
     throw new Error(message);
   }
+}
+
+function sameInstant(actual, expected) {
+  if (!actual) {
+    return false;
+  }
+
+  const actualMs = new Date(actual).getTime();
+  const expectedMs = new Date(expected).getTime();
+
+  return Number.isFinite(actualMs) && actualMs === expectedMs;
 }
