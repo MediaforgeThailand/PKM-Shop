@@ -27,6 +27,7 @@ const productionFiles = [
   'components/admin/CatalogCrud.tsx',
   'components/admin/OrdersQueue.tsx',
   'components/admin/ReferrersAdmin.tsx',
+  'components/chat/BranchOptionRow.tsx',
   'components/chat/ConsentSheet.tsx',
   'components/chat/BookingSheet.tsx',
   'components/chat/BranchPicker.tsx',
@@ -65,6 +66,7 @@ const removedRouteFiles = [
   'app/modal.tsx',
 ];
 const presentationalChatComponents = [
+  'components/chat/BranchOptionRow.tsx',
   'components/chat/ConsentSheet.tsx',
   'components/chat/BookingSheet.tsx',
   'components/chat/BranchPicker.tsx',

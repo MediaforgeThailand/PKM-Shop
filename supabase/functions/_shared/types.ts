@@ -249,6 +249,8 @@ export type AdminSlipUrlResponse = {
 export type ReferrerOrderRequest =
   | {
       action: 'create_order';
+      branch_id?: string;
+      buyer_age: number;
       buyer_name: string;
       buyer_phone: string;
       catalog_key: string;
@@ -256,10 +258,19 @@ export type ReferrerOrderRequest =
       tenant_slug: string;
     }
   | {
+      action: 'list_branches';
+      catalog_key: string;
+      tenant_slug: string;
+    }
+  | {
       action: 'payment_done';
       order_id: string;
       tenant_slug: string;
     };
+
+export type ReferrerOrderBranchesResponse = {
+  branches: OrderPanelBranch[];
+};
 
 export type ReferrerOrderResponse = {
   order: OrderPanelState;

@@ -1,6 +1,8 @@
 ﻿import { assertTenant, insertRow, resolveAuthUserId, selectOne, updateRows } from '../_shared/db.ts';
-import { HttpError, handleOptions, json, toErrorResponse, validateJson, z } from '../_shared/http.ts';
+import { activeBranchesForProduct, resolveProductBranchSelection } from '../_shared/branches.ts';
+import { HttpError, handleOptions, json, toErrorResponse, validateJson } from '../_shared/http.ts';
 import { loadOrderForPanel, toOrderPanel, transition } from '../_shared/orders.ts';
+import { referrerOrderRequestSchema } from '../_shared/referrerOrder.ts';
 import type {
   CustomerRow,
   OrderRow,
@@ -12,22 +14,6 @@ import type {
 declare const Deno: {
   serve: (handler: (req: Request) => Response | Promise<Response>) => void;
 };
-
-const requestSchema = z.discriminatedUnion('action', [
-  z.object({
-    action: z.literal('create_order'),
-    buyer_name: z.string().trim().min(2),
-    buyer_phone: z.string().regex(/^0[689]\d{8}$/),
-    catalog_key: z.string().min(1),
-    preferred_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-    tenant_slug: z.string().regex(/^[a-z0-9-]{2,32}$/),
-  }),
-  z.object({
-    action: z.literal('payment_done'),
-    order_id: z.string().uuid(),
-    tenant_slug: z.string().regex(/^[a-z0-9-]{2,32}$/),
-  }),
-]);
 
 async function loadReferrer(tenantId: string, authUserId: string) {
   const referrer = await selectOne<ReferrerRow>('referrers', {
@@ -97,9 +83,13 @@ async function createReferrerOrder(body: Extract<ReferrerOrderRequest, { action:
     throw new HttpError('VALIDATION', 'Product not found.', 404);
   }
 
+  const branches = await activeBranchesForProduct(referrer.tenant_id, product.id);
+  const branch = resolveProductBranchSelection(branches, body.branch_id);
   const customer = await resolveOrCreateBuyer(referrer.tenant_id, body.buyer_name, body.buyer_phone);
   const order = await insertRow<OrderRow>('orders', {
     amount_baht: product.price_baht,
+    branch_id: branch?.id ?? null,
+    buyer_age: body.buyer_age,
     buyer_name: body.buyer_name,
     buyer_phone: body.buyer_phone,
     channel: 'referrer',
@@ -120,6 +110,16 @@ async function createReferrerOrder(body: Extract<ReferrerOrderRequest, { action:
   return loadOrderForPanel(order.id, referrer.tenant_id);
 }
 
+async function listProductBranches(body: Extract<ReferrerOrderRequest, { action: 'list_branches' }>, referrer: ReferrerRow) {
+  const product = await productByCatalogKey(referrer.tenant_id, body.catalog_key);
+
+  if (!product) {
+    throw new HttpError('VALIDATION', 'Product not found.', 404);
+  }
+
+  return activeBranchesForProduct(referrer.tenant_id, product.id);
+}
+
 Deno.serve(async (req) => {
   const optionsResponse = handleOptions(req);
 
@@ -132,7 +132,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const body = await validateJson(req, requestSchema);
+    const body = await validateJson(req, referrerOrderRequestSchema);
     const tenant = await assertTenant(body.tenant_slug);
     const authUserId = await resolveAuthUserId(req.headers.get('authorization'));
     const referrer = await loadReferrer(tenant.id, authUserId);
@@ -147,6 +147,12 @@ Deno.serve(async (req) => {
           name: referrer.name,
           ref_code: referrer.ref_code,
         },
+      });
+    }
+
+    if (body.action === 'list_branches') {
+      return json({
+        branches: await listProductBranches(body, referrer),
       });
     }
 

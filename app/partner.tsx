@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 
+import { BranchOptionRow } from '@/components/chat/BranchOptionRow';
 import { OrderPanel } from '@/components/chat/OrderPanel';
 import { Pill } from '@/components/MiraUI';
 import { MiraDesign, softShadow } from '@/constants/Design';
@@ -8,12 +9,21 @@ import { invokeFunction } from '@/lib/api/client';
 import { useAuthSession } from '@/lib/auth/useAuthSession';
 import {
   defaultTenantSlug,
+  type BranchSummary,
   loadActiveHospitalProducts,
   type HospitalProduct,
 } from '@/lib/marketplace/hospitalProducts';
-import { showcaseDemoBranches, showcaseDemoCommissions, showcaseDemoProducts, showcaseDemoReferrers, showcaseDemoTenant } from '@/lib/showcase/demoFixtures';
+import { showcaseDemoCommissions, showcaseDemoProducts, showcaseDemoReferrers, showcaseDemoTenant } from '@/lib/showcase/demoFixtures';
 import { supabase, supabaseConfigStatus } from '@/lib/supabase';
-import type { CommissionEntryRow, OrderPanelState, ReferrerOrderRequest, ReferrerOrderResponse, ReferrerRow } from '@/lib/types/api';
+import type {
+  CommissionEntryRow,
+  OrderPanelBranch,
+  OrderPanelState,
+  ReferrerOrderBranchesResponse,
+  ReferrerOrderRequest,
+  ReferrerOrderResponse,
+  ReferrerRow,
+} from '@/lib/types/api';
 
 type TenantInfo = {
   display_name: string;
@@ -46,13 +56,23 @@ function formatMoney(amount: number) {
   return `${amount.toLocaleString('th-TH')} THB`;
 }
 
-function showcaseDemoBranchesForPartner() {
-  return showcaseDemoBranches.map((branch) => ({
+function toOrderPanelBranch(branch: BranchSummary): OrderPanelBranch {
+  return {
     address: branch.address,
     district: branch.district,
     id: branch.id,
     name: branch.name,
-  }));
+  };
+}
+
+function activeProductBranches(product: HospitalProduct | null): OrderPanelBranch[] {
+  return product?.branches.filter((branch) => branch.active).map(toOrderPanelBranch) ?? [];
+}
+
+function buyerAgeError(value: string) {
+  const parsed = Number(value.trim());
+
+  return Number.isInteger(parsed) && parsed >= 1 && parsed <= 120 ? null : 'กรุณากรอกอายุ 1-120 ปี';
 }
 
 export default function PartnerScreen() {
@@ -65,7 +85,12 @@ export default function PartnerScreen() {
   const [selectedProduct, setSelectedProduct] = useState<HospitalProduct | null>(null);
   const [buyerName, setBuyerName] = useState('');
   const [buyerPhone, setBuyerPhone] = useState('');
+  const [buyerAge, setBuyerAge] = useState('');
+  const [ageError, setAgeError] = useState<string | null>(null);
   const [preferredDate, setPreferredDate] = useState('');
+  const [branchChoices, setBranchChoices] = useState<OrderPanelBranch[]>([]);
+  const [selectedBranchId, setSelectedBranchId] = useState('');
+  const [isLoadingBranches, setIsLoadingBranches] = useState(false);
   const [activeOrder, setActiveOrder] = useState<OrderPanelState>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -73,7 +98,19 @@ export default function PartnerScreen() {
   const [error, setError] = useState<string | null>(null);
   const isWide = width >= 1080;
   const isDemoMode = !auth.session || !supabaseConfigStatus.isConfigured;
-  const canCreateOrder = selectedProduct && buyerName.trim().length > 1 && /^0[689]\d{8}$/.test(buyerPhone.trim()) && !isSubmitting;
+  const buyerAgeNumber = Number(buyerAge.trim());
+  const hasValidBuyerAge = Number.isInteger(buyerAgeNumber) && buyerAgeNumber >= 1 && buyerAgeNumber <= 120;
+  const selectedBranch = branchChoices.find((branch) => branch.id === selectedBranchId) ?? null;
+  const requiresBranchChoice = branchChoices.length > 1;
+  const canCreateOrder = Boolean(
+    selectedProduct &&
+      buyerName.trim().length > 1 &&
+      /^0[689]\d{8}$/.test(buyerPhone.trim()) &&
+      hasValidBuyerAge &&
+      !isLoadingBranches &&
+      (!requiresBranchChoice || selectedBranch) &&
+      !isSubmitting,
+  );
 
   const totals = useMemo(
     () => ({
@@ -167,8 +204,65 @@ export default function PartnerScreen() {
     };
   }, [auth.session, isDemoMode, loadPartnerData]);
 
+  useEffect(() => {
+    let isMounted = true;
+    const localBranches = activeProductBranches(selectedProduct);
+
+    setBranchChoices(localBranches);
+    setSelectedBranchId(localBranches.length > 1 ? localBranches[0]?.id ?? '' : '');
+
+    if (!selectedProduct || isDemoMode || !referrer) {
+      setIsLoadingBranches(false);
+      return () => {
+        isMounted = false;
+      };
+    }
+
+    const product = selectedProduct;
+
+    async function loadBranchesForProduct() {
+      try {
+        setIsLoadingBranches(true);
+        const result = await invokeFunction<ReferrerOrderRequest, ReferrerOrderBranchesResponse>('referrer-order', {
+          action: 'list_branches',
+          catalog_key: product.catalogKey,
+          tenant_slug: defaultTenantSlug,
+        });
+
+        if (isMounted) {
+          setBranchChoices(result.branches);
+          setSelectedBranchId(result.branches.length > 1 ? result.branches[0]?.id ?? '' : '');
+        }
+      } catch (branchError) {
+        if (isMounted) {
+          setError(branchError instanceof Error ? branchError.message : 'ไม่สามารถโหลดสาขาสำหรับแพ็กเกจนี้ได้');
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingBranches(false);
+        }
+      }
+    }
+
+    void loadBranchesForProduct();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isDemoMode, referrer, selectedProduct]);
+
   async function createOrder() {
     if (!selectedProduct || !canCreateOrder) {
+      const nextAgeError = buyerAgeError(buyerAge);
+
+      if (nextAgeError) {
+        setAgeError(nextAgeError);
+      }
+
+      if (requiresBranchChoice && !selectedBranch) {
+        setError('กรุณาเลือกสาขาก่อนสร้าง QR');
+      }
+
       return;
     }
 
@@ -176,8 +270,7 @@ export default function PartnerScreen() {
       setActiveOrder({
         amount_baht: selectedProduct.priceAmount,
         booking_at: null,
-        branch_name: null,
-        branches: showcaseDemoBranchesForPartner(),
+        branch_name: selectedBranch?.name ?? branchChoices[0]?.name ?? null,
         id: `demo-partner-order-${Date.now()}`,
         missing_fields: [],
         product_name: selectedProduct.title,
@@ -194,6 +287,8 @@ export default function PartnerScreen() {
       setMessage(null);
       const result = await invokeFunction<ReferrerOrderRequest, ReferrerOrderResponse>('referrer-order', {
         action: 'create_order',
+        ...(requiresBranchChoice && selectedBranch ? { branch_id: selectedBranch.id } : {}),
+        buyer_age: buyerAgeNumber,
         buyer_name: buyerName.trim(),
         buyer_phone: buyerPhone.trim(),
         catalog_key: selectedProduct.catalogKey,
@@ -201,9 +296,9 @@ export default function PartnerScreen() {
         tenant_slug: defaultTenantSlug,
       });
       setActiveOrder(result.order);
-      setMessage(`Created order for ${buyerName.trim()}.`);
+      setMessage(`สร้างออเดอร์ให้ ${buyerName.trim()} แล้ว`);
     } catch (createError) {
-      setError(createError instanceof Error ? createError.message : 'Unable to create referrer order.');
+      setError(createError instanceof Error ? createError.message : 'ไม่สามารถสร้างออเดอร์ได้');
     } finally {
       setIsSubmitting(false);
     }
@@ -226,10 +321,10 @@ export default function PartnerScreen() {
         tenant_slug: defaultTenantSlug,
       });
       setActiveOrder(result.order);
-      setMessage('Payment submitted for admin confirmation.');
+      setMessage('ส่งสถานะชำระเงินให้แอดมินตรวจสอบแล้ว');
       await loadPartnerData();
     } catch (paymentError) {
-      setError(paymentError instanceof Error ? paymentError.message : 'Unable to submit payment confirmation.');
+      setError(paymentError instanceof Error ? paymentError.message : 'ไม่สามารถส่งสถานะชำระเงินได้');
     } finally {
       setIsSubmitting(false);
     }
@@ -281,6 +376,7 @@ export default function PartnerScreen() {
                   onPress={() => {
                     setSelectedProduct(product);
                     setActiveOrder(null);
+                    setError(null);
                   }}
                   style={[styles.productCard, selectedProduct?.id === product.id ? styles.productCardSelected : null]}
                 >
@@ -298,10 +394,10 @@ export default function PartnerScreen() {
           </View>
 
           <View style={styles.checkoutPane}>
-            <SectionTitle title="Buyer Form" subtitle={selectedProduct?.title ?? 'Select a product'} />
+            <SectionTitle title="ข้อมูลผู้ซื้อ" subtitle={selectedProduct?.title ?? 'เลือกแพ็กเกจก่อน'} />
             <TextInput
               onChangeText={setBuyerName}
-              placeholder="Buyer full name"
+              placeholder="ชื่อ-นามสกุลผู้ซื้อ"
               placeholderTextColor={MiraDesign.color.muted}
               style={styles.input}
               value={buyerName}
@@ -314,15 +410,58 @@ export default function PartnerScreen() {
               style={styles.input}
               value={buyerPhone}
             />
+            <View style={styles.fieldStack}>
+              <TextInput
+                keyboardType="number-pad"
+                onBlur={() => setAgeError(buyerAge ? buyerAgeError(buyerAge) : null)}
+                onChangeText={(value) => {
+                  setBuyerAge(value.replace(/[^\d]/g, '').slice(0, 3));
+                  setAgeError(null);
+                }}
+                placeholder="อายุ"
+                placeholderTextColor={MiraDesign.color.muted}
+                style={[styles.input, ageError ? styles.inputError : null]}
+                value={buyerAge}
+              />
+              {ageError ? <Text style={styles.fieldError}>{ageError}</Text> : null}
+            </View>
             <TextInput
               onChangeText={setPreferredDate}
-              placeholder="Preferred date YYYY-MM-DD"
+              placeholder="วันที่สะดวก YYYY-MM-DD"
               placeholderTextColor={MiraDesign.color.muted}
               style={styles.input}
               value={preferredDate}
             />
+            {selectedProduct && (isLoadingBranches || branchChoices.length > 0) ? (
+              <View style={styles.branchBlock}>
+                <Text style={styles.fieldLabel}>สาขา</Text>
+                {isLoadingBranches ? <Text style={styles.branchHint}>กำลังโหลดสาขา...</Text> : null}
+                {!isLoadingBranches && branchChoices.length === 1 ? (
+                  <View style={styles.branchStatic}>
+                    <Text style={styles.branchStaticName}>{branchChoices[0].name}</Text>
+                    <Text style={styles.branchHint}>
+                      {[branchChoices[0].address, branchChoices[0].district].filter(Boolean).join(' · ') || 'รายละเอียดสาขาจะอัปเดตในระบบ'}
+                    </Text>
+                  </View>
+                ) : null}
+                {!isLoadingBranches && branchChoices.length > 1 ? (
+                  <View style={styles.branchList}>
+                    {branchChoices.map((branch, index) => (
+                      <BranchOptionRow
+                        key={branch.id}
+                        branch={branch}
+                        disabled={isSubmitting}
+                        isSelected={branch.id === selectedBranchId}
+                        onPress={() => setSelectedBranchId(branch.id)}
+                        showDivider={index < branchChoices.length - 1}
+                      />
+                    ))}
+                  </View>
+                ) : null}
+              </View>
+            ) : null}
             <Pressable disabled={!canCreateOrder || !referrer} onPress={createOrder} style={[styles.primaryButton, !canCreateOrder || !referrer ? styles.disabled : null]}>
-              <Text style={styles.primaryButtonText}>{isSubmitting ? 'Creating' : 'Create QR Order'}</Text>
+              <Text style={styles.primaryButtonText}>{isSubmitting ? 'กำลังสร้าง' : 'สร้าง QR ชำระเงิน'}</Text>
             </Pressable>
 
             {activeOrder ? (
@@ -330,7 +469,7 @@ export default function PartnerScreen() {
                 <OrderPanel disabled={isSubmitting} onOpenDetails={() => undefined} order={activeOrder} />
                 {activeOrder.status === 'awaiting_payment' ? (
                   <Pressable disabled={isSubmitting} onPress={() => void markPaymentDone(activeOrder.id)} style={[styles.primaryButton, isSubmitting ? styles.disabled : null]}>
-                    <Text style={styles.primaryButtonText}>{isSubmitting ? 'Submitting' : 'Mark paid'}</Text>
+                    <Text style={styles.primaryButtonText}>{isSubmitting ? 'กำลังส่ง' : 'แจ้งชำระเงินแล้ว'}</Text>
                   </Pressable>
                 ) : null}
               </View>
@@ -634,6 +773,52 @@ const styles = StyleSheet.create({
     fontSize: 14,
     minHeight: 44,
     paddingHorizontal: 12,
+  },
+  inputError: {
+    borderColor: MiraDesign.color.danger,
+  },
+  fieldStack: {
+    gap: 5,
+  },
+  fieldError: {
+    color: MiraDesign.color.danger,
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  fieldLabel: {
+    color: MiraDesign.color.ink,
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  branchBlock: {
+    gap: 8,
+  },
+  branchList: {
+    borderColor: MiraDesign.color.line,
+    borderRadius: 8,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  branchStatic: {
+    backgroundColor: MiraDesign.color.surfaceSoft,
+    borderColor: MiraDesign.color.line,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 3,
+    minHeight: 56,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  branchStaticName: {
+    color: MiraDesign.color.ink,
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  branchHint: {
+    color: MiraDesign.color.inkSoft,
+    fontSize: 12,
+    fontWeight: '700',
+    lineHeight: 17,
   },
   primaryButton: {
     alignItems: 'center',

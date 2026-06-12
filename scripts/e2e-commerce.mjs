@@ -10,7 +10,9 @@ const tenantSlug = process.env.MIRA_DEMO_TENANT_SLUG ?? 'demo-hospital';
 const ADMIN_EMAIL = 'e2e-admin@miracare.dev';
 const DIRECT_CUSTOMER_EMAIL = 'e2e-customer@miracare.dev';
 const REFERRED_CUSTOMER_EMAIL = 'e2e-referred-customer@miracare.dev';
+const REFERRER_EMAIL = 'e2e-referrer@miracare.dev';
 const REFERRER_NAME = 'E2E Commerce Referrer';
+const ASSISTED_BUYER_PHONES = ['0844444444', '0855555555', '0866666666', '0877777777'];
 
 if (!supabaseUrl || !serviceRoleKey || !anonKey) {
   throw new Error('Set SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, and SUPABASE_ANON_KEY before running commerce E2E.');
@@ -28,6 +30,7 @@ const created = {
   branchIds: [],
   orderIds: [],
   productIds: [],
+  tenantIds: [],
 };
 let adminAccessToken = null;
 let tenant = null;
@@ -53,7 +56,7 @@ try {
 async function run() {
   tenant = await loadTenant();
   const product = await loadProduct(tenant.id);
-  const [admin, directCustomer, referredCustomer] = await Promise.all([
+  const [admin, directCustomer, referredCustomer, referrerUser] = await Promise.all([
     createAuthUserSession({
       email: ADMIN_EMAIL,
       purpose: 'miracare-v2-commerce-e2e-admin',
@@ -66,10 +69,14 @@ async function run() {
       email: REFERRED_CUSTOMER_EMAIL,
       purpose: 'miracare-v2-commerce-e2e-customer',
     }),
+    createAuthUserSession({
+      email: REFERRER_EMAIL,
+      purpose: 'miracare-v3-assisted-purchase-e2e-referrer',
+    }),
   ]);
 
   adminAccessToken = admin.accessToken;
-  created.authUserIds.push(admin.user.id, directCustomer.user.id, referredCustomer.user.id);
+  created.authUserIds.push(admin.user.id, directCustomer.user.id, referredCustomer.user.id, referrerUser.user.id);
   await cleanupResidualTestData(tenant.id, created.authUserIds);
   await seedAdminMembership(tenant.id, admin.user.id);
 
@@ -87,7 +94,7 @@ async function run() {
   });
   await assertCommissionEntries(direct.orderId, 0, 'direct purchase should not create commission entries');
 
-  const referrer = await createReferrer(tenant.id);
+  const referrer = await createReferrer(tenant.id, referrerUser.user.id);
   const referred = await runPurchaseFlow({
     buyerName: 'E2E Referred Customer',
     buyerPhone: '0822222222',
@@ -127,13 +134,15 @@ async function run() {
     await runV3ChatCommerceFlow({
       adminAccessToken,
       customerAccessToken: directCustomer.accessToken,
+      referrer,
+      referrerAccessToken: referrerUser.accessToken,
       tenantId: tenant.id,
     });
   } else {
     console.log('e2e-commerce: SKIP v3 branch UX checks (branches/product_branches schema not applied on this target)');
   }
 
-  console.log('e2e-commerce: PASS (direct purchase, admin confirm, referral attribution, commission snapshot, and v3 commerce checks when available)');
+  console.log('e2e-commerce: PASS (direct purchase, admin confirm, referral attribution, assisted purchase, commission snapshot, and v3 commerce checks when available)');
 }
 
 async function loadTenant() {
@@ -186,12 +195,13 @@ async function seedAdminMembership(tenantId, authUserId) {
   }
 }
 
-async function createReferrer(tenantId) {
+async function createReferrer(tenantId, authUserId) {
   const row = await mustSingle(
     service
       .from('referrers')
       .insert({
         active: true,
+        auth_user_id: authUserId,
         commission_scheme: {
           by_category: {},
           default: 10,
@@ -201,12 +211,13 @@ async function createReferrer(tenantId) {
         tenant_id: tenantId,
         type: 'staff',
       })
-      .select('id,tenant_id,ref_code,commission_scheme')
+      .select('id,tenant_id,ref_code,commission_scheme,auth_user_id')
       .single(),
     'Unable to create commerce E2E referrer.',
   );
 
   assert(/^[0-9A-HJKMNP-TV-Z]{6}$/.test(row.ref_code), `generated ref_code has invalid shape: ${row.ref_code}`);
+  assert(row.auth_user_id === authUserId, 'created referrer should be linked to the disposable auth user');
 
   return row;
 }
@@ -294,7 +305,7 @@ async function runPurchaseFlow({ buyerName, buyerPhone, customerAccessToken, lab
   };
 }
 
-async function runV3ChatCommerceFlow({ customerAccessToken, tenantId }) {
+async function runV3ChatCommerceFlow({ customerAccessToken, referrer, referrerAccessToken, tenantId }) {
   const suffix = randomUUID().slice(0, 8);
   const products = await seedV3ProductsAndBranches(tenantId, suffix);
   const multi = await postChat(customerAccessToken, {
@@ -407,9 +418,125 @@ async function runV3ChatCommerceFlow({ customerAccessToken, tenantId }) {
   assert(single.order?.step === 'form', 'v3 single-branch product should open form step');
   assert(!single.order?.branches?.length, 'v3 single-branch product should not include branch choices');
   created.orderIds.push(single.order.id);
+
+  await runAssistedPurchaseFlow({
+    products,
+    referrer,
+    referrerAccessToken,
+  });
+}
+
+async function runAssistedPurchaseFlow({ products, referrer, referrerAccessToken }) {
+  const multiBranches = await postEdge('referrer-order', referrerAccessToken, {
+    action: 'list_branches',
+    catalog_key: products.multi.catalog_key,
+    tenant_slug: tenantSlug,
+  });
+
+  assert(multiBranches.branches?.length === 2, `assisted purchase should expose 2 multi-product branches, got ${multiBranches.branches?.length ?? 0}`);
+
+  await expectEdgeError('referrer-order', referrerAccessToken, {
+    action: 'create_order',
+    buyer_age: 36,
+    buyer_name: 'E2E Assisted Missing Branch',
+    buyer_phone: '0844444444',
+    catalog_key: products.multi.catalog_key,
+    tenant_slug: tenantSlug,
+  }, 'VALIDATION', 'assisted purchase without branch should fail for multi-branch product');
+
+  await expectEdgeError('referrer-order', referrerAccessToken, {
+    action: 'create_order',
+    branch_id: products.single.branch_id,
+    buyer_age: 36,
+    buyer_name: 'E2E Assisted Wrong Branch',
+    buyer_phone: '0855555555',
+    catalog_key: products.multi.catalog_key,
+    tenant_slug: tenantSlug,
+  }, 'VALIDATION', 'assisted purchase should reject branch ids not attached to the product');
+
+  await expectEdgeError('referrer-order', referrerAccessToken, {
+    action: 'create_order',
+    branch_id: products.cross_tenant_branch_id,
+    buyer_age: 36,
+    buyer_name: 'E2E Assisted Cross Tenant Branch',
+    buyer_phone: '0844444444',
+    catalog_key: products.multi.catalog_key,
+    tenant_slug: tenantSlug,
+  }, 'VALIDATION', 'assisted purchase should reject cross-tenant branch ids');
+
+  const chosenBranch = multiBranches.branches[0];
+  const multi = await postEdge('referrer-order', referrerAccessToken, {
+    action: 'create_order',
+    branch_id: chosenBranch.id,
+    buyer_age: 36,
+    buyer_name: 'E2E Assisted Multi',
+    buyer_phone: '0866666666',
+    catalog_key: products.multi.catalog_key,
+    preferred_date: '2026-07-02',
+    tenant_slug: tenantSlug,
+  });
+
+  assert(multi.order?.status === 'awaiting_payment', 'assisted multi-branch order should land awaiting_payment');
+  assert(multi.order?.step === 'qr', 'assisted multi-branch order should return QR step');
+  assert(multi.order?.branch_name === chosenBranch.name, 'assisted multi-branch order should expose resolved branch name');
+  assertPromptPayPayload(multi.order?.qr_payload, 'assisted multi-branch order should include a valid PromptPay payload');
+  created.orderIds.push(multi.order.id);
+
+  const multiOrder = await loadAssistedOrder(multi.order.id);
+
+  assert(multiOrder.status === 'awaiting_payment', 'assisted multi-branch DB order should be awaiting_payment');
+  assert(multiOrder.branch_id === chosenBranch.id, 'assisted multi-branch DB order should store branch_id');
+  assert(multiOrder.buyer_age === 36, 'assisted multi-branch DB order should store buyer_age');
+  assert(multiOrder.referrer_id === referrer.id, 'assisted multi-branch DB order should store referrer_id');
+
+  const paid = await postEdge('referrer-order', referrerAccessToken, {
+    action: 'payment_done',
+    order_id: multi.order.id,
+    tenant_slug: tenantSlug,
+  });
+
+  assert(paid.order?.status === 'submitted', 'assisted payment_done should move order to submitted');
+
+  const confirmed = await postEdge('admin-order-action', adminAccessToken, {
+    action: 'confirm',
+    order_id: multi.order.id,
+  });
+
+  assert(confirmed.order?.status === 'confirmed', 'assisted referrer purchase: admin confirm should move to confirmed');
+  await assertCommissionEntries(multi.order.id, 1, 'assisted referrer purchase should create one commission entry');
+
+  const single = await postEdge('referrer-order', referrerAccessToken, {
+    action: 'create_order',
+    buyer_age: 44,
+    buyer_name: 'E2E Assisted Single',
+    buyer_phone: '0877777777',
+    catalog_key: products.single.catalog_key,
+    tenant_slug: tenantSlug,
+  });
+
+  assert(single.order?.status === 'awaiting_payment', 'assisted single-branch order should land awaiting_payment');
+  assert(single.order?.branch_name, 'assisted single-branch order should expose auto-assigned branch name');
+  assertPromptPayPayload(single.order?.qr_payload, 'assisted single-branch order should include a valid PromptPay payload');
+  created.orderIds.push(single.order.id);
+
+  const singleOrder = await loadAssistedOrder(single.order.id);
+
+  assert(singleOrder.branch_id === products.single.branch_id, 'assisted single-branch DB order should auto-assign branch_id');
+  assert(singleOrder.buyer_age === 44, 'assisted single-branch DB order should store buyer_age');
 }
 
 async function seedV3ProductsAndBranches(tenantId, suffix) {
+  const otherTenant = await mustSingle(
+    service
+      .from('tenants')
+      .insert({
+        display_name: `E2E Other Tenant ${suffix}`,
+        slug: `e2e-other-${suffix}`,
+      })
+      .select('id')
+      .single(),
+    'Unable to seed v3 E2E cross-tenant tenant.',
+  );
   const [branchA, branchB, branchSingle] = await mustMany(
     service
       .from('branches')
@@ -442,6 +569,21 @@ async function seedV3ProductsAndBranches(tenantId, suffix) {
       .select('id,name'),
     'Unable to seed v3 E2E branches.',
   );
+  const crossTenantBranch = await mustSingle(
+    service
+      .from('branches')
+      .insert({
+        active: true,
+        address: 'V3 E2E Other Tenant Address',
+        district: 'บางรัก',
+        name: `V3 E2E ต่าง tenant ${suffix}`,
+        sort: 40,
+        tenant_id: otherTenant.id,
+      })
+      .select('id')
+      .single(),
+    'Unable to seed v3 E2E cross-tenant branch.',
+  );
   const [multi, single] = await mustMany(
     service
       .from('products')
@@ -469,8 +611,9 @@ async function seedV3ProductsAndBranches(tenantId, suffix) {
     'Unable to seed v3 E2E products.',
   );
 
-  created.branchIds.push(branchA.id, branchB.id, branchSingle.id);
+  created.branchIds.push(branchA.id, branchB.id, branchSingle.id, crossTenantBranch.id);
   created.productIds.push(multi.id, single.id);
+  created.tenantIds.push(otherTenant.id);
 
   await checked(
     service.from('product_branches').insert([
@@ -482,8 +625,15 @@ async function seedV3ProductsAndBranches(tenantId, suffix) {
   );
 
   return {
-    multi,
-    single,
+    multi: {
+      ...multi,
+      branch_ids: [branchA.id, branchB.id],
+    },
+    single: {
+      ...single,
+      branch_id: branchSingle.id,
+    },
+    cross_tenant_branch_id: crossTenantBranch.id,
   };
 }
 
@@ -579,6 +729,29 @@ async function postEdge(functionName, jwt, body) {
   return envelope.data;
 }
 
+async function expectEdgeError(functionName, jwt, body, expectedCode, label) {
+  const response = await fetch(`${endpointBase}/functions/v1/${functionName}`, {
+    body: JSON.stringify(body),
+    headers: {
+      Authorization: `Bearer ${jwt}`,
+      apikey: anonKey,
+      'Content-Type': 'application/json',
+    },
+    method: 'POST',
+  });
+  const text = await response.text();
+  let envelope = null;
+
+  try {
+    envelope = text ? JSON.parse(text) : null;
+  } catch {
+    throw new Error(`${label}: ${functionName} returned non-JSON response with status ${response.status}.`);
+  }
+
+  assert(!response.ok || envelope?.ok === false, `${label}: expected ${functionName} to fail`);
+  assert(envelope?.error?.code === expectedCode, `${label}: expected ${expectedCode}, got ${envelope?.error?.code ?? 'missing error code'}`);
+}
+
 async function countSystemNotices(sessionId) {
   const { count, error } = await service
     .from('chat_messages')
@@ -614,6 +787,17 @@ async function loadOrderForCommission(orderId) {
       .eq('id', orderId)
       .single(),
     `Unable to load order ${orderId} for commission assertion.`,
+  );
+}
+
+async function loadAssistedOrder(orderId) {
+  return mustSingle(
+    service
+      .from('orders')
+      .select('id,status,branch_id,buyer_age,referrer_id')
+      .eq('id', orderId)
+      .single(),
+    `Unable to load assisted order ${orderId}.`,
   );
 }
 
@@ -719,6 +903,10 @@ async function cleanupCreatedV3Catalog() {
   if (created.branchIds.length > 0) {
     await deleteByIds('branches', created.branchIds);
   }
+
+  if (created.tenantIds.length > 0) {
+    await deleteByIds('tenants', created.tenantIds);
+  }
 }
 
 async function cancelCreatedOrders() {
@@ -752,7 +940,11 @@ async function cleanupResidualTestData(tenantId, authUserIds) {
       'Unable to find residual commerce E2E customers.',
     )
     : [];
-  const customerIds = customers.map((row) => row.id);
+  const assistedCustomers = await mustMany(
+    service.from('customers').select('id').eq('tenant_id', tenantId).in('phone', ASSISTED_BUYER_PHONES),
+    'Unable to find residual assisted commerce E2E customers.',
+  );
+  const customerIds = [...new Set([...customers, ...assistedCustomers].map((row) => row.id))];
   const referrers = await mustMany(
     service.from('referrers').select('id').eq('tenant_id', tenantId).eq('name', REFERRER_NAME),
     'Unable to find residual commerce E2E referrers.',
