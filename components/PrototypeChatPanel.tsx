@@ -331,8 +331,9 @@ type PreferredDateOption = {
   weekdayLabel: string;
 };
 
-const preferredDateWeekdays = ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'];
+const preferredDateWeekdays = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
 const preferredDateMonths = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+const preferredDateMonthTitles = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const preferredStartTimes = ['07:00', '09:00', '13:00', '15:00'];
 const preferredEndTimes = ['11:00', '15:00', '17:00', '19:00'];
 
@@ -349,23 +350,54 @@ function addPreferredDateDays(date: Date, days: number) {
   return next;
 }
 
-function createPreferredDateOptions() {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+function addPreferredMonths(date: Date, months: number) {
+  return new Date(date.getFullYear(), date.getMonth() + months, 1);
+}
 
-  return Array.from({ length: 12 }, (_, index): PreferredDateOption => {
-    const date = addPreferredDateDays(today, index + 1);
-    const dayNumber = date.getDate().toLocaleString('th-TH');
-    const monthLabel = preferredDateMonths[date.getMonth()] ?? '';
+function createPreferredDateOption(date: Date): PreferredDateOption {
+  const dayNumber = `${date.getDate()}`;
+  const monthLabel = preferredDateMonths[date.getMonth()] ?? '';
 
-    return {
-      dayNumber,
-      key: preferredDateKey(date),
-      monthLabel,
-      shortLabel: `${dayNumber} ${monthLabel}`,
-      weekdayLabel: preferredDateWeekdays[date.getDay()] ?? '',
-    };
-  });
+  return {
+    dayNumber,
+    key: preferredDateKey(date),
+    monthLabel,
+    shortLabel: `${dayNumber} ${monthLabel}`,
+    weekdayLabel: preferredDateWeekdays[(date.getDay() + 6) % 7] ?? '',
+  };
+}
+
+function preferredDateOptionFromKey(key: string) {
+  const [year, month, day] = key.split('-').map((part) => Number.parseInt(part, 10));
+
+  if (!year || !month || !day) {
+    return undefined;
+  }
+
+  return createPreferredDateOption(new Date(year, month - 1, day));
+}
+
+function createPreferredDateOptions(monthDate: Date) {
+  const year = monthDate.getFullYear();
+  const month = monthDate.getMonth();
+  const firstDay = new Date(year, month, 1);
+  const leadingBlanks = (firstDay.getDay() + 6) % 7;
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const cells: Array<PreferredDateOption | null> = Array.from({ length: leadingBlanks }, () => null);
+
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    cells.push(createPreferredDateOption(new Date(year, month, day)));
+  }
+
+  while (cells.length % 7 !== 0) {
+    cells.push(null);
+  }
+
+  return cells;
+}
+
+function preferredMonthTitle(date: Date) {
+  return `${preferredDateMonthTitles[date.getMonth()] ?? ''} ${date.getFullYear()}`;
 }
 
 function formatPreferredDateRange(start: PreferredDateOption | undefined, end: PreferredDateOption | undefined, startTime: string, endTime: string) {
@@ -547,20 +579,24 @@ function PrototypeOrderFormCard({
   order: NonNullable<OrderPanelState>;
 }) {
   const cardWidth = useWideChatCardWidth();
-  const preferredDayOptions = useMemo(() => createPreferredDateOptions(), []);
+  const initialRangeStart = useMemo(() => addPreferredDateDays(new Date(), 1), []);
+  const initialRangeEnd = useMemo(() => addPreferredDateDays(new Date(), 3), []);
+  const [visibleMonthDate, setVisibleMonthDate] = useState(() => new Date(initialRangeStart.getFullYear(), initialRangeStart.getMonth(), 1));
+  const preferredDayOptions = useMemo(() => createPreferredDateOptions(visibleMonthDate), [visibleMonthDate]);
   const [buyerName, setBuyerName] = useState('');
   const [buyerPhone, setBuyerPhone] = useState('');
   const [buyerAge, setBuyerAge] = useState('');
-  const [rangeStartKey, setRangeStartKey] = useState(() => preferredDayOptions[1]?.key ?? preferredDayOptions[0]?.key ?? '');
-  const [rangeEndKey, setRangeEndKey] = useState(() => preferredDayOptions[3]?.key ?? preferredDayOptions[1]?.key ?? '');
+  const [rangeStartKey, setRangeStartKey] = useState(() => preferredDateKey(initialRangeStart));
+  const [rangeEndKey, setRangeEndKey] = useState(() => preferredDateKey(initialRangeEnd));
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [startTime, setStartTime] = useState(preferredStartTimes[1] ?? '09:00');
   const [endTime, setEndTime] = useState(preferredEndTimes[1] ?? '15:00');
   const [formError, setFormError] = useState<string | null>(null);
   const [didSubmit, setDidSubmit] = useState(false);
   const ageDigits = buyerAge.replace(/[^\d]/g, '');
   const ageValue = Number.parseInt(ageDigits, 10);
-  const rangeStart = preferredDayOptions.find((day) => day.key === rangeStartKey);
-  const rangeEnd = preferredDayOptions.find((day) => day.key === rangeEndKey);
+  const rangeStart = preferredDateOptionFromKey(rangeStartKey);
+  const rangeEnd = preferredDateOptionFromKey(rangeEndKey);
   const preferredDateRange = formatPreferredDateRange(rangeStart, rangeEnd, startTime, endTime);
   const rangeSummary = rangeStart && rangeEnd ? `${rangeStart.shortLabel} - ${rangeEnd.shortLabel}` : rangeStart ? `${rangeStart.shortLabel} - เลือกวันสุดท้าย` : 'เลือกช่วงวันที่';
   const canSubmit = buyerName.trim().length > 0 && buyerPhone.trim().length > 0 && Number.isFinite(ageValue) && ageValue > 0 && Boolean(preferredDateRange) && startTime < endTime;
@@ -592,6 +628,7 @@ function PrototypeOrderFormCard({
     }
 
     setRangeEndKey(dayKey);
+    setIsCalendarOpen(false);
   }
 
   function selectStartTimeOption(time: string) {
@@ -693,46 +730,78 @@ function PrototypeOrderFormCard({
           </View>
         </View>
 
-        <View style={styles.orderDateRangeBlock}>
-          <View style={styles.orderDateRangeHeader}>
-            <View style={styles.orderDateRangeCopy}>
-              <Text style={styles.orderInputLabel}>ช่วงวันที่สะดวก</Text>
-              <Text numberOfLines={1} style={styles.orderDateRangeSummary}>
+        <View style={styles.orderDatePickerBlock}>
+          <Text style={styles.orderInputLabel}>ช่วงวันที่สะดวก</Text>
+          <Pressable
+            disabled={isSubmitLocked}
+            onPress={() => setIsCalendarOpen((current) => !current)}
+            style={({ pressed }) => [styles.orderDatePickerButton, pressed && !isSubmitLocked ? styles.orderDatePickerButtonPressed : null]}
+          >
+            <View style={styles.orderDatePickerCopy}>
+              <Text numberOfLines={1} style={styles.orderDatePickerTitle}>
                 {rangeSummary}
               </Text>
+              <Text numberOfLines={1} style={styles.orderDatePickerMeta}>
+                {startTime} - {endTime}
+              </Text>
             </View>
-            <View style={styles.orderDateRangePill}>
-              <Text style={styles.orderDateRangePillText}>Range</Text>
+            <Text style={styles.orderDatePickerChevron}>{isCalendarOpen ? '×' : '›'}</Text>
+          </Pressable>
+
+          {isCalendarOpen ? (
+            <View style={styles.orderCalendarPanel}>
+              <View style={styles.orderCalendarHeader}>
+                <Text style={styles.orderCalendarTitle}>{preferredMonthTitle(visibleMonthDate)}</Text>
+                <View style={styles.orderCalendarNav}>
+                  <Pressable onPress={() => setVisibleMonthDate((current) => addPreferredMonths(current, -1))} style={({ pressed }) => [styles.orderCalendarNavButton, pressed ? styles.orderCalendarNavButtonPressed : null]}>
+                    <Text style={styles.orderCalendarNavText}>‹</Text>
+                  </Pressable>
+                  <Pressable onPress={() => setVisibleMonthDate((current) => addPreferredMonths(current, 1))} style={({ pressed }) => [styles.orderCalendarNavButton, pressed ? styles.orderCalendarNavButtonPressed : null]}>
+                    <Text style={styles.orderCalendarNavText}>›</Text>
+                  </Pressable>
+                </View>
+              </View>
+
+              <View style={styles.orderCalendarDivider} />
+
+              <View style={styles.orderCalendarWeekRow}>
+                {preferredDateWeekdays.map((weekday) => (
+                  <Text key={weekday} style={styles.orderCalendarWeekday}>
+                    {weekday}
+                  </Text>
+                ))}
+              </View>
+
+              <View style={styles.orderCalendarGrid}>
+                {preferredDayOptions.map((day, index) => {
+                  if (!day) {
+                    return <View key={`blank-${index}`} style={styles.orderCalendarCell} />;
+                  }
+
+                  const isStart = day.key === rangeStartKey;
+                  const isEnd = day.key === rangeEndKey;
+                  const isInside = Boolean(rangeStartKey && rangeEndKey && day.key > rangeStartKey && day.key < rangeEndKey);
+                  const isSelected = isStart || isEnd;
+
+                  return (
+                    <Pressable
+                      disabled={isSubmitLocked}
+                      key={day.key}
+                      onPress={() => selectRangeDay(day.key)}
+                      style={({ pressed }) => [
+                        styles.orderCalendarCell,
+                        isInside ? styles.orderCalendarCellInRange : null,
+                        isSelected ? styles.orderCalendarCellSelected : null,
+                        pressed && !isSubmitLocked ? styles.orderCalendarCellPressed : null,
+                      ]}
+                    >
+                      <Text style={[styles.orderCalendarDateText, isInside ? styles.orderCalendarDateTextInRange : null, isSelected ? styles.orderCalendarDateTextSelected : null]}>{day.dayNumber}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
             </View>
-          </View>
-
-          <View style={styles.orderDateRangeGrid}>
-            {preferredDayOptions.map((day) => {
-              const isStart = day.key === rangeStartKey;
-              const isEnd = day.key === rangeEndKey;
-              const isInside = Boolean(rangeStartKey && rangeEndKey && day.key > rangeStartKey && day.key < rangeEndKey);
-              const isSelected = isStart || isEnd;
-
-              return (
-                <Pressable
-                  disabled={isSubmitLocked}
-                  key={day.key}
-                  onPress={() => selectRangeDay(day.key)}
-                  style={({ pressed }) => [
-                    styles.orderDateButton,
-                    isInside ? styles.orderDateButtonInside : null,
-                    isStart ? styles.orderDateButtonSelected : null,
-                    isEnd ? styles.orderDateButtonEndSelected : null,
-                    pressed && !isSubmitLocked ? styles.orderDateButtonPressed : null,
-                  ]}
-                >
-                  <Text style={[styles.orderDateWeekday, isSelected ? styles.orderDateTextSelected : null]}>{day.weekdayLabel}</Text>
-                  <Text style={[styles.orderDateNumber, isSelected ? styles.orderDateTextSelected : null]}>{day.dayNumber}</Text>
-                  <Text style={[styles.orderDateMonth, isSelected ? styles.orderDateTextSelected : null]}>{day.monthLabel}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
+          ) : null}
         </View>
 
         <View style={styles.orderTimeRangeBlock}>
@@ -1899,106 +1968,149 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 0,
   },
-  orderDateRangeBlock: {
-    backgroundColor: 'rgba(255,255,255,0.32)',
-    borderColor: 'rgba(255,255,255,0.64)',
-    borderRadius: 16,
-    borderWidth: 1,
-    gap: 9,
-    padding: 9,
+  orderDatePickerBlock: {
+    gap: 6,
   },
-  orderDateRangeHeader: {
+  orderDatePickerButton: {
     alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.68)',
+    borderColor: 'rgba(255,255,255,0.86)',
+    borderRadius: 15,
+    borderWidth: 1,
     flexDirection: 'row',
-    gap: 8,
+    gap: 10,
     justifyContent: 'space-between',
+    minHeight: 46,
+    paddingHorizontal: 12,
   },
-  orderDateRangeCopy: {
+  orderDatePickerButtonPressed: {
+    opacity: 0.84,
+    transform: [{ scale: 0.99 }],
+  },
+  orderDatePickerCopy: {
     flex: 1,
     minWidth: 0,
   },
-  orderDateRangeSummary: {
-    color: '#31446F',
-    fontSize: 10.7,
+  orderDatePickerTitle: {
+    color: '#262A34',
+    fontSize: 11.4,
     fontWeight: '900',
-    lineHeight: 13.5,
-    marginTop: 1,
+    lineHeight: 14,
   },
-  orderDateRangePill: {
-    backgroundColor: 'rgba(92,140,255,0.16)',
-    borderColor: 'rgba(255,255,255,0.72)',
-    borderRadius: 999,
+  orderDatePickerMeta: {
+    color: '#6B7287',
+    fontSize: 9,
+    fontWeight: '800',
+    lineHeight: 12,
+    marginTop: 2,
+  },
+  orderDatePickerChevron: {
+    color: '#F014C8',
+    fontSize: 22,
+    fontWeight: '900',
+    lineHeight: 24,
+  },
+  orderCalendarPanel: {
+    backgroundColor: '#F3F2FB',
+    borderColor: 'rgba(40,40,64,0.09)',
+    borderRadius: 5,
     borderWidth: 1,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
+    overflow: 'hidden',
+    paddingBottom: 12,
+    shadowColor: '#77718E',
+    shadowOffset: { height: 9, width: 0 },
+    shadowOpacity: 0.14,
+    shadowRadius: 16,
   },
-  orderDateRangePillText: {
-    color: '#4F70EE',
-    fontSize: 8.4,
+  orderCalendarHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    minHeight: 50,
+    paddingLeft: 16,
+    paddingRight: 8,
+  },
+  orderCalendarTitle: {
+    color: '#11131B',
+    fontSize: 20,
     fontWeight: '900',
+    lineHeight: 24,
   },
-  orderDateRangeGrid: {
+  orderCalendarNav: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  orderCalendarNavButton: {
+    alignItems: 'center',
+    backgroundColor: '#F014C8',
+    borderRadius: 4,
+    height: 34,
+    justifyContent: 'center',
+    width: 34,
+  },
+  orderCalendarNavButtonPressed: {
+    opacity: 0.78,
+    transform: [{ scale: 0.96 }],
+  },
+  orderCalendarNavText: {
+    color: '#FFFFFF',
+    fontSize: 25,
+    fontWeight: '900',
+    lineHeight: 28,
+  },
+  orderCalendarDivider: {
+    backgroundColor: 'rgba(51,52,72,0.14)',
+    height: 1,
+  },
+  orderCalendarWeekRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 15,
+    paddingTop: 13,
+  },
+  orderCalendarWeekday: {
+    color: '#11131B',
+    fontSize: 15,
+    fontWeight: '900',
+    lineHeight: 19,
+    textAlign: 'center',
+    width: '14.285%',
+  },
+  orderCalendarGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 6,
+    paddingHorizontal: 15,
+    paddingTop: 10,
+    rowGap: 3,
   },
-  orderDateButton: {
+  orderCalendarCell: {
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.54)',
-    borderColor: 'rgba(255,255,255,0.72)',
-    borderRadius: 13,
-    borderWidth: 1,
+    height: 32,
     justifyContent: 'center',
-    minHeight: 57,
-    paddingVertical: 6,
-    width: '23.1%',
+    width: '14.285%',
   },
-  orderDateButtonInside: {
-    backgroundColor: 'rgba(92,140,255,0.14)',
-    borderColor: 'rgba(92,140,255,0.2)',
+  orderCalendarCellInRange: {
+    backgroundColor: 'rgba(240,20,200,0.16)',
   },
-  orderDateButtonSelected: {
-    backgroundColor: '#5B7CFF',
-    borderColor: 'rgba(255,255,255,0.82)',
-    shadowColor: '#5B7CFF',
-    shadowOffset: { height: 6, width: 0 },
-    shadowOpacity: 0.18,
-    shadowRadius: 10,
+  orderCalendarCellSelected: {
+    backgroundColor: '#F014C8',
+    borderRadius: 4,
   },
-  orderDateButtonEndSelected: {
-    backgroundColor: '#F25AA6',
-    borderColor: 'rgba(255,255,255,0.82)',
-    shadowColor: '#F25AA6',
-    shadowOffset: { height: 6, width: 0 },
-    shadowOpacity: 0.16,
-    shadowRadius: 10,
+  orderCalendarCellPressed: {
+    opacity: 0.78,
   },
-  orderDateButtonPressed: {
-    opacity: 0.82,
-    transform: [{ scale: 0.98 }],
-  },
-  orderDateWeekday: {
-    color: '#69789E',
-    fontSize: 8.4,
-    fontWeight: '900',
-    lineHeight: 10,
-  },
-  orderDateNumber: {
-    color: '#31446F',
-    fontSize: 15.4,
-    fontWeight: '900',
+  orderCalendarDateText: {
+    color: '#373846',
+    fontSize: 14,
+    fontWeight: '700',
     lineHeight: 18,
-    marginTop: 1,
   },
-  orderDateMonth: {
-    color: '#607099',
-    fontSize: 7.8,
+  orderCalendarDateTextInRange: {
+    color: '#2B2D38',
     fontWeight: '800',
-    lineHeight: 10,
-    marginTop: 1,
   },
-  orderDateTextSelected: {
+  orderCalendarDateTextSelected: {
     color: '#FFFFFF',
+    fontWeight: '900',
   },
   orderTimeRangeBlock: {
     gap: 9,

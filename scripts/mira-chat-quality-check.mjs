@@ -165,7 +165,9 @@ assert(
 assert(
   'prototype order form uses date range selector',
   prototypePanelSource.includes('createPreferredDateOptions') &&
-    prototypePanelSource.includes('orderDateRangeGrid') &&
+    prototypePanelSource.includes('orderDatePickerButton') &&
+    prototypePanelSource.includes('orderCalendarPanel') &&
+    prototypePanelSource.includes('preferredMonthTitle') &&
     prototypePanelSource.includes('preferredStartTimes') &&
     prototypePanelSource.includes('preferredEndTimes') &&
     prototypePanelSource.includes('formatPreferredDateRange'),
