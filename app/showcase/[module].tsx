@@ -9,10 +9,10 @@ import { findShowcaseModule, type ShowcasePage } from '@/lib/showcase/registry';
 const logo = require('@/assets/images/mira-care-logo.png');
 
 const moduleNotes = {
-  admin: 'เริ่มจากแค็ตตาล็อก แล้วต่อด้วยคิวออเดอร์ สาขา และ partner admin เพื่อให้เห็นงานหลังบ้านจริง.',
-  'ai-chat': 'เริ่มจากหน้าแชท แล้วเปิดคำสั่งซื้อ รายละเอียดแพ็กเกจ และ prototype เฉพาะตอนขายภาพอนาคต.',
-  health: 'เริ่มจาก dashboard สุขภาพ แล้วเปิดผลตรวจ wearable และ profile ตาม use case ของลูกค้า.',
-  referral: 'เริ่มจากลิงก์ referral แล้วเปิด workspace ของ partner และหน้า commission admin.',
+  admin: 'เริ่มจากแค็ตตาล็อก แล้วต่อด้วยคิวออเดอร์ สาขา และ partner admin ทุกหน้ามีโหมดตัวอย่างเมื่อยังไม่ล็อกอิน.',
+  'ai-chat': 'เริ่มจากคำสั่งซื้อ รายละเอียดแพ็กเกจ และ prototype เฉพาะตอนขายภาพอนาคต ทุกหน้าเปิดดูได้ทันที.',
+  health: 'เริ่มจาก dashboard สุขภาพ แล้วเปิดผลตรวจ wearable และ profile ด้วยข้อมูลตัวอย่างเมื่อยังไม่ล็อกอิน.',
+  referral: 'เริ่มจากลิงก์ referral แล้วเปิด workspace ของ partner และหน้า commission admin แบบไม่ต้องล็อกอินก่อน.',
 } as const;
 
 export default function ShowcaseDirectoryScreen() {
@@ -32,7 +32,7 @@ export default function ShowcaseDirectoryScreen() {
           <Link href="/" asChild>
             <Pressable style={styles.backButton}>
               <SymbolView name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }} size={18} tintColor="#12343B" />
-              <Text style={styles.backText}>Categories</Text>
+              <Text style={styles.backText}>หมวดหมู่</Text>
             </Pressable>
           </Link>
           <Image resizeMode="contain" source={logo} style={styles.logo} />
@@ -51,13 +51,13 @@ export default function ShowcaseDirectoryScreen() {
         </View>
 
         <View style={styles.notePanel}>
-          <Text style={styles.noteLabel}>Presenter cue</Text>
+          <Text style={styles.noteLabel}>คิวพรีเซนต์</Text>
           <Text style={styles.noteText}>{moduleNotes[module.id]}</Text>
         </View>
 
         <View style={styles.listHeader}>
-          <Text style={styles.listTitle}>Available pages</Text>
-          <Text style={styles.listMeta}>real routes</Text>
+          <Text style={styles.listTitle}>หน้าที่เปิดได้</Text>
+          <Text style={styles.listMeta}>ไม่ต้องล็อกอิน</Text>
         </View>
 
         <View style={styles.routeList}>
@@ -90,7 +90,7 @@ function RouteRow({ accent, index, isWide, page }: { accent: string; index: numb
 
       <Link href={page.href as Href} asChild>
         <Pressable style={StyleSheet.flatten([styles.openButton, { borderColor: accent }])}>
-          <Text style={[styles.openButtonText, { color: accent }]}>Open</Text>
+          <Text style={[styles.openButtonText, { color: accent }]}>เปิด</Text>
           <SymbolView name={{ ios: 'arrow.up.right', android: 'open_in_new', web: 'open_in_new' }} size={18} tintColor={accent} />
         </Pressable>
       </Link>

@@ -33,14 +33,14 @@ export default function ProductOverviewScreen() {
         <View style={styles.topBar}>
           <Image resizeMode="contain" source={logo} style={styles.logo} />
           <View style={styles.topBadge}>
-            <Text style={styles.topBadgeText}>Client demo tour</Text>
+            <Text style={styles.topBadgeText}>No-login demo</Text>
           </View>
         </View>
 
         <View style={styles.titleBlock}>
           <Text style={styles.kicker}>MiraCare product showcase</Text>
-          <Text style={[styles.title, !useTwoColumns ? styles.titleCompact : null]}>Choose a system category.</Text>
-          <Text style={styles.subtitle}>Each category opens a curated list of the real URL pages available in this build.</Text>
+          <Text style={[styles.title, !useTwoColumns ? styles.titleCompact : null]}>เลือกหมวดระบบ</Text>
+          <Text style={styles.subtitle}>ทุกหน้าที่อยู่ใน tour นี้เปิดดูได้ทันทีโดยไม่ต้องล็อกอิน ข้อมูลจริงจะเขียนได้เฉพาะเมื่อมีสิทธิ์.</Text>
         </View>
 
         <View style={styles.moduleGrid}>
@@ -98,7 +98,7 @@ function ModuleTile({ index, module, useTwoColumns }: { index: number; module: S
           </View>
 
           <View style={styles.tileFooter}>
-            <Text style={[styles.openText, { color: module.accent }]}>View URLs</Text>
+            <Text style={[styles.openText, { color: module.accent }]}>เปิดรายการ URL</Text>
             <SymbolView name={{ ios: 'chevron.right', android: 'arrow_forward', web: 'arrow_forward' }} size={18} tintColor={module.accent} />
           </View>
         </View>
