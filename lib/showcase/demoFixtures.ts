@@ -113,6 +113,15 @@ export const showcaseDemoProducts: HospitalProduct[] = [
 export const showcaseDemoOrders: OrderStatusInfo[] = [
   {
     amount_baht: 2990,
+    booking_at: null,
+    branch_name: 'สาขาอโศก',
+    created_at: '2026-06-13T04:10:00.000Z',
+    id: 'demo-order-confirmed',
+    product_name: 'ตรวจสุขภาพ Basic Plus',
+    status: 'confirmed',
+  },
+  {
+    amount_baht: 2990,
     booking_at: '2026-06-18T03:00:00.000Z',
     branch_name: 'สาขาอโศก',
     created_at: '2026-06-12T03:20:00.000Z',
@@ -128,6 +137,24 @@ export const showcaseDemoOrders: OrderStatusInfo[] = [
     id: 'demo-order-booked',
     product_name: 'วัคซีนไข้หวัดใหญ่',
     status: 'booked',
+  },
+  {
+    amount_baht: 2990,
+    booking_at: '2026-06-08T03:00:00.000Z',
+    branch_name: 'สาขาอโศก',
+    created_at: '2026-06-07T03:20:00.000Z',
+    id: 'demo-order-done',
+    product_name: 'ตรวจสุขภาพ Basic Plus',
+    status: 'done',
+  },
+  {
+    amount_baht: 890,
+    booking_at: null,
+    branch_name: 'สาขาสยาม',
+    created_at: '2026-06-05T08:10:00.000Z',
+    id: 'demo-order-cancelled',
+    product_name: 'วัคซีนไข้หวัดใหญ่',
+    status: 'cancelled',
   },
 ];
 

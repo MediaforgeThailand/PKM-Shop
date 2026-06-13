@@ -211,14 +211,14 @@ DoD: ✅ 2026-06-12 `npm run showcase:route-audit` passes and fails correctly wh
 
 **S1 — Showcase Home + Module pages rebuild.**
 §4 + §5 exactly; branded fallback posters; poster asset slots `assets/showcase/<id>.png` (use fallback until owner drops screenshots); demo script content per module (Thai, owner reviews wording in PR).
-DoD: ❌ home renders 2×2 ≥760px / 1-col mobile; ❌ every row shows correct badge+auth chip from registry; ❌ no English-primary strings on presenter surfaces; ❌ `เปิดหน้า` appends `?tour=`; ❌ owner screenshot review.
+DoD: ✅ 2026-06-14 home renders 2×2 ≥760px / 1-col mobile; ✅ 2026-06-14 every row shows correct badge+auth chip from registry; ✅ 2026-06-14 no English-primary strings on presenter surfaces; ✅ 2026-06-14 `เปิดหน้า` appends `?tour=`; ❌ owner screenshot review.
 
 **S2 — Mockup pages (§6.1–6.5).**
-DoD: ❌ all five routes render logged-out with fixtures, zero network errors in console; ❌ ribbon present + registry `status:'mockup'|'concept'`; ❌ typed against `lib/types/api` (no `any` fixtures); ❌ `/order-status` redirects to `/orders`; ❌ route audit green.
+DoD: ❌ all five routes render logged-out with fixtures, zero network errors in console (`/admin/branches` remains a LIVE branch manager, not a mockup ribbon page); ✅ 2026-06-14 ribbon present + registry `status:'mockup'|'concept'` for `/orders`, `/admin/dashboard`, `/health/lab-upload`, `/showcase/line-preview`; ✅ 2026-06-14 typed against `lib/types/api` (no `any` fixtures); ✅ 2026-06-14 `/order-status` redirects to `/orders`; ✅ 2026-06-14 route audit green.
 
 **S3 — Tour ergonomics.**
 TourPill, registry-driven `/more`, copy-URL, env-gated demo sign-in.
-DoD: ❌ pill only with `?tour=`; ❌ demo sign-in absent when env flag unset (verify in build output); ❌ `/more` has no hand-written hrefs.
+DoD: ✅ 2026-06-14 pill only with `?tour=`; ✅ 2026-06-14 demo sign-in absent when env flag unset (verified in build output); ✅ 2026-06-14 `/more` has no hand-written hrefs.
 
 Each phase = separate PR; this file's checkboxes updated truthfully.
 

@@ -3,9 +3,12 @@ import { useFonts } from 'expo-font';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
+import { MD3LightTheme, PaperProvider } from 'react-native-paper';
 import 'react-native-reanimated';
 
+import { TourPill } from '@/components/showcase/TourPill';
 import { useColorScheme } from '@/components/useColorScheme';
+import { MiraDesign } from '@/constants/Design';
 import { miraQueryClient } from '@/lib/api/client';
 
 export {
@@ -19,6 +22,21 @@ export const unstable_settings = {
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
+
+const miraPaperTheme = {
+  ...MD3LightTheme,
+  colors: {
+    ...MD3LightTheme.colors,
+    background: MiraDesign.color.canvas,
+    error: MiraDesign.color.danger,
+    outline: MiraDesign.color.line,
+    primary: MiraDesign.color.blue,
+    secondary: MiraDesign.color.primary,
+    surface: MiraDesign.color.surface,
+    surfaceVariant: MiraDesign.color.blueSoft,
+  },
+  roundness: MiraDesign.radius.sm,
+};
 
 export default function RootLayout() {
   const [loaded, error] = useFonts({
@@ -48,30 +66,37 @@ function RootLayoutNav() {
 
   return (
     <QueryClientProvider client={miraQueryClient}>
-      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <Stack>
-          <Stack.Screen name="index" options={{ headerShown: false }} />
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="package-detail" options={{ headerShown: false }} />
-          <Stack.Screen name="checkout" options={{ headerShown: false }} />
-          <Stack.Screen name="orders" options={{ headerShown: false }} />
-          <Stack.Screen name="order-status" options={{ headerShown: false }} />
-          <Stack.Screen name="partner" options={{ headerShown: false }} />
-          <Stack.Screen name="admin-panel" options={{ headerShown: false }} />
-          <Stack.Screen name="admin/branches" options={{ headerShown: false }} />
-          <Stack.Screen name="admin/catalog" options={{ headerShown: false }} />
-          <Stack.Screen name="admin/orders" options={{ headerShown: false }} />
-          <Stack.Screen name="admin/referrers" options={{ headerShown: false }} />
-          <Stack.Screen name="sales-portal" options={{ headerShown: false }} />
-          <Stack.Screen name="staff-referral" options={{ headerShown: false }} />
-          <Stack.Screen name="user-profile" options={{ headerShown: false }} />
-          <Stack.Screen name="prototype" options={{ headerShown: false }} />
-          <Stack.Screen name="r/[ref_code]" options={{ headerShown: false }} />
-          <Stack.Screen name="body-overview" options={{ headerShown: false }} />
-          <Stack.Screen name="wearable-health" options={{ headerShown: false }} />
-          <Stack.Screen name="health-check-results" options={{ headerShown: false }} />
-        </Stack>
-      </ThemeProvider>
+      <PaperProvider theme={miraPaperTheme}>
+        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+          <Stack>
+            <Stack.Screen name="index" options={{ headerShown: false }} />
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen name="tour/[module]" options={{ headerShown: false }} />
+            <Stack.Screen name="package-detail" options={{ headerShown: false }} />
+            <Stack.Screen name="checkout" options={{ headerShown: false }} />
+            <Stack.Screen name="orders" options={{ headerShown: false }} />
+            <Stack.Screen name="order-status" options={{ headerShown: false }} />
+            <Stack.Screen name="partner" options={{ headerShown: false }} />
+            <Stack.Screen name="admin-panel" options={{ headerShown: false }} />
+            <Stack.Screen name="admin/branches" options={{ headerShown: false }} />
+            <Stack.Screen name="admin/catalog" options={{ headerShown: false }} />
+            <Stack.Screen name="admin/dashboard" options={{ headerShown: false }} />
+            <Stack.Screen name="admin/orders" options={{ headerShown: false }} />
+            <Stack.Screen name="admin/referrers" options={{ headerShown: false }} />
+            <Stack.Screen name="sales-portal" options={{ headerShown: false }} />
+            <Stack.Screen name="staff-referral" options={{ headerShown: false }} />
+            <Stack.Screen name="user-profile" options={{ headerShown: false }} />
+            <Stack.Screen name="prototype" options={{ headerShown: false }} />
+            <Stack.Screen name="r/[ref_code]" options={{ headerShown: false }} />
+            <Stack.Screen name="body-overview" options={{ headerShown: false }} />
+            <Stack.Screen name="wearable-health" options={{ headerShown: false }} />
+            <Stack.Screen name="health-check-results" options={{ headerShown: false }} />
+            <Stack.Screen name="health/lab-upload" options={{ headerShown: false }} />
+            <Stack.Screen name="showcase/line-preview" options={{ headerShown: false }} />
+          </Stack>
+          <TourPill />
+        </ThemeProvider>
+      </PaperProvider>
     </QueryClientProvider>
   );
 }

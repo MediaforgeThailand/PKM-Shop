@@ -1,82 +1,121 @@
 import { Link, type Href } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { BrandHeader, Screen, SectionHeader } from '@/components/MiraUI';
+import { AuthChip, Panel, ShowcaseHeader, ShowcaseScreen, StatusChip } from '@/components/showcase/ShowcaseUI';
 import { MiraDesign } from '@/constants/Design';
-
-type MenuItem = {
-  title: string;
-  body: string;
-  href: Href;
-};
-
-const menuItems: MenuItem[] = [
-  { title: 'Product overview', body: 'Client-facing tour for the four MiraCare product systems.', href: '/' },
-  { title: 'Order and booking', body: 'Post-payment instruction and booking status inside the user profile.', href: '/user-profile' },
-  { title: 'Partner referral', body: 'Referral links, commission, and payouts.', href: '/partner' },
-  { title: 'Admin panel', body: 'Central workspace for product review, RAG, and booking operations.', href: '/admin-panel' },
-  { title: 'Live orders admin', body: 'Live orders queue, booking actions, and transcript review.', href: '/admin/orders' },
-  { title: 'Referrer admin', body: 'Manage referrers, commission schemes, and payout states.', href: '/admin/referrers' },
-  { title: 'Manage products', body: 'Create, edit, archive, restore, and sync tenant products with Stripe.', href: '/admin/catalog' },
-  { title: 'Sales portal', body: 'Doctor and staff sales workspace for products, referral links, and commission dashboard.', href: '/sales-portal' },
-  { title: 'User profile', body: 'Identity, consent, goals, and health timeline.', href: '/user-profile' },
-];
+import { getShowcaseEntriesForModule, showcaseModuleIds, showcaseModuleMeta, type ShowcaseEntry } from '@/lib/showcase/registry';
 
 export default function MoreScreen() {
   return (
-    <Screen>
-      <BrandHeader
-        eyebrow="Operations"
-        title="User, partner, and hospital surfaces."
-        subtitle="These are the supporting flows around the product showcase and live demo routes."
-        compact
+    <ShowcaseScreen maxWidth={980}>
+      <ShowcaseHeader
+        eyebrow="MIRACARE ROUTES"
+        subtitle="รายการนี้ดึงจาก registry เดียวกับหน้า tour จึงสะท้อน route ที่ใช้งานจริงและ mockup ปัจจุบัน"
+        title="เมนูทั้งหมด"
       />
 
-      <SectionHeader title="Operations" meta="tap to open" />
-      {menuItems.map((item) => (
-        <Link key={item.title} href={item.href} asChild>
-          <Pressable style={styles.menuRow}>
-            <View style={styles.menuCopy}>
-              <Text style={styles.menuTitle}>{item.title}</Text>
-              <Text style={styles.menuBody}>{item.body}</Text>
+      {showcaseModuleIds.map((moduleId) => {
+        const meta = showcaseModuleMeta[moduleId];
+        const entries = getShowcaseEntriesForModule(moduleId, false);
+
+        return (
+          <Panel key={moduleId}>
+            <View style={styles.sectionHead}>
+              <View>
+                <Text style={styles.sectionEyebrow}>{meta.eyebrow_en}</Text>
+                <Text style={styles.sectionTitle}>{meta.title_th}</Text>
+              </View>
+              <Text style={styles.count}>{entries.length} หน้า</Text>
             </View>
-            <Text style={styles.chevron}>Go</Text>
-          </Pressable>
-        </Link>
-      ))}
-    </Screen>
+
+            <View style={styles.rowStack}>
+              {entries.map((entry) => (
+                <MenuRow key={entry.id} entry={entry} />
+              ))}
+            </View>
+          </Panel>
+        );
+      })}
+    </ShowcaseScreen>
+  );
+}
+
+function MenuRow({ entry }: { entry: ShowcaseEntry }) {
+  if (!entry.href) {
+    return null;
+  }
+
+  return (
+    <Link href={entry.href as Href} asChild>
+      <Pressable style={styles.menuRow}>
+        <View style={styles.menuCopy}>
+          <Text style={styles.menuPath}>{entry.path}</Text>
+          <Text style={styles.menuTitle}>{entry.label_th}</Text>
+        </View>
+        <View style={styles.badges}>
+          <StatusChip status={entry.status} />
+          <AuthChip auth={entry.auth} />
+        </View>
+      </Pressable>
+    </Link>
   );
 }
 
 const styles = StyleSheet.create({
+  sectionHead: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: MiraDesign.space.md,
+    justifyContent: 'space-between',
+  },
+  sectionEyebrow: {
+    color: MiraDesign.color.blue,
+    fontSize: 11,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+  },
+  sectionTitle: {
+    color: MiraDesign.color.ink,
+    fontSize: 20,
+    fontWeight: '900',
+    marginTop: 3,
+  },
+  count: {
+    color: MiraDesign.color.inkSoft,
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  rowStack: {
+    gap: MiraDesign.space.sm,
+  },
   menuRow: {
     alignItems: 'center',
-    backgroundColor: MiraDesign.color.surface,
-    borderColor: '#E6F1FA',
-    borderRadius: MiraDesign.radius.md,
+    backgroundColor: '#F7FBFF',
+    borderColor: '#D8E9F8',
+    borderRadius: MiraDesign.radius.sm,
     borderWidth: 1,
     flexDirection: 'row',
     gap: MiraDesign.space.md,
-    minHeight: 86,
-    padding: MiraDesign.space.lg,
+    justifyContent: 'space-between',
+    minHeight: 74,
+    padding: MiraDesign.space.md,
   },
   menuCopy: {
     flex: 1,
-    gap: MiraDesign.space.xs,
+    gap: 4,
+  },
+  menuPath: {
+    color: MiraDesign.color.blue,
+    fontSize: 11,
+    fontWeight: '900',
   },
   menuTitle: {
     color: MiraDesign.color.ink,
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '900',
   },
-  menuBody: {
-    color: MiraDesign.color.inkSoft,
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  chevron: {
-    color: MiraDesign.color.primary,
-    fontSize: 13,
-    fontWeight: '900',
+  badges: {
+    alignItems: 'flex-end',
+    gap: 5,
   },
 });

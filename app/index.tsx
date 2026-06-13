@@ -1,333 +1,363 @@
 import { Link } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
-import { SymbolView } from 'expo-symbols';
-import type { ImageSourcePropType } from 'react-native';
-import { Image, ImageBackground, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useMemo, useState } from 'react';
+import { Image, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
+import { AuthChip, MetricTile, Panel, PrimaryAction, ShowcaseHeader, ShowcaseScreen, StatusChip } from '@/components/showcase/ShowcaseUI';
 import { MiraDesign } from '@/constants/Design';
-import { showcaseModules, type ShowcaseModule, type ShowcaseModuleId } from '@/lib/showcase/registry';
+import { signInWithEmailPassword } from '@/lib/auth/useAuthSession';
+import { showcaseModules, getShowcaseEntriesForModule, type ShowcaseModule } from '@/lib/showcase/registry';
+import { supabaseConfigStatus } from '@/lib/supabase';
 
-const logo = require('@/assets/images/mira-care-logo.png');
+const brandMark = require('@/assets/images/mira-care-mark.png');
 
-const moduleImages: Record<ShowcaseModuleId, ImageSourcePropType> = {
-  admin: require('@/assets/images/product-preview-longevity.png'),
-  'ai-chat': require('@/assets/images/product-preview-heart.png'),
-  health: require('@/assets/images/mockup-health-check-results.png'),
-  referral: require('@/assets/images/mira-care-mark.png'),
+const moduleNumbers: Record<ShowcaseModule['id'], string> = {
+  admin: '02',
+  'ai-chat': '03',
+  health: '04',
+  referral: '01',
 };
 
-const moduleIcons = {
-  admin: { android: 'admin_panel_settings', ios: 'slider.horizontal.3', web: 'admin_panel_settings' },
-  'ai-chat': { android: 'chat', ios: 'message.and.waveform.fill', web: 'chat' },
-  health: { android: 'monitor_heart', ios: 'heart.text.square.fill', web: 'monitor_heart' },
-  referral: { android: 'link', ios: 'link', web: 'link' },
-} as const;
+const demoLoginEnabled = process.env.EXPO_PUBLIC_DEMO_LOGIN === '1';
 
-const totalPages = showcaseModules.reduce((sum, module) => sum + module.pages.length, 0);
+const demoAccounts = [
+  {
+    email: process.env.EXPO_PUBLIC_DEMO_ADMIN_EMAIL,
+    label: 'เข้าสู่ระบบเดโมแอดมิน',
+    password: process.env.EXPO_PUBLIC_DEMO_ADMIN_PASSWORD,
+  },
+  {
+    email: process.env.EXPO_PUBLIC_DEMO_CUSTOMER_EMAIL,
+    label: 'เข้าสู่ระบบเดโมลูกค้า',
+    password: process.env.EXPO_PUBLIC_DEMO_CUSTOMER_PASSWORD,
+  },
+];
 
 export default function ProductOverviewScreen() {
+  const [loginMessage, setLoginMessage] = useState<string | null>(null);
   const { width } = useWindowDimensions();
-  const isWide = width >= 860;
-  const isCompact = width < 620;
+  const isWide = width >= 760;
+
+  const totals = useMemo(() => {
+    const entries = showcaseModules.flatMap((module) => getShowcaseEntriesForModule(module.id, true));
+
+    return {
+      concept: entries.filter((entry) => entry.status === 'concept').length,
+      live: entries.filter((entry) => entry.status === 'live').length,
+      mockup: entries.filter((entry) => entry.status === 'mockup').length,
+      pages: entries.length,
+    };
+  }, []);
+
+  async function signInDemo(email: string | undefined, password: string | undefined, label: string) {
+    if (!email || !password) {
+      setLoginMessage('ยังไม่ได้ตั้งค่า demo account ใน env');
+      return;
+    }
+
+    try {
+      setLoginMessage(`กำลังเข้าสู่ระบบ: ${label}`);
+      await signInWithEmailPassword(email, password);
+      setLoginMessage('เข้าสู่ระบบเดโมแล้ว');
+    } catch (error) {
+      setLoginMessage(error instanceof Error ? error.message : 'เข้าสู่ระบบไม่สำเร็จ');
+    }
+  }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <ScrollView contentContainerStyle={[styles.container, isWide ? styles.containerWide : null]} showsVerticalScrollIndicator={false}>
-        <View style={styles.topBar}>
-          <Image resizeMode="contain" source={logo} style={styles.logo} />
-          <View style={styles.deckBadge}>
-            <SymbolView name={{ ios: 'play.rectangle.fill', android: 'play_circle', web: 'play_circle' }} size={18} tintColor={MiraDesign.color.primaryDeep} />
-            <Text style={styles.deckBadgeText}>Presenter</Text>
+    <ShowcaseScreen>
+      <ShowcaseHeader
+        actions={
+          <View style={styles.connectionBadge}>
+            <View style={[styles.connectionDot, supabaseConfigStatus.isConfigured ? styles.connectionDotLive : styles.connectionDotOffline]} />
+            <Text style={styles.connectionText}>{supabaseConfigStatus.isConfigured ? 'เชื่อมต่อระบบจริง' : 'โหมดออฟไลน์'}</Text>
           </View>
-        </View>
+        }
+        eyebrow="MIRACARE PLATFORM"
+        subtitle="ทัวร์หน้าที่ใช้คุยกับโรงพยาบาล แยกชัดว่าอะไรพร้อมใช้ อะไรเป็น mockup และอะไรเป็น concept"
+        title="เลือกระบบที่อยากดู"
+      />
 
-        <View style={[styles.hero, !isWide ? styles.heroStack : null]}>
-          <View style={styles.heroCopy}>
-            <Text style={styles.kicker}>SHOWCASE</Text>
-            <Text style={[styles.title, isCompact ? styles.titleCompact : null]}>เลือกฉากที่จะเปิด</Text>
-          </View>
-          <View style={styles.statsRail}>
-            <StatBlock value={showcaseModules.length} label="หมวด" />
-            <StatBlock value={totalPages} label="หน้า" />
-            <StatBlock value="0" label="login" />
-          </View>
-        </View>
+      <View style={[styles.metricRow, !isWide ? styles.metricRowStack : null]}>
+        <MetricTile label="หมวด UI" value={`${showcaseModules.length}`} detail="กดเข้า tour ได้ทุกหมวด" />
+        <MetricTile label="หน้าทั้งหมด" value={`${totals.pages}`} detail={`${totals.live} live / ${totals.mockup} mockup / ${totals.concept} concept`} />
+        <MetricTile label="Login" value="0" detail="หน้า tour เปิดดูได้ทันที" />
+      </View>
 
-        <View style={styles.moduleGrid}>
-          {showcaseModules.map((module, index) => (
-            <ModuleTile key={module.id} index={index} isWide={isWide} module={module} />
-          ))}
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+      <View style={styles.moduleGrid}>
+        {showcaseModules.map((module) => (
+          <ModulePoster key={module.id} isWide={isWide} module={module} />
+        ))}
+      </View>
+
+      {demoLoginEnabled ? (
+        <Panel style={styles.demoPanel}>
+          <View style={styles.demoCopy}>
+            <Text style={styles.demoTitle}>Demo sign-in</Text>
+            <Text style={styles.demoBody}>เปิดเฉพาะเมื่อ `EXPO_PUBLIC_DEMO_LOGIN=1` และต้องตั้งค่า account ผ่าน env</Text>
+            {loginMessage ? <Text style={styles.demoMessage}>{loginMessage}</Text> : null}
+          </View>
+          <View style={styles.demoActions}>
+            {demoAccounts.map((account) => (
+              <PrimaryAction
+                key={account.label}
+                disabled={!supabaseConfigStatus.isConfigured}
+                label={account.label}
+                onPress={() => void signInDemo(account.email, account.password, account.label)}
+              />
+            ))}
+          </View>
+        </Panel>
+      ) : null}
+    </ShowcaseScreen>
   );
 }
 
-function StatBlock({ label, value }: { label: string; value: number | string }) {
-  return (
-    <View style={styles.statBlock}>
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
-    </View>
-  );
-}
-
-function ModuleTile({ index, isWide, module }: { index: number; isWide: boolean; module: ShowcaseModule }) {
-  const previewPages = module.pages.slice(0, 3);
+function ModulePoster({ isWide, module }: { isWide: boolean; module: ShowcaseModule }) {
+  const entries = getShowcaseEntriesForModule(module.id, true);
+  const visibleEntries = getShowcaseEntriesForModule(module.id, false);
+  const statusSummary = {
+    concept: entries.filter((entry) => entry.status === 'concept').length,
+    live: entries.filter((entry) => entry.status === 'live').length,
+    mockup: entries.filter((entry) => entry.status === 'mockup').length,
+    planned: entries.filter((entry) => entry.status === 'planned').length,
+  };
 
   return (
     <Link href={{ pathname: '/tour/[module]', params: { module: module.id } }} asChild>
-      <Pressable style={StyleSheet.flatten([styles.moduleTile, isWide ? styles.moduleTileWide : styles.moduleTileStacked])}>
-        <ImageBackground imageStyle={styles.tileImage} resizeMode="cover" source={moduleImages[module.id]} style={styles.tileImageWrap}>
-          <LinearGradient colors={['rgba(7, 17, 15, 0.02)', 'rgba(7, 17, 15, 0.82)']} style={styles.tileOverlay}>
-            <View style={styles.tileTop}>
-              <View style={[styles.moduleIcon, { backgroundColor: module.accent }]}>
-                <SymbolView name={moduleIcons[module.id]} size={26} tintColor={MiraDesign.color.ink} />
-              </View>
-              <View style={styles.tileIndex}>
-                <Text style={styles.tileIndexText}>{String(index + 1).padStart(2, '0')}</Text>
-              </View>
+      <Pressable style={StyleSheet.flatten([styles.moduleCard, isWide ? styles.moduleCardWide : styles.moduleCardStacked])}>
+        <View style={[styles.poster, { borderColor: module.accent }]}>
+          <Image source={brandMark} style={styles.posterMark} />
+          <Text style={[styles.moduleNumber, { color: module.accent }]}>{moduleNumbers[module.id]}</Text>
+          <View style={styles.statusRail}>
+            {statusSummary.live > 0 ? <StatusDot color="#26A269" count={statusSummary.live} /> : null}
+            {statusSummary.mockup > 0 ? <StatusDot color={MiraDesign.color.amber} count={statusSummary.mockup} /> : null}
+            {statusSummary.concept > 0 ? <StatusDot color="#6B7DE3" count={statusSummary.concept} /> : null}
+            {statusSummary.planned > 0 ? <StatusDot color={MiraDesign.color.muted} count={statusSummary.planned} /> : null}
+          </View>
+        </View>
+
+        <View style={styles.moduleBody}>
+          <View style={styles.moduleHead}>
+            <View style={styles.moduleTitleWrap}>
+              <Text style={styles.moduleEyebrow}>{module.eyebrow}</Text>
+              <Text numberOfLines={2} style={styles.moduleTitle}>
+                {module.title}
+              </Text>
             </View>
-
-            <View style={styles.tileBottom}>
-              <View style={styles.tileTitleLine}>
-                <Text numberOfLines={1} style={styles.moduleTitle}>
-                  {module.title}
-                </Text>
-                <View style={[styles.routeCount, { backgroundColor: module.accent }]}>
-                  <Text style={styles.routeCountText}>{module.pages.length}</Text>
-                </View>
-              </View>
-
-              <View style={styles.previewStrip}>
-                {previewPages.map((page) => (
-                  <View key={page.id} style={styles.previewChip}>
-                    <Text numberOfLines={1} style={styles.previewChipText}>
-                      {page.label}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-
-              <View style={styles.openRow}>
-                <Text style={[styles.openText, { color: module.accent }]}>เปิดหมวด</Text>
-                <SymbolView name={{ ios: 'arrow.up.right', android: 'open_in_new', web: 'open_in_new' }} size={18} tintColor={module.accent} />
-              </View>
+            <View style={[styles.countChip, { backgroundColor: module.accent }]}>
+              <Text style={styles.countChipText}>{entries.length}</Text>
             </View>
-          </LinearGradient>
-        </ImageBackground>
+          </View>
+
+          <View style={styles.moduleMeta}>
+            <StatusChip status={statusSummary.mockup > 0 ? 'mockup' : statusSummary.concept > 0 ? 'concept' : 'live'} />
+            <AuthChip auth="none" />
+          </View>
+
+          <View style={styles.pagePreview}>
+            {visibleEntries.slice(0, 3).map((entry) => (
+              <Text key={entry.id} numberOfLines={1} style={styles.pagePreviewText}>
+                {entry.path}
+              </Text>
+            ))}
+          </View>
+        </View>
       </Pressable>
     </Link>
   );
 }
 
+function StatusDot({ color, count }: { color: string; count: number }) {
+  return (
+    <View style={styles.statusDotGroup}>
+      <View style={[styles.statusDot, { backgroundColor: color }]} />
+      <Text style={styles.statusDotText}>{count}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  safeArea: {
-    backgroundColor: MiraDesign.color.canvas,
-    flex: 1,
-  },
-  container: {
-    gap: MiraDesign.space.xl,
-    padding: MiraDesign.space.xl,
-    paddingBottom: 44,
-  },
-  containerWide: {
-    alignSelf: 'center',
-    maxWidth: 1180,
-    width: '100%',
-  },
-  topBar: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  logo: {
-    height: 42,
-    width: 168,
-  },
-  deckBadge: {
+  connectionBadge: {
     alignItems: 'center',
     backgroundColor: MiraDesign.color.surface,
-    borderColor: MiraDesign.color.line,
-    borderRadius: MiraDesign.radius.sm,
+    borderColor: '#D8E9F8',
+    borderRadius: MiraDesign.radius.pill,
     borderWidth: 1,
     flexDirection: 'row',
     gap: MiraDesign.space.sm,
-    minHeight: 42,
+    minHeight: 40,
     paddingHorizontal: MiraDesign.space.md,
   },
-  deckBadgeText: {
+  connectionDot: {
+    borderRadius: MiraDesign.radius.pill,
+    height: 9,
+    width: 9,
+  },
+  connectionDotLive: {
+    backgroundColor: '#26A269',
+  },
+  connectionDotOffline: {
+    backgroundColor: MiraDesign.color.amber,
+  },
+  connectionText: {
     color: MiraDesign.color.ink,
     fontSize: 13,
     fontWeight: '900',
-    textTransform: 'uppercase',
   },
-  hero: {
-    alignItems: 'flex-end',
+  metricRow: {
     flexDirection: 'row',
-    gap: MiraDesign.space.lg,
-    justifyContent: 'space-between',
+    gap: MiraDesign.space.md,
   },
-  heroStack: {
-    alignItems: 'stretch',
+  metricRowStack: {
     flexDirection: 'column',
-  },
-  heroCopy: {
-    gap: MiraDesign.space.xs,
-  },
-  kicker: {
-    color: MiraDesign.color.primaryDeep,
-    fontSize: 12,
-    fontWeight: '900',
-    textTransform: 'uppercase',
-  },
-  title: {
-    color: MiraDesign.color.ink,
-    fontSize: 44,
-    fontWeight: '900',
-    lineHeight: 50,
-  },
-  titleCompact: {
-    fontSize: 34,
-    lineHeight: 40,
-  },
-  statsRail: {
-    flexDirection: 'row',
-    gap: MiraDesign.space.sm,
-  },
-  statBlock: {
-    alignItems: 'center',
-    backgroundColor: MiraDesign.color.surface,
-    borderColor: MiraDesign.color.line,
-    borderRadius: MiraDesign.radius.sm,
-    borderWidth: 1,
-    minWidth: 78,
-    paddingHorizontal: MiraDesign.space.md,
-    paddingVertical: MiraDesign.space.sm,
-  },
-  statValue: {
-    color: MiraDesign.color.ink,
-    fontSize: 24,
-    fontWeight: '900',
-    lineHeight: 28,
-  },
-  statLabel: {
-    color: MiraDesign.color.inkSoft,
-    fontSize: 11,
-    fontWeight: '900',
-    textTransform: 'uppercase',
   },
   moduleGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: MiraDesign.space.lg,
   },
-  moduleTile: {
-    borderRadius: MiraDesign.radius.sm,
-    minHeight: 330,
-    overflow: 'hidden',
-  },
-  moduleTileWide: {
-    width: '48.6%',
-  },
-  moduleTileStacked: {
-    width: '100%',
-  },
-  tileImageWrap: {
-    flex: 1,
-    minHeight: 330,
-  },
-  tileImage: {
-    borderRadius: MiraDesign.radius.sm,
-  },
-  tileOverlay: {
-    flex: 1,
-    justifyContent: 'space-between',
-    padding: MiraDesign.space.lg,
-  },
-  tileTop: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  moduleIcon: {
-    alignItems: 'center',
-    borderRadius: MiraDesign.radius.sm,
-    height: 48,
-    justifyContent: 'center',
-    width: 48,
-  },
-  tileIndex: {
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.18)',
-    borderColor: 'rgba(255, 255, 255, 0.34)',
+  moduleCard: {
+    backgroundColor: MiraDesign.color.surface,
+    borderColor: '#D8E9F8',
     borderRadius: MiraDesign.radius.sm,
     borderWidth: 1,
-    height: 42,
-    justifyContent: 'center',
-    width: 50,
+    overflow: 'hidden',
   },
-  tileIndexText: {
-    color: MiraDesign.color.surface,
-    fontSize: 13,
-    fontWeight: '900',
+  moduleCardWide: {
+    width: '48.7%',
   },
-  tileBottom: {
-    gap: MiraDesign.space.md,
+  moduleCardStacked: {
+    width: '100%',
   },
-  tileTitleLine: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: MiraDesign.space.sm,
+  poster: {
+    backgroundColor: '#DCEBFF',
+    borderBottomWidth: 4,
+    height: 220,
     justifyContent: 'space-between',
+    overflow: 'hidden',
+    padding: MiraDesign.space.lg,
   },
-  moduleTitle: {
-    color: MiraDesign.color.surface,
-    flex: 1,
-    fontSize: 30,
+  posterMark: {
+    height: 250,
+    opacity: 0.08,
+    position: 'absolute',
+    right: -46,
+    top: -18,
+    width: 250,
+  },
+  moduleNumber: {
+    fontSize: 56,
     fontWeight: '900',
-    lineHeight: 36,
+    letterSpacing: 0,
+    lineHeight: 62,
   },
-  routeCount: {
+  statusRail: {
     alignItems: 'center',
-    borderRadius: MiraDesign.radius.sm,
-    height: 38,
-    justifyContent: 'center',
-    width: 42,
-  },
-  routeCountText: {
-    color: MiraDesign.color.ink,
-    fontSize: 14,
-    fontWeight: '900',
-  },
-  previewStrip: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: MiraDesign.space.sm,
   },
-  previewChip: {
-    backgroundColor: 'rgba(255, 255, 255, 0.16)',
-    borderColor: 'rgba(255, 255, 255, 0.26)',
-    borderRadius: MiraDesign.radius.sm,
+  statusDotGroup: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.72)',
+    borderColor: 'rgba(50,120,199,0.12)',
+    borderRadius: MiraDesign.radius.pill,
     borderWidth: 1,
-    maxWidth: 176,
-    paddingHorizontal: MiraDesign.space.sm,
-    paddingVertical: MiraDesign.space.xs,
+    flexDirection: 'row',
+    gap: 5,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
   },
-  previewChipText: {
-    color: MiraDesign.color.surface,
+  statusDot: {
+    borderRadius: MiraDesign.radius.pill,
+    height: 8,
+    width: 8,
+  },
+  statusDotText: {
+    color: MiraDesign.color.ink,
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  moduleBody: {
+    gap: MiraDesign.space.md,
+    padding: MiraDesign.space.lg,
+  },
+  moduleHead: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: MiraDesign.space.md,
+    justifyContent: 'space-between',
+  },
+  moduleTitleWrap: {
+    flex: 1,
+    gap: MiraDesign.space.xs,
+  },
+  moduleEyebrow: {
+    color: MiraDesign.color.blue,
+    fontSize: 11,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+  },
+  moduleTitle: {
+    color: MiraDesign.color.ink,
+    fontSize: 24,
+    fontWeight: '900',
+    lineHeight: 30,
+  },
+  countChip: {
+    alignItems: 'center',
+    borderRadius: MiraDesign.radius.sm,
+    height: 42,
+    justifyContent: 'center',
+    width: 46,
+  },
+  countChipText: {
+    color: MiraDesign.color.ink,
+    fontSize: 16,
+    fontWeight: '900',
+  },
+  moduleMeta: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: MiraDesign.space.sm,
+  },
+  pagePreview: {
+    gap: 6,
+  },
+  pagePreviewText: {
+    color: MiraDesign.color.inkSoft,
     fontSize: 12,
     fontWeight: '800',
   },
-  openRow: {
+  demoPanel: {
     alignItems: 'center',
     flexDirection: 'row',
-    gap: MiraDesign.space.sm,
+    justifyContent: 'space-between',
   },
-  openText: {
+  demoCopy: {
+    flex: 1,
+    gap: MiraDesign.space.xs,
+  },
+  demoTitle: {
+    color: MiraDesign.color.ink,
+    fontSize: 16,
+    fontWeight: '900',
+  },
+  demoBody: {
+    color: MiraDesign.color.inkSoft,
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  demoMessage: {
+    color: MiraDesign.color.blue,
     fontSize: 13,
     fontWeight: '900',
-    textTransform: 'uppercase',
+  },
+  demoActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: MiraDesign.space.sm,
+    justifyContent: 'flex-end',
   },
 });

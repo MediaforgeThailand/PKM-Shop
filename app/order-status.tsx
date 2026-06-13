@@ -6,5 +6,5 @@ export default function OrderStatusRedirect() {
   const orderId = Array.isArray(params.orderId) ? params.orderId[0] : params.orderId;
   const targetOrderId = focus || orderId;
 
-  return <Redirect href={targetOrderId ? `/user-profile?focus=${encodeURIComponent(targetOrderId)}` : '/user-profile'} />;
+  return <Redirect href={targetOrderId ? `/orders?focus=${encodeURIComponent(targetOrderId)}` : '/orders'} />;
 }

@@ -28,6 +28,20 @@ npm run typecheck
 
 Use Expo Go for fast previews. Use EAS Build later when the app needs store-ready Android and iOS builds, custom native modules, push notifications, or team distribution.
 
+## Showcase Demo Login
+
+Showcase demo sign-in is off by default and must stay off in normal client builds. To expose the presenter-only buttons locally, set:
+
+```env
+EXPO_PUBLIC_DEMO_LOGIN=1
+EXPO_PUBLIC_DEMO_ADMIN_EMAIL=admin-demo@example.com
+EXPO_PUBLIC_DEMO_ADMIN_PASSWORD=replace-me
+EXPO_PUBLIC_DEMO_CUSTOMER_EMAIL=customer-demo@example.com
+EXPO_PUBLIC_DEMO_CUSTOMER_PASSWORD=replace-me
+```
+
+Do not commit real demo credentials. The seeded users should be created outside the app build, then provided through local or deployment-specific environment variables.
+
 ## MiraCare v2 Verification
 
 ```bash
