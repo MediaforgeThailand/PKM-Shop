@@ -1155,7 +1155,9 @@ async function completeChatTurn({
   // V3-7 (LINE): record any typed buyer info / confirmation BEFORE building the
   // prompt context, so the order state the model sees is current — it can read the
   // details back and ask to confirm, or (on confirmation) see awaiting_payment.
-  if (channel === 'line') {
+  // Skip on postback-driven turns (actionResult.order is set): those carry a canned
+  // label, not buyer info, so the extractor LLM call would be wasted latency.
+  if (channel === 'line' && !actionResult.order) {
     activeOrder = await updateCollectingOrderFromMessage(activeOrder, message);
   }
 
