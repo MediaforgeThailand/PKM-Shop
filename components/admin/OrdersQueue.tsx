@@ -2,6 +2,7 @@ import { Link } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 
+import { PdpaActions } from '@/components/admin/PdpaActions';
 import { Pill } from '@/components/MiraUI';
 import { MiraDesign, softShadow } from '@/constants/Design';
 import { invokeFunction } from '@/lib/api/client';
@@ -608,6 +609,7 @@ export function OrdersQueue({ title = 'Orders Queue' }: { title?: string }) {
                 bookingDate={bookingDate}
                 bookingTime={bookingTime}
                 busyAction={busyAction}
+                canErase={tenant?.role === 'tenant_admin' || tenant?.role === 'superadmin'}
                 isSavingNote={isSavingNote}
                 note={note}
                 onAction={(action) => void runAction(action)}
@@ -685,6 +687,7 @@ function OrderDetail({
   bookingDate,
   bookingTime,
   busyAction,
+  canErase,
   isSavingNote,
   note,
   onAction,
@@ -699,6 +702,7 @@ function OrderDetail({
   bookingDate: string;
   bookingTime: string;
   busyAction: OrderMutationAction | null;
+  canErase: boolean;
   isSavingNote: boolean;
   note: string;
   onAction: (action: OrderMutationAction) => void;
@@ -823,6 +827,8 @@ function OrderDetail({
           ))
         )}
       </View>
+
+      <PdpaActions canErase={canErase} customerId={order.customer_id ?? null} />
     </View>
   );
 }
