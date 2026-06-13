@@ -1,6 +1,6 @@
 ---
 interface Props {
-  name: 'hero-aurora' | 'referral-flywheel' | 'miracare-pulse' | 'mirabeauty-scan' | 'ai-chat-story';
+  name: 'hero-aurora' | 'referral-flywheel' | 'miracare-pulse' | 'mirabeauty-scan' | 'ai-chat-story' | 'hero-chat' | 'back-office';
   class?: string;
 }
 
@@ -11,6 +11,7 @@ const base = `/motion/${name}`;
 <div class:list={['motion-loop', className]} data-motion-shell>
   <video
     aria-hidden="true"
+    autoplay
     muted
     loop
     playsinline

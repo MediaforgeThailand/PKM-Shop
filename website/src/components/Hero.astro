@@ -1,6 +1,5 @@
 ---
 import Button from './Button.astro';
-import ChatSim from './ChatSim.astro';
 import Chip from './Chip.astro';
 import MotionLoop from './MotionLoop.astro';
 ---
@@ -40,9 +39,7 @@ import MotionLoop from './MotionLoop.astro';
       </div>
     </div>
     <div class="hero-device" data-reveal>
-      <div class="device-tilt">
-        <ChatSim />
-      </div>
+      <MotionLoop name="hero-chat" class="hero-chat" />
     </div>
   </div>
 </section>
@@ -153,12 +150,18 @@ import MotionLoop from './MotionLoop.astro';
 
   .hero-device {
     position: relative;
-    perspective: 1100px;
+    aspect-ratio: 880 / 1200;
+    width: 100%;
+    max-width: 440px;
+    margin-inline: auto;
   }
 
-  .device-tilt {
-    transform-style: preserve-3d;
-    will-change: transform;
+  .hero-device :global(.motion-loop video) {
+    object-fit: cover;
+    /* dissolve the opaque video's top/bottom edges into the hero so it reads as
+       floating chat, not a boxed panel (kept opaque so it autoplays everywhere) */
+    -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 13%, #000 87%, transparent 100%);
+    mask-image: linear-gradient(180deg, transparent 0%, #000 13%, #000 87%, transparent 100%);
   }
 
   .hero-device::before {

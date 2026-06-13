@@ -40,7 +40,7 @@
       .step-num { display: grid; place-items: center; width: 58px; height: 58px; border-radius: 50%;
         border: 2px solid var(--brand); color: var(--brand); font-size: 24px; }
       .step-rule { width: 64px; height: 2px; background: var(--brand); opacity: 0.5; }
-      .step-title { margin: 28px 0 0; font-size: 88px; line-height: 1.04; font-weight: 600; letter-spacing: -1px; }
+      .step-title { margin: 28px 0 0; font-size: 88px; line-height: 1.06; font-weight: 600; letter-spacing: -1px; word-break: keep-all; }
       .step-title .hl { color: var(--brand); }
       .step-sub { margin: 22px 0 0; font-size: 34px; line-height: 1.35; font-weight: 500; color: var(--ink-soft); }
 
@@ -56,14 +56,13 @@
       .screen { position: relative; width: 100%; height: 100%; border-radius: 52px; overflow: hidden; background: var(--canvas); }
       .island { position: absolute; left: 50%; top: 16px; width: 122px; height: 34px; border-radius: 999px; transform: translateX(-50%); background: #07070a; z-index: 40; }
 
-      .topbar { position: absolute; left: 0; top: 0; width: 100%; height: 96px; display: flex; align-items: center; gap: 12px;
-        padding: 40px 28px 0; z-index: 20; }
-      .brand-dot { width: 34px; height: 34px; border-radius: 11px; background: linear-gradient(135deg, var(--deep), var(--bright)); box-shadow: 0 6px 16px rgba(46, 107, 246, 0.3); }
-      .brand-name { font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 21px; }
-      .brand-status { margin-left: auto; display: inline-flex; align-items: center; gap: 7px; font-size: 15px; color: var(--ink-soft); }
-      .live-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--mint); box-shadow: 0 0 0 4px rgba(31, 170, 120, 0.18); }
+      .topbar { position: absolute; left: 0; top: 0; width: 100%; height: 104px; display: flex; align-items: flex-end; gap: 12px;
+        padding: 0 28px 16px; z-index: 20; background: linear-gradient(118deg, #1d56db 0%, #3f8efc 100%); }
+      .brand-logo { height: 30px; width: auto; object-fit: contain; display: block; }
+      .brand-status { margin-left: auto; display: inline-flex; align-items: center; gap: 7px; font-size: 16px; color: rgba(255, 255, 255, 0.92); padding-bottom: 2px; }
+      .live-dot { width: 9px; height: 9px; border-radius: 50%; background: #7cf0be; box-shadow: 0 0 0 4px rgba(124, 240, 190, 0.28); }
 
-      .view { position: absolute; left: 0; top: 110px; width: 100%; height: 764px; padding: 18px 26px 28px; }
+      .view { position: absolute; left: 0; top: 116px; width: 100%; height: 752px; padding: 18px 26px 28px; }
       .view-pay, .view-catalog { opacity: 0; }
 
       /* chat */
@@ -116,7 +115,7 @@
     </style>
   </head>
   <body>
-    <div id="root" data-composition-id="ai-chat-story" data-width="1920" data-height="1080" data-start="0" data-duration="32">
+    <div id="root" data-composition-id="ai-chat-story" data-width="1920" data-height="1080" data-start="0" data-duration="25.6">
       <div class="glow a"></div>
       <div class="glow b"></div>
       <div class="glow c"></div>
@@ -136,7 +135,7 @@
         </div>
         <div class="step" id="step-3" style="opacity:0">
           <div class="step-kicker"><span class="step-num">03</span><span class="step-rule"></span>YOU'RE IN CONTROL</div>
-          <h2 class="step-title">ข้อมูลคุณ <span class="hl">คุมเองได้</span></h2>
+          <h2 class="step-title">ข้อมูลคุณ<br><span class="hl">คุมเองได้</span></h2>
           <p class="step-sub">แก้ราคา-สินค้า AI รู้ทันที</p>
         </div>
       </div>
@@ -154,8 +153,7 @@
         <div class="screen">
           <div class="island"></div>
           <div class="topbar">
-            <span class="brand-dot"></span>
-            <span class="brand-name">Mira</span>
+            <img class="brand-logo" src="../assets/mira-ai-wordmark.webp" alt="" />
             <span class="brand-status"><i class="live-dot"></i>ผู้ช่วยขาย</span>
           </div>
 
@@ -210,8 +208,8 @@
       <script src="../vendor/gsap.min.js"></script>
       <script>
         const fmt = (n) => '฿' + Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-        // Global slow-mo: author at native tempo, multiply every time by S (= 50% slower).
-        const S = 2;
+        // Global tempo: author at native speed, multiply every time by S.
+        const S = 1.6;
         const d = (v) => v * S;   // scale a duration / stagger
         const at = (v) => v * S;  // scale a position on the timeline
         const tl = gsap.timeline({ paused: true, defaults: { ease: 'power3.out' } });
@@ -243,7 +241,7 @@
         /* ===== transition 1 -> 2 ===== */
         tl.to('#step-1', { y: -24, opacity: 0, duration: d(0.4) }, at(5.6))
           .to('#view-chat', { x: -70, opacity: 0, duration: d(0.5), ease: 'power2.in' }, at(5.65))
-          .set('#ghost', { textContent: 'CLOSE' }, at(5.9))
+          .to('#ghost', { opacity: 0, duration: d(0.4) }, at(5.6))
           .fromTo('#step-2', { y: 24, opacity: 0 }, { y: 0, opacity: 1, duration: d(0.5) }, at(5.95))
           .fromTo('#view-pay', { x: 80, opacity: 0 }, { x: 0, opacity: 1, duration: d(0.55), ease: 'power3.out' }, at(6.0));
 
@@ -258,6 +256,7 @@
         tl.to('#step-2', { y: -24, opacity: 0, duration: d(0.4) }, at(10.0))
           .to('#view-pay', { x: -70, opacity: 0, duration: d(0.5), ease: 'power2.in' }, at(10.05))
           .set('#ghost', { textContent: 'CONTROL' }, at(10.3))
+          .to('#ghost', { opacity: 1, duration: d(0.4) }, at(10.3))
           .fromTo('#step-3', { y: 24, opacity: 0 }, { y: 0, opacity: 1, duration: d(0.5) }, at(10.35))
           .fromTo('#view-catalog', { x: 80, opacity: 0 }, { x: 0, opacity: 1, duration: d(0.55), ease: 'power3.out' }, at(10.4));
 

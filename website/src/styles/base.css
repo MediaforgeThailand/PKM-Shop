@@ -349,6 +349,35 @@ video {
   color: #EAF1FF;
 }
 
+/* smooth the seams where dark and light sections meet: a short gradient over the
+   top padding fades the neighbour's tone into this section (behind the content) */
+.section-shell > .container {
+  position: relative;
+  z-index: 1;
+}
+
+#ai-chat::before,
+#channels::before,
+#referral::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: clamp(60px, 6.5vw, 120px);
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* light section under a dark one (hero → #ai-chat, #referral → #channels) */
+#ai-chat::before,
+#channels::before {
+  background: linear-gradient(180deg, var(--night), transparent);
+}
+
+/* dark section under a light one (#admin → #referral) */
+#referral::before {
+  background: linear-gradient(180deg, var(--canvas), transparent);
+}
+
 .grain::after {
   position: absolute;
   inset: 0;

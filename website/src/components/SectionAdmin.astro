@@ -1,284 +1,47 @@
 ---
 import Section from './Section.astro';
+import MotionLoop from './MotionLoop.astro';
+
+// The video carries the full story; this text is the SEO + screen-reader equivalent.
+const steps = [
+  'ตั้งค่าสินค้า ราคา และค่าคอมมิชชั่นได้เอง',
+  'ให้ AI แนะนำข้อมูลสินค้าและข้อความปิดการขาย',
+  'สร้าง QR ราคาตามสินค้า แล้วติดตามสถานะการชำระเงิน',
+  'ยืนยันคิวออเดอร์ของลูกค้า และดูแดชบอร์ดยอดขาย + คอมมิชชั่น',
+];
 ---
 
-<Section id="admin" tone="surface" class="admin-section">
-  <div class="admin-layout">
-    <div class="admin-copy">
-      <header class="section-head">
-        <span class="ghost-word" aria-hidden="true">CONTROL</span>
-        <p class="kicker" data-reveal>
-          <span class="kicker-num">02</span>
-          <span class="kicker-rule"></span>
-          BACK OFFICE
-        </p>
-        <p class="pain-line" data-reveal>จะเพิ่มแพ็กเกจใหม่ที ต้องรอใครอีกกี่คน?</p>
-        <h2 class="section-title" data-reveal>หลังบ้านครบ <span class="gradient-text">ทีมคุณคุมเองได้หมด</span></h2>
-        <p class="section-sub" data-reveal>เพิ่มสินค้า เปลี่ยนราคา ตั้งส่วนแบ่ง — แก้ปุ๊บ AI ขายตัวใหม่ให้ทันที</p>
-        <a class="mini-cta" href="#contact" data-reveal>ดูหลังบ้านจริงในเดโม <span class="arrow">→</span></a>
-      </header>
-    </div>
+<Section id="admin" tone="light" class="admin-section">
+  <h2 class="sr-only">หลังบ้านครบ ทีมคุณคุมเองได้หมด — เพิ่มสินค้า ตั้งราคา ตั้งคอมมิชชั่น คิวออเดอร์ และยอดขาย พร้อม AI ช่วยปิดการขาย</h2>
 
-    <div class="admin-grid grid-2">
-      <article class="admin-card tilt-card sheen" data-reveal data-float-card>
-        <div class="card-head">
-          <h3>แคตตาล็อกสินค้า</h3>
-          <span class="mock-label">แก้ได้ตลอด</span>
-        </div>
-        <ul class="mock-rows">
-          <li><span>ตรวจสุขภาพ Premium 50+</span><strong>฿4,900</strong><i class="toggle on"></i></li>
-          <li><span>วัคซีนไข้หวัดใหญ่</span><strong>฿890</strong><i class="toggle on"></i></li>
-          <li class="is-new"><span>แพ็กเกจใหม่ของคุณ…</span><strong>+</strong><i class="toggle"></i></li>
-        </ul>
-      </article>
-
-      <article class="admin-card tilt-card sheen" data-reveal data-float-card>
-        <div class="card-head">
-          <h3>คิวออเดอร์</h3>
-          <span class="mock-label">ทีมคุณยืนยันเอง</span>
-        </div>
-        <ul class="mock-rows">
-          <li><span>#1042 · คุณนิภา</span><em class="pill mint">ชำระแล้ว ✓</em></li>
-          <li><span>#1041 · คุณสมชาย</span><em class="pill amber">รอตรวจสลิป</em></li>
-          <li><span>#1040 · คุณดวงใจ</span><em class="pill mint">ยืนยันนัดแล้ว</em></li>
-        </ul>
-      </article>
-
-      <article class="admin-card tilt-card sheen" data-reveal data-float-card>
-        <div class="card-head">
-          <h3>ผู้แนะนำ & ส่วนแบ่ง</h3>
-          <span class="mock-label">ตัวอย่าง</span>
-        </div>
-        <ul class="mock-rows">
-          <li><span class="avatar">น</span><span>คุณหมอนก · DRNOK2</span><strong class="mint-text">฿4,350</strong></li>
-          <li><span class="avatar alt">พ</span><span>คุณพลอย · PLOY9</span><strong class="mint-text">฿2,180</strong></li>
-        </ul>
-      </article>
-
-      <article class="admin-card tilt-card sheen" data-reveal data-float-card>
-        <div class="card-head">
-          <h3>แดชบอร์ดยอดขาย</h3>
-          <span class="mock-label">LIVE</span>
-        </div>
-        <div class="mock-chart" aria-hidden="true">
-          <i style="--h: 0.45"></i><i style="--h: 0.62"></i><i style="--h: 0.5"></i><i style="--h: 0.78"></i><i style="--h: 0.92"></i>
-        </div>
-      </article>
-    </div>
-  </div>
+  <figure class="bo-video" data-reveal>
+    <MotionLoop name="back-office" />
+    <figcaption class="sr-only">
+      ระบบหลังบ้าน Mira จัดการได้ในที่เดียว:
+      <ol>
+        {steps.map((step) => <li>{step}</li>)}
+      </ol>
+    </figcaption>
+  </figure>
 </Section>
 
 <style>
-  .admin-layout {
-    display: grid;
-    grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
-    gap: clamp(2rem, 5vw, 4rem);
-    align-items: start;
-  }
-
-  .admin-copy {
-    position: sticky;
-    top: 110px;
-  }
-
-  .admin-grid {
-    perspective: 1200px;
-  }
-
-  .admin-card {
-    display: grid;
-    align-content: start;
-    gap: 0.9rem;
-    min-height: 210px;
-    border: 1px solid var(--line);
-    border-radius: var(--radius-lg);
-    background:
-      linear-gradient(180deg, rgba(232, 241, 255, 0.5), rgba(255, 255, 255, 0)),
-      var(--surface);
-    box-shadow: var(--shadow-soft);
-    padding: 1.2rem;
-    transition: border-color 250ms ease, box-shadow 250ms ease;
-  }
-
-  .admin-card:hover {
-    border-color: rgba(46, 107, 246, 0.35);
-    box-shadow: var(--shadow-card);
-  }
-
-  .card-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.75rem;
-  }
-
-  h3 {
-    margin: 0;
-    font-size: clamp(1.12rem, 2vw, 1.32rem);
-    font-weight: 600;
-    line-height: 1.25;
-  }
-
-  .mock-label {
-    flex: none;
-    border-radius: var(--radius-pill);
-    background: var(--brand-soft);
-    color: var(--brand-deep);
-    font-family: "Space Grotesk", "Anuphan", sans-serif;
-    font-size: 0.72rem;
-    font-weight: 600;
-    padding: 0.22rem 0.55rem;
-  }
-
-  .mock-rows {
-    display: grid;
-    gap: 0.45rem;
-    margin: 0;
-    padding: 0;
-    list-style: none;
-  }
-
-  .mock-rows li {
-    display: flex;
-    gap: 0.6rem;
-    align-items: center;
-    border: 1px solid var(--line);
-    border-radius: 12px;
-    background: var(--surface);
-    font-size: 0.85rem;
-    padding: 0.5rem 0.7rem;
-  }
-
-  .mock-rows li.is-new {
-    border-style: dashed;
-    color: var(--muted);
-  }
-
-  .mock-rows span:first-child:not(.avatar) {
-    flex: 1;
-  }
-
-  .mock-rows .avatar {
-    display: grid;
-    width: 26px;
-    height: 26px;
-    flex: none;
-    place-items: center;
-    border-radius: 50%;
-    background: var(--grad-brand);
-    color: #fff;
-    font-size: 0.72rem;
-    font-weight: 600;
-  }
-
-  .mock-rows .avatar + span {
-    flex: 1;
-  }
-
-  .mock-rows .avatar.alt {
-    background: linear-gradient(120deg, var(--sky), var(--ice));
-    color: var(--brand-deep);
-  }
-
-  .mock-rows strong {
-    color: var(--brand-deep);
-    font-family: "Space Grotesk", sans-serif;
-    font-size: 0.85rem;
-  }
-
-  .mock-rows strong.mint-text {
-    color: var(--mint-deep);
-  }
-
-  .toggle {
+  .bo-video {
+    /* ~10% safe zone each side; staying below the 1920px source keeps it crisp */
     position: relative;
-    width: 30px;
-    height: 17px;
-    flex: none;
-    border-radius: var(--radius-pill);
-    background: var(--line);
-    transition: background 200ms ease;
+    width: 80vw;
+    margin: 0 calc(50% - 40vw);
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+    border-radius: clamp(16px, 1.6vw, 28px);
+    background: var(--canvas);
+    box-shadow: 0 40px 92px -46px rgba(46, 107, 246, 0.5);
   }
 
-  .toggle::after {
-    position: absolute;
-    top: 2px;
-    left: 2px;
-    width: 13px;
-    height: 13px;
-    content: "";
-    border-radius: 50%;
-    background: #fff;
-    box-shadow: 0 1px 3px rgba(15, 27, 46, 0.25);
-    transition: transform 200ms ease;
-  }
-
-  .toggle.on {
-    background: var(--brand);
-  }
-
-  .toggle.on::after {
-    transform: translateX(13px);
-  }
-
-  .pill {
-    border-radius: var(--radius-pill);
-    font-size: 0.72rem;
-    font-style: normal;
-    font-weight: 600;
-    padding: 0.18rem 0.5rem;
-  }
-
-  .pill.mint {
-    background: rgba(84, 207, 165, 0.16);
-    color: var(--mint-deep);
-  }
-
-  .pill.amber {
-    background: rgba(245, 184, 75, 0.18);
-    color: #7A5200;
-  }
-
-  .mock-chart {
-    display: flex;
-    gap: 0.5rem;
-    align-items: flex-end;
-    height: 110px;
-    border-bottom: 1px solid var(--line);
-    padding-bottom: 2px;
-  }
-
-  .mock-chart i {
-    flex: 1;
-    height: 100%;
-    transform: scaleY(0.12);
-    transform-origin: bottom;
-    border-radius: 6px 6px 2px 2px;
-    background: linear-gradient(180deg, var(--brand-bright), var(--brand-deep));
-    opacity: 0.9;
-    transition: transform 900ms var(--ease-out);
-  }
-
-  .admin-card[data-reveal-done] .mock-chart i {
-    transform: scaleY(var(--h));
-  }
-
-  .admin-card[data-reveal-done] .mock-chart i:nth-child(2) { transition-delay: 90ms; }
-  .admin-card[data-reveal-done] .mock-chart i:nth-child(3) { transition-delay: 180ms; }
-  .admin-card[data-reveal-done] .mock-chart i:nth-child(4) { transition-delay: 270ms; }
-  .admin-card[data-reveal-done] .mock-chart i:nth-child(5) { transition-delay: 360ms; }
-
-  :global(html:not(.has-motion)) .mock-chart i {
-    transform: scaleY(var(--h));
-  }
-
-  @media (max-width: 920px) {
-    .admin-layout {
-      grid-template-columns: 1fr;
-    }
-
-    .admin-copy {
-      position: static;
+  @media (max-width: 720px) {
+    .bo-video {
+      width: 92vw;
+      margin: 0 calc(50% - 46vw);
     }
   }
 </style>
