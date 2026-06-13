@@ -37,6 +37,10 @@ const RECOMMENDED_PACKAGES_ALT =
   '\u0e41\u0e1e\u0e47\u0e01\u0e40\u0e01\u0e08\u0e17\u0e35\u0e48\u0e41\u0e19\u0e30\u0e19\u0e33';
 const SELECT_PRODUCT_MESSAGE =
   '\u0e15\u0e49\u0e2d\u0e07\u0e01\u0e32\u0e23\u0e08\u0e2d\u0e07\u0e41\u0e1e\u0e47\u0e01\u0e40\u0e01\u0e08\u0e19\u0e35\u0e49';
+// "\u0e40\u0e25\u0e37\u0e2d\u0e01\u0e2a\u0e32\u0e02\u0e32\u0e19\u0e35\u0e49" (choose this branch)
+const SELECT_BRANCH_LABEL = '\u0e40\u0e25\u0e37\u0e2d\u0e01\u0e2a\u0e32\u0e02\u0e32\u0e19\u0e35\u0e49';
+// "\u0e40\u0e25\u0e37\u0e2d\u0e01\u0e2a\u0e32\u0e02\u0e32" (choose a branch)
+const SELECT_BRANCH_ALT = '\u0e40\u0e25\u0e37\u0e2d\u0e01\u0e2a\u0e32\u0e02\u0e32';
 
 function requireEnv(key: string) {
   const value = Deno.env.get(key)?.trim();
@@ -190,6 +194,27 @@ export function linePostbackToAction(data: string | undefined): { action: ChatAc
     };
   }
 
+  if (data.startsWith('select_branch:')) {
+    const rest = data.slice('select_branch:'.length);
+    const separator = rest.indexOf(':');
+
+    if (separator > 0) {
+      const orderId = rest.slice(0, separator);
+      const branchId = rest.slice(separator + 1);
+
+      if (orderId && branchId) {
+        return {
+          action: {
+            branch_id: branchId,
+            order_id: orderId,
+            type: 'select_branch',
+          },
+          message: SELECT_BRANCH_LABEL,
+        };
+      }
+    }
+  }
+
   return {
     action: null,
     message: data.slice(0, 400) || GREETING_MESSAGE,
@@ -261,6 +286,70 @@ export function productLineFlexMessage(products: ChatProduct[]): LineFlexMessage
           : undefined,
         type: 'bubble',
       })),
+      type: 'carousel',
+    },
+    type: 'flex',
+  };
+}
+
+export function branchSelectionLineFlexMessage(order: NonNullOrderPanelState): LineFlexMessage | null {
+  const branches = order.branches ?? [];
+
+  if (branches.length === 0) {
+    return null;
+  }
+
+  return {
+    altText: SELECT_BRANCH_ALT,
+    contents: {
+      contents: branches.slice(0, 10).map((branch) => {
+        const location = branch.district || branch.address || null;
+
+        return {
+          body: {
+            contents: [
+              {
+                size: 'md',
+                text: branch.name,
+                type: 'text',
+                weight: 'bold',
+                wrap: true,
+              },
+              ...(location
+                ? [
+                    {
+                      color: '#4E5F59',
+                      margin: 'sm',
+                      size: 'sm',
+                      text: location,
+                      type: 'text',
+                      wrap: true,
+                    },
+                  ]
+                : []),
+            ],
+            layout: 'vertical',
+            type: 'box',
+          },
+          footer: {
+            contents: [
+              {
+                action: {
+                  data: `select_branch:${order.id}:${branch.id}`,
+                  label: SELECT_BRANCH_LABEL,
+                  type: 'postback',
+                },
+                color: '#163F34',
+                style: 'primary',
+                type: 'button',
+              },
+            ],
+            layout: 'vertical',
+            type: 'box',
+          },
+          type: 'bubble',
+        };
+      }),
       type: 'carousel',
     },
     type: 'flex',
