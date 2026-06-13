@@ -1,5 +1,6 @@
 ﻿import { assertTenant, insertRow, resolveAuthUserId, selectOne, updateRows } from '../_shared/db.ts';
 import { activeBranchesForProduct, resolveProductBranchSelection } from '../_shared/branches.ts';
+import { recordFormAgeFact } from '../_shared/facts.ts';
 import { HttpError, handleOptions, json, toErrorResponse, validateJson } from '../_shared/http.ts';
 import { loadOrderForPanel, toOrderPanel, transition } from '../_shared/orders.ts';
 import { referrerOrderRequestSchema } from '../_shared/referrerOrder.ts';
@@ -106,6 +107,20 @@ async function createReferrerOrder(body: Extract<ReferrerOrderRequest, { action:
   });
 
   await transition(order.id, 'awaiting_payment', `referrer:${referrer.id}`, { channel: 'referrer' });
+
+  // F1 (v3 plan §11.3): consent-gated form-age fact. Referrer-created buyers
+  // normally have no consent row, so this no-ops by design — do not create consent here.
+  // A facts failure must never fail the assisted purchase.
+  try {
+    await recordFormAgeFact({
+      age: body.buyer_age,
+      customerId: customer.id,
+      orderId: order.id,
+      tenantId: referrer.tenant_id,
+    });
+  } catch (error) {
+    console.warn('form_age_fact_failed', error);
+  }
 
   return loadOrderForPanel(order.id, referrer.tenant_id);
 }
