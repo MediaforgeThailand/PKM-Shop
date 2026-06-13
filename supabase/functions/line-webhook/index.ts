@@ -3,6 +3,7 @@ import QRCode from 'qrcode';
 import { HttpError, handleOptions, json, toErrorResponse } from '../_shared/http.ts';
 import {
   branchSelectionLineFlexMessage,
+  categoryLineFlexMessage,
   linePostbackToAction,
   orderPaymentLineFlexMessage,
   orderQrLineImageMessage,
@@ -24,6 +25,9 @@ declare const Deno: {
 };
 
 type LineEvent = {
+  deliveryContext?: {
+    isRedelivery?: boolean;
+  };
   message?: {
     id?: string;
     text?: string;
@@ -99,10 +103,26 @@ async function toLineMessages(response: ChatOrchestratorResponse) {
     }
   }
 
+  for (const card of response.cards) {
+    if (card.type === 'category_grid') {
+      const categories = categoryLineFlexMessage(card.categories);
+
+      if (categories) {
+        messages.push(categories);
+      }
+    }
+  }
+
   return messages.slice(0, 5);
 }
 
 async function handleEvent(event: LineEvent, tenantSlug: string) {
+  // Idempotency (V3-5): LINE re-delivers events when the webhook is slow to ack.
+  // Reprocessing a redelivered postback creates duplicate orders, so skip them.
+  if (event.deliveryContext?.isRedelivery) {
+    return;
+  }
+
   const replyToken = event.replyToken;
   const lineUserId = event.source?.userId;
 

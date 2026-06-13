@@ -355,6 +355,21 @@ async function handleAction({
       throw new HttpError('VALIDATION', 'Product not found.', 404);
     }
 
+    // Dedup guard (V3-5): a LINE postback can be re-delivered or double-tapped.
+    // If an active pre-payment order for the same product already exists in this
+    // session, reuse it instead of inserting a duplicate. Never changes status.
+    if (channel === 'line') {
+      const existing = await loadActiveOrder(sessionId, tenant.id);
+
+      if (
+        existing &&
+        existing.product_id === product.id &&
+        ['selecting_branch', 'collecting_info', 'awaiting_payment'].includes(existing.status)
+      ) {
+        return { order: await loadOrderForPanel(existing.id, tenant.id) };
+      }
+    }
+
     return {
       order: await createOrderFromProduct({
         channel,
