@@ -226,10 +226,14 @@ async function createOrderFromProduct({
     : null;
   const branches = await activeBranchesForProduct(tenant.id, product.id);
   const singleBranch = branches.length === 1 ? branches[0] : null;
+  const isLine = channel === 'line';
+  // V3-7 (LINE): always force an explicit branch choice (even a single-branch
+  // product) and never auto-fill the buyer phone from the account — the buyer may
+  // be someone other than the LINE account holder. App/PWA behaviour is unchanged.
   const order = await insertRow<OrderRow>('orders', {
     amount_baht: product.price_baht,
-    branch_id: singleBranch?.id ?? null,
-    buyer_phone: customer.phone,
+    branch_id: isLine ? null : (singleBranch?.id ?? null),
+    buyer_phone: isLine ? null : customer.phone,
     channel: channel === 'app' ? 'chat_app' : channel === 'line' ? 'chat_line' : 'chat_pwa',
     commission_scheme_snapshot: referrer?.commission_scheme ?? null,
     customer_id: customer.id,
@@ -237,7 +241,7 @@ async function createOrderFromProduct({
     qty: 1,
     referrer_id: referrerId,
     session_id: sessionId,
-    status: branches.length > 1 ? 'selecting_branch' : 'collecting_info',
+    status: (isLine ? branches.length >= 1 : branches.length > 1) ? 'selecting_branch' : 'collecting_info',
     tenant_id: tenant.id,
   }, {
     select: ORDER_PANEL_SELECT,
@@ -1014,34 +1018,49 @@ async function updateCollectingOrderFromMessage(order: OrderWithProductRow | nul
     return order;
   }
 
+  const wasComplete = missingOrderFields(order).length === 0;
   const extracted = await callOrderFieldExtractor(message);
+  const hasNewFields =
+    extracted.buyer_age !== undefined ||
+    Boolean(extracted.buyer_name) ||
+    Boolean(extracted.buyer_phone) ||
+    Boolean(extracted.preferred_date);
 
-  if (!extracted.buyer_age && !extracted.buyer_name && !extracted.buyer_phone && !extracted.preferred_date) {
-    return order;
-  }
+  if (hasNewFields) {
+    const updated = await updateOrderFields(order.id, {
+      customerId: order.customer_id ?? undefined,
+      sessionId: order.session_id ?? undefined,
+      tenantId: order.tenant_id,
+    }, extracted);
 
-  const updated = await updateOrderFields(order.id, {
-    customerId: order.customer_id ?? undefined,
-    sessionId: order.session_id ?? undefined,
-    tenantId: order.tenant_id,
-  }, extracted);
-
-  // F1 (v3 plan §11.3): persist a conversationally-collected age as a consent-gated user_fact,
-  // mirroring the order_form_submit call site. A facts failure must never fail the chat turn.
-  if (typeof extracted.buyer_age === 'number' && order.customer_id) {
-    try {
-      await recordFormAgeFact({
-        age: extracted.buyer_age,
-        customerId: order.customer_id,
-        orderId: order.id,
-        tenantId: order.tenant_id,
-      });
-    } catch (error) {
-      console.warn('form_age_fact_failed', error);
+    // F1 (v3 plan §11.3): persist a conversationally-collected age as a consent-gated user_fact,
+    // mirroring the order_form_submit call site. A facts failure must never fail the chat turn.
+    if (typeof extracted.buyer_age === 'number' && order.customer_id) {
+      try {
+        await recordFormAgeFact({
+          age: extracted.buyer_age,
+          customerId: order.customer_id,
+          orderId: order.id,
+          tenantId: order.tenant_id,
+        });
+      } catch (error) {
+        console.warn('form_age_fact_failed', error);
+      }
     }
+
+    // V3-7: do NOT auto-advance even once every field is present. The order stays
+    // in collecting_info so the prompt can read the details back and ask the
+    // customer to confirm before the PromptPay QR is released.
+    return loadOrderForPanel(updated.id, order.tenant_id);
   }
 
-  return maybeAdvanceCollectingOrder(await loadOrderForPanel(updated.id, order.tenant_id));
+  // No new field values in this message. Once everything is collected, an explicit
+  // affirmation ("ใช่"/"ถูกต้อง") is what releases the QR — sales-style confirm step.
+  if (wasComplete && extracted.confirmed) {
+    return maybeAdvanceCollectingOrder(order);
+  }
+
+  return order;
 }
 
 async function resolveOrCreateLineCustomer(tenantId: string, lineUserId: string) {
