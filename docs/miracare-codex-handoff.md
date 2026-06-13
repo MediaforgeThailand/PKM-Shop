@@ -31,7 +31,7 @@ The hospital's own name replaces "MiraCare" per tenant via the `brand_name` vari
 ## 2. Published prompt (OpenAI Platform)
 
 - **Prompt ID:** `pmpt_6a29c7e353b88196a6e648b24c54849e0f6204e24d65c021`
-- **Version:** 2 (default) — use the default version unless told otherwise
+- **Version:** 3 (default, since 2026-06-13) — use the default version unless told otherwise. The only supported override is the `MIRA_PROMPT_VERSION` env consumed in `_shared/openai.ts` (absent = platform default). v2 remains a published, selectable version for rollback.
 - **Model:** `gpt-5.5`, effort `medium`, verbosity `medium`, text output
 - **Tools:** Web Search (user location: Thailand) — the model uses it silently for general medical questions outside the provided data. Keep it enabled.
 - **store:** MUST be `false` in production requests (real customer health data). `true` is allowed only for synthetic test traffic.
@@ -80,34 +80,43 @@ JSON array, one object per purchasable product:
     "name": "ตรวจสุขภาพพื้นฐาน",
     "description": "น้ำตาล ไขมัน CBC ตับ ไต",
     "price": 1590,
+    "category": "checkup",
     "image": "https://cdn.example.com/chk-basic.jpg"
   }
 ]
 ```
 
 - `id`: stable unique key — the model echoes it in the card marker, the app resolves it back to the DB row. Keep ids short, ascii, kebab/snake case.
+- `category`: catalog category key (e.g. `checkup`, `vaccine`). Added in prompt v3 — the model uses it to scope in-category browse questions and the `[[categories]]` marker. Always populate it.
 - `price`: number, THB.
 - `image` is passed through for completeness; the model never describes or links images (per prompt rules) — cards are rendered by the app from the DB, not from model output.
 - The model is instructed to NEVER invent products/prices not in this array. If recommendations look wrong, fix the catalog data, not the prompt.
 - Keep the array reasonably small (the tenant's sellable items). If a tenant catalog grows large (>50 items), pre-filter server-side by relevance/category before injecting — do not redesign the prompt.
 
-## 5. Product card marker protocol
+## 5. Card marker protocol (v3 — three types)
 
-When a reply names/recommends/quotes any catalog item, the model appends a final line:
+The model appends at most ONE marker line, always the final line. Three types:
 
 ```
 [[products: chk-basic-plus]]
-[[products: chk-basic, chk-premium]]   // comparison case, max 2
+[[products: chk-basic, chk-premium, vac-flu, vac-hpv]]   // 1–4 ids, best recommendation FIRST
+[[categories]]                                            // broad "what do you have" questions
+[[order_status]]                                          // questions about the customer's order/queue/booking
 ```
 
-Frontend/backend handling (build this; it does not exist yet):
+- `products` — emitted whenever a catalog item is named/recommended, on buying intent (CTA moment), and for in-category browse questions. **1–4 ids, best first.** (v2 emitted up to 2 ids; that still parses.)
+- `categories` — broad catalog questions → UI renders category boxes. No args.
+- `order_status` — only emitted when `personal_context` actually contains `คำสั่งซื้อ` order lines → UI renders the live tracking card. No args.
 
-1. Parse with `/\n?\[\[products:\s*([^\]]+)\]\]\s*$/` on the assistant text.
+Frontend/backend handling (implemented in `_shared/marker.ts`):
+
+1. Parse with `/\n?\[\[(products|categories|order_status)(?::\s*([^\]]*))?\]\]\s*$/` on the assistant text.
 2. Strip the marker line from the text shown to the customer — they must never see it.
-3. Split ids by comma, trim, look up each in the tenant catalog; render product cards (image, name, price, buy/book CTA) below the message bubble.
-4. Unknown id → log it, render nothing for that id, still show the text. Do not crash, do not show the raw marker.
-5. No marker → plain text message (greetings, general health answers, emergencies — by design).
-6. LINE OA target: render cards as Flex Messages; same parsing rules.
+3. `products`: split ids by comma, trim, **slice(0, 4)**, look up each in the tenant catalog (unknown ids filtered + logged); render product cards (image, name, price, buy/book CTA) below the bubble.
+4. `categories` / `order_status`: ignore any args; render the category grid / order-status card respectively.
+5. Unknown product id → log it, render nothing for that id, still show the text. Do not crash, do not show the raw marker.
+6. No marker → plain text message (greetings, general health answers, emergencies — by design).
+7. LINE OA target: render cards as Flex Messages; same parsing rules.
 
 ## 6. Conversation flow expectations (already encoded in the prompt — do not re-implement in code)
 
@@ -115,21 +124,26 @@ The model itself handles: one-question-at-a-time intake (max 2–3 questions), i
 
 Backend must NOT add its own scripted intake flow, canned sales messages, or template responses on top — that double-layer is exactly what made the previous iteration feel robotic. Backend's job is: supply correct variables, call the API, parse the marker, render.
 
-## 7. Regression test suite (run after ANY change to prompt, variables, or pipeline)
+## 7. Regression test suite v3 (run after ANY change to prompt, variables, or pipeline)
 
-Send in order within one conversation (variables filled with the sample catalog from §4 plus a basic-plus 2990 package; nickname "บอส"):
+Automated as `npm run chat:regression:v3` (`scripts/chat-regression-v3.mjs`). The v2 7-case file is kept for rollback. Send in order within one conversation; sample catalog from §4 plus `chk-premium 4990` (checkup), vaccines `vac-flu 990` and `vac-hpv 6500`, all with `category` filled; nickname "บอส":
 
-| # | Send | Pass criteria |
+| # | Send (or inject) | Pass criteria |
 |---|---|---|
-| 1 | `สวัสดีครับ` | One short greeting line, no products, no marker |
-| 2 | `อยากตรวจสุขภาพ` | Asks exactly ONE question (age). No pitch |
-| 3 | `35 ครับ ช่วงนี้กังวลเรื่องน้ำตาล` | Asks ONE next question (last checkup). Does not re-ask age |
-| 4 | `จำไม่ได้แล้ว` | Recommends ONE package with reason tied to age/concern + soft close + `[[products: ...]]` with a valid id. Does not re-ask checkup |
-| 5 | `แพงไปหน่อย ขอคิดดูก่อน` | Acknowledges once, offers ONE cheaper alternative with marker, leaves door open, no second push |
-| 6 | `วัคซีนไข้หวัดใหญ่ราคาเท่าไหร่` | Immediate price from catalog + marker. No interrogation first |
-| 7 | `เจ็บแน่นหน้าอก หายใจไม่ค่อยออก` | ER/1669 escalation. No products, NO marker |
+| 1 | `สวัสดีครับ` | greeting, no marker |
+| 2 | `มีแพ็กเกจอะไรบ้าง` | ONE short line + `[[categories]]` |
+| 3 | `มีวัคซีนอะไรบ้าง` | short line + `[[products: ...]]` with ≤4 vaccine ids only |
+| 4 | `อยากตรวจสุขภาพ` | ONE question (age), no marker |
+| 5 | `35 ครับ ช่วงนี้กังวลเรื่องน้ำตาล` | ONE next question, does not re-ask age |
+| 6 | `จำไม่ได้แล้ว` | ONE product discussed in text + `[[products: ...]]`, best id first, ≤4, all valid |
+| 7 | `แพงไปหน่อย ขอคิดดูก่อน` | one cheaper alternative + marker, no second push |
+| 8 | inject `กำลังสั่งซื้อ: ตรวจสุขภาพพื้นฐาน / ข้อมูลที่ยังขาด: buyer_name` then `ต้องทำยังไงต่อ` | points to on-screen form in ≤2 sentences; does NOT ask for name/phone/age in text; no marker |
+| 9 | inject `คำสั่งซื้อ: ตรวจสุขภาพพื้นฐาน สถานะ: ลงคิวแล้ว 2026-06-20 09:30` then `ถึงคิวหรือยังครับ` | answer contains the date/time from context + `[[order_status]]`; nothing invented |
+| 10 | `เจ็บแน่นหน้าอก หายใจไม่ค่อยออก` | ER/1669 escalation. No products, NO marker |
 
 Global criteria for every reply: Thai, ค่ะ/คะ register, 1–3 short sentences, max one question, no markdown/bullets, never mentions AI/system/tools/web search, never says "ไม่มีข้อมูลในระบบ", prices only from catalog. A reply that names a catalog product without a marker is a FAIL.
+
+> Verified live 2026-06-13: `chat:regression:v3` 10/10 PASS + `v2:e2e-commerce` (incl. `MIRA_E2E_EXPECT_PROMPT_V3=1`) PASS against staging `xwixdxmemwcuoamcloty` with the v3 default.
 
 ## 8. Things explicitly out of scope for Codex to "improve"
 
