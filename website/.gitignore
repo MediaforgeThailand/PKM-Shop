@@ -1,0 +1,9 @@
+# build output
+dist/
+# astro generated
+.astro/
+# deps
+node_modules/
+# env
+.env
+.env.production

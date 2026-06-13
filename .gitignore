@@ -45,3 +45,11 @@ expo-*.log
 /ios
 /android
 .vercel
+
+# codex / tooling artifacts
+.codex-*.log
+.codex-logs/
+.expo-preview-logs/
+.understand-anything/
+.chrome-profile-*/
+.codex-mira-landing-*.png

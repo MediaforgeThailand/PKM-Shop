@@ -1,0 +1,96 @@
+---
+const links = [
+  { href: '#ai-chat', label: 'AI Chat' },
+  { href: '#admin', label: 'หลังบ้าน' },
+  { href: '#referral', label: 'Referral' },
+  { href: '#miracare', label: 'MiraCare' },
+  { href: '#mirabeauty', label: 'MiraBeauty' },
+  { href: '#contact', label: 'ติดต่อเรา' },
+];
+---
+
+<footer class="footer">
+  <div class="container footer-inner">
+    <div>
+      <a class="wordmark" href="#top" aria-label="mira AI home">
+        <span>mira AI</span><span class="wordmark-dot" aria-hidden="true"></span>
+      </a>
+      <p class="tagline">AI Chat ที่ขายเป็น × Referral ที่ขยายยอดขาย</p>
+    </div>
+    <p>© MediaForge</p>
+    <nav aria-label="ท้ายหน้า">
+      {links.map((link) => <a href={link.href}>{link.label}</a>)}
+    </nav>
+  </div>
+</footer>
+
+<style>
+  .footer {
+    border-top: 1px solid var(--night-line);
+    background: var(--night);
+    color: var(--muted-dark);
+    padding: 1.7rem 0 2.1rem;
+  }
+
+  .footer-inner {
+    display: grid;
+    grid-template-columns: auto auto 1fr;
+    gap: 1.5rem;
+    align-items: center;
+  }
+
+  .wordmark {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.28rem;
+    color: #EAF1FF;
+    font-family: "Space Grotesk", system-ui, sans-serif;
+    font-size: 1.18rem;
+    font-weight: 600;
+    line-height: 1;
+  }
+
+  .wordmark-dot {
+    width: 0.4rem;
+    height: 0.4rem;
+    border-radius: 50%;
+    background: var(--brand-bright);
+    box-shadow: 0 0 14px var(--glow-brand);
+  }
+
+  .tagline {
+    margin: 0.45rem 0 0;
+    font-size: 0.82rem;
+  }
+
+  p {
+    margin: 0;
+    font-size: 0.9rem;
+  }
+
+  nav {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.8rem 1.25rem;
+    font-size: 0.9rem;
+  }
+
+  a {
+    transition: color 180ms ease;
+  }
+
+  a:hover {
+    color: #EAF1FF;
+  }
+
+  @media (max-width: 760px) {
+    .footer-inner {
+      grid-template-columns: 1fr;
+    }
+
+    nav {
+      justify-content: flex-start;
+    }
+  }
+</style>

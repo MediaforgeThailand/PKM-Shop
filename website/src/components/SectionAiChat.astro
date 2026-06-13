@@ -1,0 +1,122 @@
+---
+import Section from './Section.astro';
+
+const features = [
+  {
+    icon: 'target',
+    title: 'แนะนำตรงใจ',
+    body: 'อ่านใจลูกค้าจากแชท แล้วเสนอของที่ใช่ — โอกาสปิดสูงขึ้น',
+  },
+  {
+    icon: 'bolt',
+    title: 'ปิดการขายในแชท',
+    body: 'เลือกของ จ่าย QR จบในแชทเดียว ไม่มีจังหวะให้เปลี่ยนใจ',
+  },
+  {
+    icon: 'data',
+    title: 'ข้อมูลคุณ คุมเองได้',
+    body: 'แก้สินค้า เปลี่ยนราคาเมื่อไหร่ AI รู้ทันที ไม่ต้องรอใคร',
+  },
+];
+---
+
+<Section id="ai-chat" tone="light" class="ai-chat-section">
+  <header class="section-head">
+    <span class="ghost-word" aria-hidden="true">AI CHAT</span>
+    <p class="kicker" data-reveal>
+      <span class="kicker-num">01</span>
+      <span class="kicker-rule"></span>
+      AI SALES CHAT
+    </p>
+    <p class="pain-line" data-reveal>ลูกค้าทักตอนตี 2 ไม่มีใครตอบ — ยอดนั้นหายไปเงียบ ๆ</p>
+    <h2 class="section-title" data-reveal>
+      Mira ตอบใน 1 วินาที <span class="gradient-text">และขายจนจบ</span>
+    </h2>
+  </header>
+
+  <div class="feature-grid grid-3">
+    {features.map((feature) => (
+      <article class="feature-tile tilt-card sheen" data-reveal>
+        <div class="tilt-inner">
+          <span class="feature-icon" aria-hidden="true">
+            {feature.icon === 'target' && (
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+                <circle cx="12" cy="12" r="8.4"></circle>
+                <circle cx="12" cy="12" r="4.2"></circle>
+                <circle cx="12" cy="12" r="0.8" fill="currentColor"></circle>
+              </svg>
+            )}
+            {feature.icon === 'bolt' && (
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round">
+                <path d="M13 2.5 5 13.5h6l-1 8 8-11h-6l1-8Z"></path>
+              </svg>
+            )}
+            {feature.icon === 'data' && (
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+                <ellipse cx="12" cy="5.4" rx="7.6" ry="2.9"></ellipse>
+                <path d="M4.4 5.4v6.3c0 1.6 3.4 2.9 7.6 2.9s7.6-1.3 7.6-2.9V5.4"></path>
+                <path d="M4.4 11.7V18c0 1.6 3.4 2.9 7.6 2.9s7.6-1.3 7.6-2.9v-6.3"></path>
+              </svg>
+            )}
+          </span>
+          <h3>{feature.title}</h3>
+          <p>{feature.body}</p>
+        </div>
+      </article>
+    ))}
+  </div>
+
+  <a class="mini-cta" href="#contact" data-reveal>ดู Mira ขายให้ธุรกิจคุณ — นัดเดโมฟรี <span class="arrow">→</span></a>
+</Section>
+
+<style>
+  .section-head {
+    max-width: 880px;
+  }
+
+  .feature-grid {
+    margin-top: 2.5rem;
+  }
+
+  .feature-tile {
+    min-height: 210px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    background: var(--surface);
+    box-shadow: var(--shadow-soft);
+    padding: clamp(1.2rem, 2.5vw, 1.65rem);
+    transition: box-shadow 250ms ease, border-color 250ms ease;
+  }
+
+  .feature-tile:hover {
+    border-color: rgba(46, 107, 246, 0.35);
+    box-shadow: var(--shadow-card);
+  }
+
+  .feature-icon {
+    display: grid;
+    width: 52px;
+    height: 52px;
+    place-items: center;
+    border-radius: 16px;
+    background: var(--brand-soft);
+    color: var(--brand-deep);
+  }
+
+  .feature-icon svg {
+    width: 26px;
+    height: 26px;
+  }
+
+  h3 {
+    margin: 1.1rem 0 0;
+    font-size: clamp(1.3rem, 2.4vw, 1.7rem);
+    font-weight: 600;
+    line-height: 1.2;
+  }
+
+  .feature-tile p {
+    margin: 0.7rem 0 0;
+    color: var(--ink-soft);
+  }
+</style>
