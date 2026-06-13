@@ -1,4 +1,5 @@
 import {
+  branchSelectionLineFlexMessage,
   linePostbackToAction,
   orderPaymentLineFlexMessage,
   orderQrLineImageMessage,
@@ -209,6 +210,71 @@ Deno.test('linePostbackToAction keeps unknown postback text bounded', () => {
 
   assertEquals(parsed.action, null);
   assertEquals(parsed.message.length, 400);
+});
+
+Deno.test('linePostbackToAction maps branch selection postback', () => {
+  const parsed = linePostbackToAction('select_branch:order-9:branch-a');
+  const action = parsed.action;
+
+  if (!action || action.type !== 'select_branch') {
+    throw new Error('expected select_branch action');
+  }
+
+  assertEquals(action.order_id, 'order-9');
+  assertEquals(action.branch_id, 'branch-a');
+});
+
+Deno.test('branchSelectionLineFlexMessage builds carousel with branch postbacks', () => {
+  const order: NonNullable<OrderPanelState> = {
+    amount_baht: 1590,
+    booking_at: null,
+    branch_name: null,
+    branches: [
+      { address: 'Addr A', district: 'District A', id: 'branch-a', name: 'Branch A' },
+      { address: 'Addr B', district: null, id: 'branch-b', name: 'Branch B' },
+    ],
+    id: 'order-9',
+    missing_fields: [],
+    product_name: 'Checkup',
+    step: 'branch',
+    status: 'selecting_branch',
+  };
+
+  const message = branchSelectionLineFlexMessage(order);
+  if (!message) {
+    throw new Error('expected branch flex message');
+  }
+
+  assertEquals(message.type, 'flex');
+
+  const carousel = message.contents as { contents: Array<Record<string, unknown>>; type: string };
+  assertEquals(carousel.type, 'carousel');
+  assertEquals(carousel.contents.length, 2);
+
+  const firstBubble = carousel.contents[0] as {
+    body: { contents: Array<{ text?: string }> };
+    footer: { contents: Array<{ action: { data: string; type: string } }> };
+  };
+  assertEquals(firstBubble.body.contents[0].text, 'Branch A');
+  assertEquals(firstBubble.body.contents[1].text, 'District A');
+  assertEquals(firstBubble.footer.contents[0].action.type, 'postback');
+  assertEquals(firstBubble.footer.contents[0].action.data, 'select_branch:order-9:branch-a');
+});
+
+Deno.test('branchSelectionLineFlexMessage returns null when there are no branches', () => {
+  const order: NonNullable<OrderPanelState> = {
+    amount_baht: 1590,
+    booking_at: null,
+    branch_name: null,
+    branches: [],
+    id: 'order-9',
+    missing_fields: [],
+    product_name: 'Checkup',
+    step: 'branch',
+    status: 'selecting_branch',
+  };
+
+  assertEquals(branchSelectionLineFlexMessage(order), null);
 });
 
 Deno.test('verifyLineSignature accepts valid HMAC signature', async () => {

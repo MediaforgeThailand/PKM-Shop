@@ -976,7 +976,7 @@ async function updateCollectingOrderFromMessage(order: OrderWithProductRow | nul
 
   const extracted = await callOrderFieldExtractor(message);
 
-  if (!extracted.buyer_name && !extracted.buyer_phone && !extracted.preferred_date) {
+  if (!extracted.buyer_name && !extracted.buyer_phone && !extracted.preferred_date && extracted.buyer_age === undefined) {
     return order;
   }
 
@@ -985,6 +985,21 @@ async function updateCollectingOrderFromMessage(order: OrderWithProductRow | nul
     sessionId: order.session_id ?? undefined,
     tenantId: order.tenant_id,
   }, extracted);
+
+  // F1 (v3 plan §11.3): persist a conversationally-collected age as a consent-gated user_fact,
+  // mirroring the order_form_submit call site. A facts failure must never fail the chat turn.
+  if (typeof extracted.buyer_age === 'number' && order.customer_id) {
+    try {
+      await recordFormAgeFact({
+        age: extracted.buyer_age,
+        customerId: order.customer_id,
+        orderId: order.id,
+        tenantId: order.tenant_id,
+      });
+    } catch (error) {
+      console.warn('form_age_fact_failed', error);
+    }
+  }
 
   return maybeAdvanceCollectingOrder(await loadOrderForPanel(updated.id, order.tenant_id));
 }

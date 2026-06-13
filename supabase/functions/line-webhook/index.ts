@@ -2,6 +2,7 @@ import QRCode from 'qrcode';
 
 import { HttpError, handleOptions, json, toErrorResponse } from '../_shared/http.ts';
 import {
+  branchSelectionLineFlexMessage,
   linePostbackToAction,
   orderPaymentLineFlexMessage,
   orderQrLineImageMessage,
@@ -84,8 +85,18 @@ async function toLineMessages(response: ChatOrchestratorResponse) {
     messages.push(products);
   }
 
-  if (response.order) {
-    messages.push(...await orderLineMessages(response.order));
+  const order = response.order;
+
+  if (order) {
+    if (order.step === 'branch') {
+      const branchMessage = branchSelectionLineFlexMessage(order);
+
+      if (branchMessage) {
+        messages.push(branchMessage);
+      }
+    } else {
+      messages.push(...await orderLineMessages(order));
+    }
   }
 
   return messages.slice(0, 5);
