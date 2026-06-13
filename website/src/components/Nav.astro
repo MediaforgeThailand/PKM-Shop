@@ -14,20 +14,15 @@ const links = [
 <header class="site-header" data-site-header>
   <nav class="nav container" aria-label="หลัก">
     <a class="wordmark" href="#top" aria-label="mira AI home">
-      <span class="wordmark-orbit" aria-hidden="true">
-        <svg viewBox="0 0 32 32" fill="none">
-          <circle cx="16" cy="16" r="6.5" fill="url(#mw-g)"></circle>
-          <path d="M3.5 21.5C8 26.5 19 28.5 26 22.5" stroke="url(#mw-g)" stroke-width="2.4" stroke-linecap="round"></path>
-          <path d="M28.5 10.5C24 5.5 13 3.5 6 9.5" stroke="url(#mw-g)" stroke-width="2.4" stroke-linecap="round"></path>
-          <defs>
-            <linearGradient id="mw-g" x1="2" y1="28" x2="30" y2="4" gradientUnits="userSpaceOnUse">
-              <stop stop-color="#2E6BF6"></stop>
-              <stop offset="1" stop-color="#9CC3FE"></stop>
-            </linearGradient>
-          </defs>
-        </svg>
-      </span>
-      <span>mira <em>AI</em></span>
+      <img
+        class="wordmark-image"
+        src="/mira-ai-wordmark.webp"
+        alt="Mira AI"
+        width="346"
+        height="82"
+        decoding="async"
+        fetchpriority="high"
+      />
     </a>
 
     <div class="nav-links" aria-label="เมนูหลัก">
@@ -85,23 +80,16 @@ const links = [
   .wordmark {
     display: inline-flex;
     align-items: center;
-    gap: 0.45rem;
+    width: clamp(118px, 13vw, 154px);
+    aspect-ratio: 346 / 82;
     color: #EAF2FF;
-    font-family: "Space Grotesk", system-ui, sans-serif;
-    font-size: 1.35rem;
-    font-weight: 600;
     line-height: 1;
   }
 
-  .wordmark em {
-    color: var(--sky);
-    font-style: normal;
-  }
-
-  .wordmark-orbit {
-    display: inline-flex;
-    width: 26px;
-    height: 26px;
+  .wordmark-image {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
   }
 
   .nav-links {
