@@ -1,4 +1,4 @@
-import { insertRow, selectMany, updateRows, upsertRow } from './db.ts';
+import { insertRow, selectMany, selectOne, updateRows, upsertRow } from './db.ts';
 import type { FactKeyRow, UserFactRow } from './types.ts';
 
 export type ExtractedFactCandidate = {
@@ -168,11 +168,13 @@ export async function loadFactRegistry() {
 export async function insertFactsIdempotent({
   customerId,
   facts,
+  source = 'chat_extraction',
   sourceRef,
   tenantId,
 }: {
   customerId: string;
   facts: NormalizedFact[];
+  source?: UserFactRow['source'];
   sourceRef: string;
   tenantId: string;
 }) {
@@ -185,7 +187,7 @@ export async function insertFactsIdempotent({
         confidence: fact.confidence,
         customer_id: customerId,
         key: fact.key,
-        source: 'chat_extraction',
+        source,
         source_ref: sourceRef,
         status: fact.status,
         tenant_id: tenantId,
@@ -234,6 +236,59 @@ export async function insertFactsIdempotent({
   }
 
   return inserted;
+}
+
+// Records the buyer's age (collected via a purchase form) as a user_fact,
+// ONLY when the customer has an active health_data_collection consent.
+// Per v3 plan §11.3: key 'age', source 'user_form', confidence 1.0, source_ref = orderId.
+// Returns null on silent skip (no consent) — callers must treat any failure as
+// non-fatal (the order submit must succeed regardless).
+export async function recordFormAgeFact({
+  age,
+  customerId,
+  orderId,
+  tenantId,
+}: {
+  age: number;
+  customerId: string;
+  orderId: string;
+  tenantId: string;
+}): Promise<UserFactRow | null> {
+  if (!Number.isFinite(age) || age < 1 || age > 120) {
+    return null;
+  }
+
+  // Consent gate: latest health_data_collection consent must be granted.
+  // Mirrors the query pattern in _shared/context.ts; gates on granted === true.
+  const latestConsent = await selectOne<{ granted: boolean }>('consents', {
+    customer_id: `eq.${customerId}`,
+    kind: 'eq.health_data_collection',
+    order: 'created_at.desc',
+    select: 'granted',
+    tenant_id: `eq.${tenantId}`,
+  });
+
+  if (!latestConsent || latestConsent.granted !== true) {
+    return null;
+  }
+
+  const [inserted] = await insertFactsIdempotent({
+    customerId,
+    facts: [
+      {
+        confidence: 1.0,
+        key: 'age',
+        status: 'active',
+        value_num: Math.round(age),
+        value_text: null,
+      },
+    ],
+    source: 'user_form',
+    sourceRef: orderId,
+    tenantId,
+  });
+
+  return inserted ?? null;
 }
 
 export async function insertSystemNotice(sessionId: string, content: string) {

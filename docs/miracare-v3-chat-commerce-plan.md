@@ -359,7 +359,7 @@ DoD: ✅ 2026-06-12 E2E script extended in `scripts/e2e-commerce.mjs` for produc
 
 **V3-3 — Default flip + docs.**
 Owner flips default to v3 → rerun suite on default → update handoff doc → remove env pin.
-DoD: ❌ suite green on default; ❌ handoff doc updated; ❌ `docs/miracare-v2-product-plan.md` §4 annotated pointing here.
+DoD: ✅ 2026-06-13 owner flipped the Platform default to v3; `chat:regression:v3` 10/10 PASS + `v2:e2e-commerce` (incl. `MIRA_E2E_EXPECT_PROMPT_V3=1`) PASS live against staging `xwixdxmemwcuoamcloty`; ✅ 2026-06-13 handoff doc updated (§2 version 3, §4 `category`, §5 three marker types, §7 v3 10-case suite); ✅ 2026-06-13 `docs/miracare-v2-product-plan.md` §4 annotated pointing here; ✅ 2026-06-13 no staging `MIRA_PROMPT_VERSION` pin exists (verified via `supabase secrets list`), so the passing suite already ran against the v3 platform default with no env pin — **V3-3 complete**.
 
 **V3-4 — LINE renderer.**
 `lineCards.ts`, postback mapping, conversational-form path kept for LINE, deterministic tests. Live sandbox regression stays blocked on credentials (tracked in v2 plan §11).

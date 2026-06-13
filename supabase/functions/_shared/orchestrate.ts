@@ -11,6 +11,7 @@ import {
   updateRows,
   upsertRow,
 } from './db.ts';
+import { recordFormAgeFact } from './facts.ts';
 import { HttpError, z } from './http.ts';
 import { filterKnownProductMarkerKeys, parseChatMarker } from './marker.ts';
 import {
@@ -432,6 +433,22 @@ async function handleAction({
       preferred_date_end: action.preferred_date_end,
       preferred_time_window: action.preferred_time_window,
     });
+
+    // F1 (v3 plan §11.3): persist the form-collected age as a consent-gated user_fact.
+    // A facts failure must never fail the order submit.
+    if (typeof action.buyer_age === 'number') {
+      try {
+        await recordFormAgeFact({
+          age: action.buyer_age,
+          customerId: customer.id,
+          orderId: action.order_id,
+          tenantId: tenant.id,
+        });
+      } catch (error) {
+        console.warn('form_age_fact_failed', error);
+      }
+    }
+
     const loaded = await maybeAdvanceCollectingOrder(await loadOrderForPanel(order.id, tenant.id), 'customer');
 
     return {

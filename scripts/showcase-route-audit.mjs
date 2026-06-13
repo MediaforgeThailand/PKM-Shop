@@ -13,7 +13,7 @@ const EXCLUDED_ROUTES = new Map([
   ['/', 'showcase home is the module picker, not a module row'],
   ['/+html', 'expo-router document shell'],
   ['/+not-found', 'demo safety net'],
-  ['/showcase/[module]', 'module tour shell generated from registry'],
+  ['/tour/[module]', 'module tour shell generated from registry'],
   ['/more', 'tab navigation hub; S3 regenerates its rows from registry'],
   ['/checkout', 'legacy checkout kept out of the tour until chat checkout cleanup'],
   ['/order-status', 'legacy Stripe return redirect to /user-profile'],

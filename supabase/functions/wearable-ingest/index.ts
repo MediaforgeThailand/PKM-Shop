@@ -2,7 +2,7 @@ import { insertRow, selectMany, selectOne, updateRows, upsertRow } from '../_sha
 import { HttpError, handleOptions, json, toErrorResponse, validateJson, z } from '../_shared/http.ts';
 import { assertInternalServiceRoleAuthorization } from '../_shared/internalAuth.ts';
 import { streamStorageObject } from '../_shared/storage.ts';
-import type { CustomerRow, UserFactRow, WearableIngestRequest, WearableMetricRow } from '../_shared/types.ts';
+import type { CustomerRow, UserFactRow, WearableImportRow, WearableIngestRequest, WearableMetricRow } from '../_shared/types.ts';
 import { AppleHealthParseError, parseAppleHealthExportStream, type LatestBodySample } from '../_shared/wearable.ts';
 
 declare const Deno: {
@@ -27,7 +27,7 @@ async function loadCustomerForInternalIngest(customerId: string) {
   return customer;
 }
 
-async function insertLatestFact(customer: CustomerRow, sample: LatestBodySample) {
+async function insertLatestFact(customer: CustomerRow, sample: LatestBodySample, sourceRef: string | null) {
   const activeFacts = await selectMany<UserFactRow>('user_facts', {
     customer_id: `eq.${customer.id}`,
     key: `eq.${sample.key}`,
@@ -55,7 +55,7 @@ async function insertLatestFact(customer: CustomerRow, sample: LatestBodySample)
     customer_id: customer.id,
     key: sample.key,
     source: 'wearable',
-    source_ref: null,
+    source_ref: sourceRef,
     status: 'active',
     tenant_id: customer.tenant_id,
     value_num: Math.round(sample.value * 10) / 10,
@@ -104,6 +104,23 @@ export async function handleWearableIngest(req: Request) {
       contentType: object.contentType,
       storagePath: body.storage_path,
     });
+    // R5: record the import entity first so every metric and fact derived from
+    // this file carries a spec-defined source_ref instead of null.
+    const importRow = await insertRow<WearableImportRow>(
+      'wearable_imports',
+      {
+        customer_id: customer.id,
+        file_path: body.storage_path,
+        filename: body.storage_path.split('/').pop() ?? body.storage_path,
+        metric_count: parsed.metrics.length,
+        source: 'apple_export',
+        tenant_id: customer.tenant_id,
+      },
+      {
+        select: 'id,tenant_id,customer_id,source,filename,file_path,metric_count,imported_at',
+      },
+    );
+
     const metrics: WearableMetricRow[] = [];
 
     for (const metric of parsed.metrics) {
@@ -112,6 +129,7 @@ export async function handleWearableIngest(req: Request) {
         {
           customer_id: customer.id,
           day: metric.day,
+          import_id: importRow.id,
           metric: metric.metric,
           source: 'apple_export',
           tenant_id: customer.tenant_id,
@@ -126,7 +144,7 @@ export async function handleWearableIngest(req: Request) {
     }
 
     for (const sample of parsed.latestSamples) {
-      await insertLatestFact(customer, sample);
+      await insertLatestFact(customer, sample, importRow.id);
     }
 
     return json({

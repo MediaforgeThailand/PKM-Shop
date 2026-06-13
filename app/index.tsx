@@ -77,7 +77,7 @@ function ModuleTile({ index, isWide, module }: { index: number; isWide: boolean;
   const previewPages = module.pages.slice(0, 3);
 
   return (
-    <Link href={{ pathname: '/showcase/[module]', params: { module: module.id } }} asChild>
+    <Link href={{ pathname: '/tour/[module]', params: { module: module.id } }} asChild>
       <Pressable style={StyleSheet.flatten([styles.moduleTile, isWide ? styles.moduleTileWide : styles.moduleTileStacked])}>
         <ImageBackground imageStyle={styles.tileImage} resizeMode="cover" source={moduleImages[module.id]} style={styles.tileImageWrap}>
           <LinearGradient colors={['rgba(7, 17, 15, 0.02)', 'rgba(7, 17, 15, 0.82)']} style={styles.tileOverlay}>

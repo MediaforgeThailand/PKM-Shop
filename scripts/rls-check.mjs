@@ -30,6 +30,7 @@ const created = {
   productFilters: [],
   tenantIds: [],
   userFactIds: [],
+  wearableImportIds: [],
 };
 let caughtError = null;
 
@@ -113,12 +114,14 @@ async function run() {
   await expectOne('customer A can read own order row', customerAClient.from('orders').select('id').eq('id', fixtures.orderA.id));
   await expectOne('customer A can read own chat message row', customerAClient.from('chat_messages').select('id').eq('id', fixtures.messageA.id));
   await expectOne('customer A can read own lab report row', customerAClient.from('lab_reports').select('id').eq('id', fixtures.labReportA.id));
+  await expectOne('customer A can read own wearable import row', customerAClient.from('wearable_imports').select('id').eq('id', fixtures.wearableImportA.id));
 
   await expectZero('customer A cannot read customer B row', customerAClient.from('customers').select('id').eq('id', customerB.id));
   await expectZero('customer A cannot read customer B user_facts row', customerAClient.from('user_facts').select('id').eq('id', fixtures.factB.id));
   await expectZero('customer A cannot read customer B order row', customerAClient.from('orders').select('id').eq('id', fixtures.orderB.id));
   await expectZero('customer A cannot read customer B chat message row', customerAClient.from('chat_messages').select('id').eq('id', fixtures.messageB.id));
   await expectZero('customer A cannot read customer B lab report row', customerAClient.from('lab_reports').select('id').eq('id', fixtures.labReportB.id));
+  await expectZero('customer A cannot read customer B wearable import row', customerAClient.from('wearable_imports').select('id').eq('id', fixtures.wearableImportB.id));
 
   await expectCrossTenantProductWriteDenied(customerAClient, otherTenant.id);
   await runV3CommerceChecks({
@@ -254,6 +257,26 @@ async function seedPrivateRows({ customerA, customerB, product, tenant }) {
   ]);
   created.labReportIds.push(labReportA.id, labReportB.id);
 
+  const [wearableImportA, wearableImportB] = await Promise.all([
+    insertRow('wearable_imports', {
+      customer_id: customerA.id,
+      file_path: `rls/${customerA.id}/export.zip`,
+      filename: 'export.zip',
+      metric_count: 1,
+      source: 'apple_export',
+      tenant_id: tenant.id,
+    }),
+    insertRow('wearable_imports', {
+      customer_id: customerB.id,
+      file_path: `rls/${customerB.id}/export.zip`,
+      filename: 'export.zip',
+      metric_count: 1,
+      source: 'apple_export',
+      tenant_id: tenant.id,
+    }),
+  ]);
+  created.wearableImportIds.push(wearableImportA.id, wearableImportB.id);
+
   return {
     factA,
     factB,
@@ -263,6 +286,8 @@ async function seedPrivateRows({ customerA, customerB, product, tenant }) {
     messageB,
     orderA,
     orderB,
+    wearableImportA,
+    wearableImportB,
   };
 }
 
@@ -538,6 +563,7 @@ async function cleanup() {
   }
 
   await deleteByIds('branches', created.branchIds);
+  await deleteByIds('wearable_imports', created.wearableImportIds);
   await deleteByIds('lab_reports', created.labReportIds);
   await deleteByIds('orders', created.orderIds);
   await deleteByIds('chat_messages', created.chatMessageIds);

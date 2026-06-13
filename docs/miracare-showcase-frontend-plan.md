@@ -5,6 +5,8 @@ Scope: **front-end / UI only.** This plan must not touch `supabase/functions/*`,
 
 Workflow: same as v2/v3 — Codex implements phase by phase, updates the DoD checkboxes here (✅/❌ + date), owner audits.
 
+> **Revision 2026-06-13 (owner-directed):** The showcase now ships under a `/showcase` base path so the marketing landing can own `/` on `mira.mediaforge.co` (see `docs/mira-landing-plan.md` §8.6). Two consequences for the route table below: the showcase home (`app/index.tsx`) is served at `/showcase` on the domain (still `/` inside the Expo app), and the module-tour route was renamed `app/showcase/[module].tsx` → `app/tour/[module].tsx`, served at `/showcase/tour/[module]`. Route names in this doc that read `/showcase/[module]` refer to the renamed `/tour/[module]` file.
+
 ---
 
 ## 0. Product intent (read first)

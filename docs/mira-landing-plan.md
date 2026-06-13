@@ -389,6 +389,23 @@ DoD note: this pass supersedes the L1–L6 visual specs above where they conflic
 
 **Second owner pass (same day):** owner supplied the real logos (`mira AI` orbit + `mira care`) — palette shifted from indigo to true CI blue (`--brand-deep #1D56DB`, `--brand #2E6BF6`, `--brand-bright #3F8EFC`, night `#051226`); wordmark is now "mira AI". Copy was cut hard for noise reduction: every section now reads pain-line (✗ one sentence) → solution headline → minimal support → mini-CTA; hero punch line is "ไม่ขอเงินเดือน ไม่มีวันหยุด ปิดการขายให้คุณตลอด 24 ชม."; capability-chip strips, verticals-intro section, and long sub-paragraphs were removed. §3 copy blocks above are therefore historical — the live components are the copy source of truth now.
 
+## 8.6 Revision 2026-06-13 — single combined deployment (owner-directed)
+
+Owner directed that `mira.mediaforge.co` serve the **landing page at `/`** and the **Expo showcase at `/showcase`**, on one deployment. This intentionally overrides two earlier DECIDED items for this task only:
+
+- §1 "Deploy: separate Vercel project … domain mira.com" and "The Expo app keeps `/` as the Netflix-style showcase" — the two apps now ship together behind one domain.
+- §6 guardrail 1 "no edits outside `website/`" — this task necessarily touches root `package.json`, `app.json`, and `app/*` showcase routing.
+
+What changed (no AGENTS.md §2 protected-core file was touched):
+
+1. `app.json` → `expo.experiments.baseUrl = "/showcase"` so the whole Expo web export is mounted under `/showcase` (asset + navigation URLs prefixed automatically). Native builds ignore `baseUrl`, so iOS/Android are unaffected.
+2. Expo inner tour route renamed `app/showcase/[module].tsx` → `app/tour/[module].tsx`. Reason: under the `/showcase` base, the old route would resolve to `/showcase/showcase/[module]`; it now resolves to a clean `/showcase/tour/[module]`. Updated: the tile link in `app/index.tsx` and `EXCLUDED_ROUTES` in `scripts/showcase-route-audit.mjs`. The picker itself stays at the Expo app root (`/` → `/showcase` on the domain).
+3. Root build pipeline: root `package.json` `build` now runs `node scripts/build-site.mjs`, which exports Expo into `dist/showcase` and builds the Astro site into the `dist` root (landing at `/`). Root `vercel.json` is unchanged (`outputDirectory: dist`, `cleanUrls`).
+4. Astro landing now lives at `/` (`website/src/pages/index.astro`); `/landingpage` is a permanent redirect to `/`. `astro.config.mjs` `site` → `https://mira.mediaforge.co`.
+5. `components/MiraLandingPage.tsx` was left untouched per the [EXISTING-LANDING] guardrail. It is unrouted dead code; its stale `/showcase/[module]` links would need updating to `/tour/[module]` only if it is ever re-wired into the route tree.
+
+Owner action remaining: the existing `mira.mediaforge.co` Vercel project already builds from the repo root, so this is just a redeploy — no new Vercel project or DNS change is required. (L8 below is superseded: there is no separate `website/` project.)
+
 ## 9. Open questions for owner (answer at audit; none block L0–L7)
 
 1. **Domain**: mira.com is stated in the brief — confirm the actual domain to configure (mira.com is likely taken; e.g. `mira.co.th`, `usemira.ai`, …). Affects §5 metadata only.
