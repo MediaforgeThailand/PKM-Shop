@@ -3,15 +3,6 @@ import Button from './Button.astro';
 import ChatSim from './ChatSim.astro';
 import Chip from './Chip.astro';
 import MotionLoop from './MotionLoop.astro';
-
-const marqueeItems = [
-  'ปิดการขายในแชท',
-  'REFERRAL → ยอดขาย',
-  'ตอบลูกค้า 24/7',
-  'PWA · APP · LINE OA',
-  'หลังบ้านครบในตัว',
-  'ปรับตาม CI ของคุณ',
-];
 ---
 
 <section id="top" class="hero section-dark grain">
@@ -51,23 +42,6 @@ const marqueeItems = [
     <div class="hero-device" data-reveal>
       <div class="device-tilt">
         <ChatSim />
-      </div>
-    </div>
-  </div>
-
-  <div class="hero-band" aria-hidden="true">
-    <div class="marquee">
-      <div class="marquee-track">
-        {[0, 1].map(() => (
-          <span class="marquee-item">
-            {marqueeItems.map((item) => (
-              <>
-                <span>{item}</span>
-                <span class="marquee-dot"></span>
-              </>
-            ))}
-          </span>
-        ))}
       </div>
     </div>
   </div>
@@ -197,21 +171,6 @@ const marqueeItems = [
     filter: blur(34px);
   }
 
-  .hero-band {
-    position: relative;
-    z-index: 2;
-    border-top: 1px solid var(--night-line);
-    background: rgba(5, 18, 38, 0.55);
-    backdrop-filter: blur(6px);
-    padding: 0.85rem 0;
-    color: var(--ice);
-    font-size: 0.95rem;
-  }
-
-  .hero-band :global(.marquee-dot) {
-    background: var(--brand-bright);
-  }
-
   @media (max-width: 1020px) {
     .hero {
       min-height: auto;
@@ -240,10 +199,6 @@ const marqueeItems = [
     .hero-sub {
       font-size: 0.98rem;
       line-height: 1.6;
-    }
-
-    .hero-band {
-      font-size: 0.85rem;
     }
   }
 </style>
