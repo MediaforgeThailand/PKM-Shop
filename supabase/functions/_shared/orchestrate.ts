@@ -417,6 +417,12 @@ async function handleAction({
     const order = await transition(action.order_id, 'collecting_info', 'customer', { branch_id: branch.id });
     const loaded = await loadOrderForPanel(order.id, tenant.id);
 
+    // V3-7 (LINE): don't short-circuit with a canned line — return the order so the
+    // turn runs through the model and Mira asks for the buyer info conversationally.
+    if (channel === 'line') {
+      return { order: loaded };
+    }
+
     return {
       response: {
         order: await orderPanelFor(loaded, tenant),
@@ -1145,6 +1151,14 @@ async function completeChatTurn({
   }
 
   let activeOrder = actionResult.order ?? await loadActiveOrder(session.id, tenant.id);
+
+  // V3-7 (LINE): record any typed buyer info / confirmation BEFORE building the
+  // prompt context, so the order state the model sees is current — it can read the
+  // details back and ask to confirm, or (on confirmation) see awaiting_payment.
+  if (channel === 'line') {
+    activeOrder = await updateCollectingOrderFromMessage(activeOrder, message);
+  }
+
   const intentCategory = inferIntentCategory(message);
   const orderContext = await formatOrderContextLines(customer.id, session.id, tenant.id, channel);
   const [personalContext, recentChat, productCatalog] = await Promise.all([
@@ -1202,8 +1216,6 @@ async function completeChatTurn({
   });
 
   await updateSessionAfterAssistant(session.id, tenant.id, parsed.text);
-
-  activeOrder = channel === 'line' ? await updateCollectingOrderFromMessage(activeOrder, message) : activeOrder;
 
   void invokeInternalFunction('fact-extractor', { message_id: userPersist.row.id }).catch((error) => {
     console.warn('fact_extractor_invoke_failed', error instanceof Error ? error.message : error);
