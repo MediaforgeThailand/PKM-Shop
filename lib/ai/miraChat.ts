@@ -13,6 +13,8 @@ import type {
   ProductSummary,
   StripeCheckoutRequest,
   StripeCheckoutResponse,
+  StripePromptPayQrRequest,
+  StripePromptPayQrResponse,
 } from '@/lib/types/api';
 import { readStoredReferralCode } from '@/lib/referrals/attribution';
 import type {
@@ -116,6 +118,10 @@ type ConsentRow = {
   id: string;
 };
 
+type CustomerIdentityRow = {
+  id: string;
+};
+
 export type ChatHistoryPage = {
   hasMore: boolean;
   messages: ChatMessage[];
@@ -153,10 +159,52 @@ export async function loadLatestChatHistoryPage(pageSize = chatHistoryPageSize):
     };
   }
 
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+
+  if (authError) {
+    throw new Error(authError.message);
+  }
+
+  const authUserId = authData.user?.id;
+
+  if (!authUserId) {
+    setCurrentChatSessionId(null);
+
+    return {
+      hasMore: false,
+      messages: [],
+      nextBefore: null,
+      sessionId: null,
+    };
+  }
+
+  const { data: customerRows, error: customerError } = await supabase
+    .from('customers')
+    .select('id')
+    .eq('auth_user_id', authUserId);
+
+  if (customerError) {
+    throw new Error(customerError.message);
+  }
+
+  const customerIds = ((customerRows ?? []) as CustomerIdentityRow[]).map((customer) => customer.id);
+
+  if (customerIds.length === 0) {
+    setCurrentChatSessionId(null);
+
+    return {
+      hasMore: false,
+      messages: [],
+      nextBefore: null,
+      sessionId: null,
+    };
+  }
+
   const { data, error } = await supabase
     .from('chat_sessions')
     .select('id,last_message_at,created_at')
     .eq('channel', 'app')
+    .in('customer_id', customerIds)
     .order('last_message_at', { ascending: false, nullsFirst: false })
     .order('created_at', { ascending: false })
     .limit(1);
@@ -371,13 +419,55 @@ export async function uploadPaymentSlipFile(uploadUrl: string, file: SlipUploadF
 
 export async function createStripeCheckoutSession({
   orderId,
+  returnPath,
+  sessionId,
+}: {
+  orderId: string;
+  returnPath?: string;
+  sessionId?: string | null;
+}) {
+  const returnUrlBase = typeof window !== 'undefined' ? window.location.origin : undefined;
+
+  return invokeFunction<StripeCheckoutRequest, StripeCheckoutResponse>('stripe-checkout', {
+    order_id: orderId,
+    return_path: returnPath,
+    return_url_base: returnUrlBase,
+    session_id: sessionId ?? orchestratorSessionId,
+    tenant_slug: defaultTenantSlug,
+  });
+}
+
+export async function createStripePromptPayQr({
+  orderId,
   sessionId,
 }: {
   orderId: string;
   sessionId?: string | null;
 }) {
-  return invokeFunction<StripeCheckoutRequest, StripeCheckoutResponse>('stripe-checkout', {
+  const returnUrlBase = typeof window !== 'undefined' ? window.location.origin : undefined;
+
+  return invokeFunction<StripePromptPayQrRequest, StripePromptPayQrResponse>('stripe-promptpay-qr', {
+    action: 'create',
     order_id: orderId,
+    return_url_base: returnUrlBase,
+    session_id: sessionId ?? orchestratorSessionId,
+    tenant_slug: defaultTenantSlug,
+  });
+}
+
+export async function checkStripePromptPayQrStatus({
+  orderId,
+  sessionId,
+}: {
+  orderId: string;
+  sessionId?: string | null;
+}) {
+  const returnUrlBase = typeof window !== 'undefined' ? window.location.origin : undefined;
+
+  return invokeFunction<StripePromptPayQrRequest, StripePromptPayQrResponse>('stripe-promptpay-qr', {
+    action: 'status',
+    order_id: orderId,
+    return_url_base: returnUrlBase,
     session_id: sessionId ?? orchestratorSessionId,
     tenant_slug: defaultTenantSlug,
   });

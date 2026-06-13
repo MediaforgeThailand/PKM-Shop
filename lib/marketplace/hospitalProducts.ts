@@ -1,5 +1,14 @@
+import { invokeFunction } from '@/lib/api/client';
 import { supabase, supabaseConfigStatus } from '@/lib/supabase';
-import type { BranchRow, CatalogCategory, ProductCategoryRow, ProductSummary, TenantSummary } from '@/lib/types/api';
+import type {
+  AdminStripeProductSyncRequest,
+  AdminStripeProductSyncResponse,
+  BranchRow,
+  CatalogCategory,
+  ProductCategoryRow,
+  ProductSummary,
+  TenantSummary,
+} from '@/lib/types/api';
 
 export type ProductCategory = CatalogCategory;
 
@@ -7,6 +16,7 @@ export type HospitalProductDraft = {
   branchInfo?: string;
   branchIds?: string[];
   category?: ProductCategory;
+  commissionPercent?: string;
   description: string;
   hospitalAddress: string;
   hospitalLat?: number;
@@ -14,8 +24,11 @@ export type HospitalProductDraft = {
   hospitalMapQuery: string;
   hospitalName: string;
   imageUrl?: string;
+  productImageFile?: File;
+  productImageMimeType?: string;
   productImageName?: string;
   productImagePreviewUri?: string;
+  productImageSize?: number;
   priceAmount: string;
   requiresAppointment?: boolean;
   title: string;
@@ -55,6 +68,7 @@ export type HospitalProduct = {
   branches: BranchSummary[];
   catalogKey: string;
   category: ProductCategory;
+  commissionRate: number;
   createdAt: string;
   description: string;
   duration?: string | null;
@@ -69,11 +83,27 @@ export type HospitalProduct = {
   location?: string | null;
   preparationNotes?: string | null;
   priceAmount: number;
+  productImageBucket?: string | null;
+  productImageMimeType?: string | null;
   productImageName?: string | null;
+  productImagePath?: string | null;
   productImagePreviewUri?: string | null;
+  productImageSize?: number | null;
   ragChunkId?: string | null;
+  ragEmbeddingDimensions?: number | null;
+  ragEmbeddingError?: string | null;
+  ragEmbeddingModel?: string | null;
+  ragEmbeddingStatus: 'embedded' | 'error' | 'not_published' | 'pending' | 'skipped';
+  ragEmbeddingUpdatedAt?: string | null;
+  ragStatus: 'archived' | 'error' | 'not_published' | 'pending_review' | 'published' | 'rejected';
   requiresAppointment: boolean;
-  status: 'active' | 'archived';
+  reviewNote?: string | null;
+  reviewStatus: 'approved' | 'archived' | 'draft' | 'pending_review' | 'rejected';
+  reviewedAt?: string | null;
+  reviewedBy?: string | null;
+  status: 'active' | 'archived' | 'draft' | 'pending_review' | 'rejected';
+  stripePriceId?: string | null;
+  stripeProductId?: string | null;
   tags: string[];
   tenantId: string;
   title: string;
@@ -146,6 +176,17 @@ export type RagEmbeddingResult = {
   status: 'embedded' | 'error' | 'skipped';
 };
 
+export type HospitalProductRagActionResult = {
+  embedding: RagEmbeddingResult;
+  product: HospitalProduct;
+};
+
+export type StripeProductSyncResult = {
+  product: HospitalProduct;
+  response: AdminStripeProductSyncResponse;
+  summary: string;
+};
+
 type ProductRow = {
   active: boolean;
   branch_info: string | null;
@@ -158,6 +199,8 @@ type ProductRow = {
   name: string;
   price_baht: number;
   requires_appointment: boolean;
+  stripe_price_id: string | null;
+  stripe_product_id: string | null;
   tenant_id: string;
   tenants?: Pick<TenantSummary, 'display_name'> | Pick<TenantSummary, 'display_name'>[] | null;
   updated_at: string;
@@ -176,7 +219,14 @@ export const defaultTenantSlug = process.env.EXPO_PUBLIC_MIRA_TENANT_SLUG?.trim(
 const categoryLabels: Record<string, string> = {
   checkup: 'Checkup',
   general: 'General',
+  health_checkup: 'ตรวจสุขภาพ',
+  imaging: 'เอกซเรย์/ภาพวินิจฉัย',
+  lab_test: 'ตรวจแล็บ/ตรวจเลือด',
+  other: 'อื่นๆ',
+  procedure: 'หัตถการ',
+  specialty_consult: 'ปรึกษาแพทย์',
   vaccine: 'Vaccine',
+  wellness: 'Wellness',
 };
 
 const productCategories = Object.keys(categoryLabels);
@@ -236,6 +286,8 @@ function productSelectColumns() {
     'branch_info',
     'requires_appointment',
     'active',
+    'stripe_product_id',
+    'stripe_price_id',
     'created_at',
     'updated_at',
     'tenants(display_name)',
@@ -276,6 +328,7 @@ function toHospitalProduct(row: ProductRow): HospitalProduct {
     branches: [],
     catalogKey: row.catalog_key,
     category,
+    commissionRate: 0.03,
     createdAt: row.created_at,
     description: row.description,
     duration: null,
@@ -290,11 +343,27 @@ function toHospitalProduct(row: ProductRow): HospitalProduct {
     location: row.branch_info,
     preparationNotes: null,
     priceAmount: row.price_baht,
+    productImageBucket: null,
+    productImageMimeType: null,
     productImageName: null,
+    productImagePath: null,
     productImagePreviewUri: row.image_url,
+    productImageSize: null,
     ragChunkId: null,
+    ragEmbeddingDimensions: null,
+    ragEmbeddingError: null,
+    ragEmbeddingModel: null,
+    ragEmbeddingStatus: 'not_published',
+    ragEmbeddingUpdatedAt: null,
+    ragStatus: 'not_published',
     requiresAppointment: row.requires_appointment,
+    reviewNote: null,
+    reviewStatus: row.active ? 'approved' : 'archived',
+    reviewedAt: null,
+    reviewedBy: null,
     status: row.active ? 'active' : 'archived',
+    stripePriceId: row.stripe_price_id,
+    stripeProductId: row.stripe_product_id,
     tags,
     tenantId: row.tenant_id,
     title: row.name,
@@ -451,6 +520,16 @@ export function getProductCategories() {
   return productCategories;
 }
 
+export function formatCommissionPercent(rate: number) {
+  if (!Number.isFinite(rate)) {
+    return '0%';
+  }
+
+  const percent = rate * 100;
+
+  return Number.isInteger(percent) ? `${percent}%` : `${percent.toFixed(1).replace(/\.0$/, '')}%`;
+}
+
 function toBranchSummary(row: BranchRow): BranchSummary {
   return {
     active: row.active,
@@ -565,6 +644,18 @@ export async function loadActiveHospitalProducts(limit = 20): Promise<HospitalPr
   }
 
   return attachBranches((data as unknown as ProductRow[]).map(toHospitalProduct));
+}
+
+export async function loadActiveHospitalProductById(productId: string): Promise<HospitalProduct | null> {
+  const trimmedProductId = productId.trim();
+
+  if (!trimmedProductId) {
+    return null;
+  }
+
+  const products = await loadActiveHospitalProducts(100);
+
+  return products.find((product) => product.id === trimmedProductId || product.catalogKey === trimmedProductId) ?? null;
 }
 
 export async function loadManagedHospitalProducts(limit = 80): Promise<HospitalProduct[]> {
@@ -812,6 +903,80 @@ export async function saveHospitalProductWithRag(draft: HospitalProductDraft, pr
 
 export async function saveCatalogProduct(draft: HospitalProductDraft, productId?: string) {
   return saveHospitalProductWithRag(draft, productId);
+}
+
+export async function syncCatalogProductToStripe(productId: string): Promise<AdminStripeProductSyncResponse> {
+  await requireAuthenticatedUser();
+
+  return invokeFunction<AdminStripeProductSyncRequest, AdminStripeProductSyncResponse>('admin-stripe-product-sync', {
+    product_id: productId,
+  });
+}
+
+export function hasStripeCatalogMapping(product: HospitalProduct) {
+  return Boolean(product.stripeProductId && product.stripePriceId);
+}
+
+export function shouldSyncCatalogStatusToStripe(product: HospitalProduct, nextStatus: HospitalProductStatus) {
+  return nextStatus === 'active' || Boolean(product.stripeProductId || product.stripePriceId);
+}
+
+export async function syncHospitalProductToStripe(product: HospitalProduct): Promise<StripeProductSyncResult> {
+  const response = await syncCatalogProductToStripe(product.id);
+  const syncedProduct = {
+    ...product,
+    stripePriceId: response.stripe_price_id,
+    stripeProductId: response.stripe_product_id,
+  };
+
+  return {
+    product: syncedProduct,
+    response,
+    summary: `Stripe ${response.product_action}; price ${response.price_action}`,
+  };
+}
+
+export async function approveHospitalProductForPublication(product: HospitalProduct): Promise<HospitalProductRagActionResult> {
+  const updatedProduct = await updateHospitalProductStatus(product, 'active');
+
+  return {
+    embedding: {
+      message: 'Catalog product is active. Product RAG embedding is not wired in the main catalog schema yet.',
+      status: 'skipped',
+    },
+    product: {
+      ...updatedProduct,
+      ragEmbeddingStatus: 'not_published',
+      ragStatus: 'not_published',
+      reviewStatus: 'approved',
+    },
+  };
+}
+
+export async function rejectHospitalProductRag(product: HospitalProduct, reviewNote = ''): Promise<HospitalProduct> {
+  const archivedProduct = await updateHospitalProductStatus(product, 'archived');
+
+  return {
+    ...archivedProduct,
+    ragStatus: 'rejected',
+    reviewNote,
+    reviewStatus: 'rejected',
+    status: 'rejected',
+  };
+}
+
+export async function retryHospitalProductEmbedding(product: HospitalProduct): Promise<HospitalProductRagActionResult> {
+  return {
+    embedding: {
+      message: 'Product RAG embedding is not wired in the main catalog schema yet.',
+      status: 'skipped',
+    },
+    product: {
+      ...product,
+      ragEmbeddingStatus: 'not_published',
+      ragStatus: 'not_published',
+    },
+  };
 }
 
 export function toProductSummary(product: HospitalProduct): ProductSummary {

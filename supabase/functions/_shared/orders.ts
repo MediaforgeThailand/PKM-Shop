@@ -27,7 +27,7 @@ export const orderStatuses: OrderStatus[] = [
 ];
 
 export const ORDER_WITH_PRODUCT_SELECT =
-  'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,channel,referrer_id,commission_scheme_snapshot,status,slip_url,booking_at,branch_id,buyer_age,admin_note,created_at,updated_at,products(name,catalog_key,category,price_baht),branches(id,name,address,district)';
+  'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,preferred_date_end,preferred_time_window,channel,referrer_id,commission_scheme_snapshot,status,slip_url,booking_at,branch_id,buyer_age,admin_note,payment_provider,stripe_checkout_session_id,stripe_payment_intent_id,stripe_payment_status,paid_at,created_at,updated_at,products(name,catalog_key,category,price_baht),branches(id,name,address,district)';
 
 function hasBuyerInfo(order: Pick<OrderRow, 'buyer_age' | 'buyer_name' | 'buyer_phone'>) {
   return Boolean(order.buyer_name?.trim() && order.buyer_phone?.trim() && order.buyer_age);
@@ -270,13 +270,17 @@ export function toOrderPanel(
     ...(step === 'branch' && branches.length > 0 ? { branches } : {}),
     id: order.id,
     missing_fields: missingFields,
+    payment_provider: order.payment_provider ?? null,
+    preferred_date: order.preferred_date ?? null,
+    preferred_date_end: order.preferred_date_end ?? null,
+    preferred_time_window: order.preferred_time_window ?? null,
     product_name: product?.name ?? 'แพ็กเกจ',
     show_form: step === 'form',
     step,
     status: order.status,
   };
 
-  if (step === 'qr' && tenant.promptpay_id) {
+  if (step === 'qr' && tenant.promptpay_id && order.payment_provider !== 'stripe') {
     return {
       ...base,
       qr_payload: buildPromptPayPayload(tenant.promptpay_id, order.amount_baht),
@@ -353,7 +357,7 @@ export async function updateOrderFields(
     sessionId?: string;
     tenantId: string;
   },
-  fields: Partial<Pick<OrderRow, 'buyer_age' | 'buyer_name' | 'buyer_phone' | 'preferred_date'>>,
+  fields: Partial<Pick<OrderRow, 'buyer_age' | 'buyer_name' | 'buyer_phone' | 'preferred_date' | 'preferred_date_end' | 'preferred_time_window'>>,
 ) {
   const patch: Record<string, unknown> = {
     updated_at: new Date().toISOString(),
@@ -375,11 +379,19 @@ export async function updateOrderFields(
     patch.preferred_date = fields.preferred_date;
   }
 
+  if (fields.preferred_date_end !== undefined) {
+    patch.preferred_date_end = fields.preferred_date_end;
+  }
+
+  if (fields.preferred_time_window !== undefined) {
+    patch.preferred_time_window = fields.preferred_time_window;
+  }
+
   const rows = await updateRows<OrderRow>('orders', patch, {
     ...(scope.customerId ? { customer_id: `eq.${scope.customerId}` } : {}),
     id: `eq.${orderId}`,
     select:
-      'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,channel,referrer_id,commission_scheme_snapshot,status,slip_url,booking_at,branch_id,buyer_age,admin_note,created_at,updated_at',
+      'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,preferred_date_end,preferred_time_window,channel,referrer_id,commission_scheme_snapshot,status,slip_url,booking_at,branch_id,buyer_age,admin_note,payment_provider,stripe_checkout_session_id,stripe_payment_intent_id,stripe_payment_status,paid_at,created_at,updated_at',
     ...(scope.sessionId ? { session_id: `eq.${scope.sessionId}` } : {}),
     tenant_id: `eq.${scope.tenantId}`,
   });

@@ -179,6 +179,32 @@ export const purchaseOrders: PurchaseOrder[] = [
     referralCode: 'DRNOK-2026',
     bookingStatus: 'awaiting_call',
   },
+  {
+    id: 'ORD-260604-1188',
+    userName: 'Anong Demo',
+    userPhone: '+66 82 555 7811',
+    nationalIdLast4: '8811',
+    packageTitle: 'Basic Blood Checkup',
+    hospital: 'Mira Partner Hospital',
+    paidAt: '2026-06-04T11:18:00+07:00',
+    amount: { amount: 3500, currency: 'THB' },
+    commission: { amount: 350, currency: 'THB' },
+    referralCode: 'NURSE-MAY',
+    bookingStatus: 'scheduled',
+  },
+  {
+    id: 'ORD-260604-1275',
+    userName: 'Krit Demo',
+    userPhone: '+66 89 112 4477',
+    nationalIdLast4: '4477',
+    packageTitle: 'Cancer Risk Baseline',
+    hospital: 'Sukhumvit Wellness Center',
+    paidAt: '2026-06-04T12:15:00+07:00',
+    amount: { amount: 18900, currency: 'THB' },
+    commission: { amount: 1890, currency: 'THB' },
+    referralCode: 'DRNOK-2026',
+    bookingStatus: 'completed',
+  },
 ];
 
 export const healthMetrics: HealthMetric[] = [

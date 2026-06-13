@@ -80,6 +80,7 @@ supabase secrets set DEFAULT_USER_NICKNAME=ลูกค้า
 supabase functions deploy chat-orchestrator
 supabase functions deploy fact-extractor
 supabase functions deploy admin-order-action
+supabase functions deploy admin-stripe-product-sync
 supabase functions deploy referrer-order
 supabase functions deploy line-webhook --no-verify-jwt
 supabase functions deploy stripe-checkout
@@ -99,7 +100,7 @@ On Windows, you can also run the helper script. It reads `SUPABASE_ACCESS_TOKEN`
 
 The helper deploys the MiraCare v2 Edge Functions, including `chat-orchestrator`, with JWT verification enabled where required. Users must sign in through Supabase Auth before the mobile app can call OpenAI or save chat-derived health facts.
 
-Stripe payments use the authenticated `stripe-checkout` Edge Function and the public `stripe-webhook` callback. Configure the Stripe webhook endpoint as `https://<project-ref>.supabase.co/functions/v1/stripe-webhook` and subscribe to `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed`, and `checkout.session.expired`.
+Stripe payments use the authenticated `admin-stripe-product-sync` and `stripe-checkout` Edge Functions plus the public `stripe-webhook` callback. Admin catalog sync creates or updates Stripe Products/Prices and stores `products.stripe_product_id` / `products.stripe_price_id`; Checkout uses the stored price when present. Configure the Stripe webhook endpoint as `https://<project-ref>.supabase.co/functions/v1/stripe-webhook` and subscribe to `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed`, and `checkout.session.expired`.
 
 For local function testing:
 

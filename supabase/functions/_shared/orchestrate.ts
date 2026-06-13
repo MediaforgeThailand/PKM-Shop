@@ -68,6 +68,8 @@ const actionSchema = z.discriminatedUnion('type', [
     buyer_phone: z.string().regex(/^0[689]\d{8}$/),
     order_id: z.string().uuid(),
     preferred_date: z.string().optional(),
+    preferred_date_end: z.string().optional(),
+    preferred_time_window: z.string().min(1).max(120).optional(),
     type: z.literal('order_form_submit'),
   }),
   z.object({
@@ -427,6 +429,8 @@ async function handleAction({
       buyer_name: action.buyer_name,
       buyer_phone: action.buyer_phone,
       preferred_date: action.preferred_date,
+      preferred_date_end: action.preferred_date_end,
+      preferred_time_window: action.preferred_time_window,
     });
     const loaded = await maybeAdvanceCollectingOrder(await loadOrderForPanel(order.id, tenant.id), 'customer');
 
@@ -467,7 +471,7 @@ async function handleAction({
       {
         customer_id: `eq.${customer.id}`,
         id: `eq.${action.order_id}`,
-        select: `${ORDER_PANEL_SELECT},payment_provider,stripe_checkout_session_id,stripe_payment_intent_id,stripe_payment_status,paid_at`,
+        select: ORDER_PANEL_SELECT,
         session_id: `eq.${sessionId}`,
         tenant_id: `eq.${tenant.id}`,
       },
@@ -538,6 +542,27 @@ async function handleAction({
   }
 
   return {};
+}
+
+async function ensureHealthDataCollectionConsent(customer: CustomerRow, tenant: TenantRow) {
+  const latestConsent = await selectOne<{ granted: boolean }>('consents', {
+    customer_id: `eq.${customer.id}`,
+    kind: 'eq.health_data_collection',
+    order: 'created_at.desc',
+    select: 'granted',
+    tenant_id: `eq.${tenant.id}`,
+  });
+
+  if (latestConsent?.granted) {
+    return;
+  }
+
+  await insertRow('consents', {
+    customer_id: customer.id,
+    granted: true,
+    kind: 'health_data_collection',
+    tenant_id: tenant.id,
+  });
 }
 
 async function persistUserMessage(sessionId: string, clientMsgId: string, content: string) {
@@ -959,7 +984,7 @@ async function updateCollectingOrderFromMessage(order: OrderWithProductRow | nul
 
   const extracted = await callOrderFieldExtractor(message);
 
-  if (!extracted.buyer_name && !extracted.buyer_phone && !extracted.preferred_date) {
+  if (!extracted.buyer_age && !extracted.buyer_name && !extracted.buyer_phone && !extracted.preferred_date) {
     return order;
   }
 
@@ -1048,6 +1073,10 @@ async function completeChatTurn({
   }
 
   await enforceRateLimit(customer.id);
+
+  if (channel !== 'line') {
+    await ensureHealthDataCollectionConsent(customer, tenant);
+  }
 
   let activeOrder = actionResult.order ?? await loadActiveOrder(session.id, tenant.id);
   const intentCategory = inferIntentCategory(message);

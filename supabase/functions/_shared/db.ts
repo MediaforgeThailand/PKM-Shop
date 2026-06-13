@@ -158,7 +158,7 @@ export async function assertTenant(slug: string) {
   return tenant;
 }
 
-export async function resolveAuthUserId(authorization: string | null) {
+export async function resolveAuthUser(authorization: string | null) {
   const token = authorization?.replace(/^Bearer\s+/i, '').trim();
 
   if (!token) {
@@ -178,7 +178,16 @@ export async function resolveAuthUserId(authorization: string | null) {
     throw new HttpError('VALIDATION', 'Invalid Supabase JWT.', 401);
   }
 
-  return (payload as { id: string }).id;
+  return {
+    email: typeof (payload as { email?: unknown }).email === 'string' ? (payload as { email: string }).email : null,
+    id: (payload as { id: string }).id,
+  };
+}
+
+export async function resolveAuthUserId(authorization: string | null) {
+  const user = await resolveAuthUser(authorization);
+
+  return user.id;
 }
 
 export async function resolveOrCreateCustomer(tenantId: string, authUserId: string, nickname?: string | null) {
