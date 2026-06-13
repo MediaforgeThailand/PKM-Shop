@@ -73,7 +73,7 @@ export function renderPersonalContextRows({
   return lines.length ? lines.join('\n') : EMPTY_PERSONAL_CONTEXT;
 }
 
-export async function buildPersonalContext(customerId: string, orderContext?: string | null) {
+export async function buildPersonalContext(customerId: string, orderContext?: string | null, suppressConsentPrompt = false) {
   const activeFacts = await selectMany<UserFactRow>('user_facts', {
     customer_id: `eq.${customerId}`,
     limit: '20',
@@ -101,7 +101,9 @@ export async function buildPersonalContext(customerId: string, orderContext?: st
   return renderPersonalContextRows({
     activeFacts,
     candidateFacts,
-    hasConsent: Boolean(latestConsent),
+    // V3-7: on LINE the operator manages consent themselves, so don't surface the
+    // "missing consent" line that prompts Mira to ask for it.
+    hasConsent: suppressConsentPrompt || Boolean(latestConsent),
     orderContext,
     registry,
   });

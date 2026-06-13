@@ -167,6 +167,26 @@ export async function pushLineMessages(tenantSlug: string, lineUserId: string, m
   }
 }
 
+export async function startLineLoading(tenantSlug: string, lineUserId: string, seconds = 20) {
+  const token = requireLineChannelToken(tenantSlug);
+  const response = await fetch('https://api.line.me/v2/bot/chat/loading/start', {
+    body: JSON.stringify({
+      chatId: lineUserId,
+      loadingSeconds: seconds,
+    }),
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    method: 'POST',
+  });
+
+  // The loading animation is best-effort UX — never fail the turn over it.
+  if (!response.ok) {
+    console.warn('line_loading_failed', response.status);
+  }
+}
+
 export function textLineMessage(text: string): LineTextMessage {
   return {
     text: text.slice(0, 4500),

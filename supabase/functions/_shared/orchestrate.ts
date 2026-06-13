@@ -1162,7 +1162,7 @@ async function completeChatTurn({
   const intentCategory = inferIntentCategory(message);
   const orderContext = await formatOrderContextLines(customer.id, session.id, tenant.id, channel);
   const [personalContext, recentChat, productCatalog] = await Promise.all([
-    buildPersonalContext(customer.id, orderContext),
+    buildPersonalContext(customer.id, orderContext, channel === 'line'),
     buildRecentChat(session.id),
     buildCatalogJson(tenant.id, intentCategory),
   ]);

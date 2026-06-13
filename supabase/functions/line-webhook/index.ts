@@ -9,6 +9,7 @@ import {
   orderQrLineImageMessage,
   productLineFlexMessage,
   replyLineMessages,
+  startLineLoading,
   textLineMessage,
   verifyLineSignature,
   type LineMessage,
@@ -128,6 +129,14 @@ async function handleEvent(event: LineEvent, tenantSlug: string) {
 
   if (!replyToken || !lineUserId) {
     return;
+  }
+
+  // Show the LINE typing/loading animation right away so button taps feel
+  // responsive while the model runs (best-effort — must not block the turn).
+  try {
+    await startLineLoading(tenantSlug, lineUserId);
+  } catch (error) {
+    console.warn('line_loading_failed', error);
   }
 
   if (event.type === 'message' && event.message?.type === 'text' && event.message.text) {
