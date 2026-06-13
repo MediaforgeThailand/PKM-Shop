@@ -188,9 +188,9 @@ This phase has a hard ordering dependency on the OWNER. Codex must NOT start ste
 ### DoD — R3
 
 - [x] ✅ 2026-06-13 — Owner confirmed default = v3 in the OpenAI Platform (flipped the published prompt default).
-- [x] ✅ 2026-06-13 — `chat:regression:v3` **10/10 PASS** + `v2:e2e-commerce` green (incl. `MIRA_E2E_EXPECT_PROMPT_V3=1` v3 order-status assertion) live against staging. Caveat: local `MIRA_PROMPT_VERSION` was left unset; the script printed its reminder that the value isn't `3` in-process. Behavior was v3 (markers, age-asking, emergency, order-status) so the deployed function is serving v3.
-- [ ] ❌ Handoff doc v3 draft merged by owner; v2 plan §4 annotated; v3 plan V3-3 boxes ticked. (Codex doc-draft pending — next R3 step-2 task.)
-- [ ] ❌ Owner removed the staging `MIRA_PROMPT_VERSION` function-secret pin (checklist acknowledged). Until removed, the "against default with NO env pin" guarantee is not yet conclusively proven — re-run after removal to close this box.
+- [x] ✅ 2026-06-13 — `chat:regression:v3` **10/10 PASS** + `v2:e2e-commerce` green (incl. `MIRA_E2E_EXPECT_PROMPT_V3=1` v3 order-status assertion) live against staging, re-run after deploying this branch. `supabase secrets list` confirms staging has **NO `MIRA_PROMPT_VERSION` secret**, so the function used the v3 **platform default with no env pin** — the script's local-process reminder is about the test runner's own env only, not the deployed function.
+- [x] ✅ 2026-06-13 — Handoff doc v3 on main (§2 version 3 + `MIRA_PROMPT_VERSION` override note, §4 `category`, §5 three marker types, §7 v3 10-case suite); `docs/miracare-v2-product-plan.md` §4 annotated; `docs/miracare-v3-chat-commerce-plan.md` §8 V3-3 ticked. Merged + pushed to `origin/main` (1c1e814) per owner direction.
+- [x] ✅ 2026-06-13 — No staging `MIRA_PROMPT_VERSION` function-secret pin exists (verified via `supabase secrets list` on `xwixdxmemwcuoamcloty` — only FACT_MODEL / OPENAI_* / GEMINI_* / STRIPE_* / SUPABASE_* present). The 10/10 regression + e2e therefore ran against the v3 platform default with no pin → "default with no env pin" conclusively proven. **R3 fully complete.**
 
 ---
 
