@@ -1,181 +1,213 @@
-# MiraCare — Referral Code Cross-Platform Completion Plan
+# MiraCare — Referral Code Cross-Platform Completion Plan (Codex Handoff)
 
-Status: DRAFT for owner review — 2026-06-13
+Status: READY FOR IMPLEMENTATION — 2026-06-13
 Owner: taksin / MediaForge
-Scope owner doc precedence: extends `docs/miracare-v2-product-plan.md` §5 (Refer Program). Does **not** re-open any DECIDED item there.
+Executor: Codex (this document is the work order)
+Precedence: extends `docs/miracare-v2-product-plan.md` §5 (Refer Program). Does **not** re-open any DECIDED item there.
 
-> Read `AGENTS.md` first. This plan touches client code on three platforms plus one
-> protected-core reply path (`orchestrate.ts` / LINE webhook). All backend changes here
-> are **additive** (new columns/functions/migration files only) and keep the
-> `ChatOrchestratorRequest` / order schema backward-compatible per AGENTS.md §7.
-
----
-
-## 0. One-paragraph problem statement
-
-The referral **backend is built and correct** (referrers, commission_entries, attribution
-window, `ref_code`, `transition_order` commission creation, `referrer-order` function). The
-gap is that **referral attribution only works end-to-end on PWA/Web**. On the **mobile app**
-the attribution store is a silent no-op, and on **LINE OA** there is no referral capture at
-all — even though the v2 plan §5 explicitly decided attribution must cover "PWA chat / LINE
-OA". This plan closes the three-platform gap and removes the mock sales-portal that emits
-non-conformant codes.
+> Codex: read `AGENTS.md` first — it is binding. Everything backend in this plan is
+> **additive only** (new migration files / new columns / new functions). Keep
+> `ChatOrchestratorRequest`, the order shape, and the action schema backward-compatible
+> (AGENTS.md §7) and mirror any type change in `lib/types/api.ts`. Do not touch the
+> protected core in §2 of AGENTS.md (prompt, marker protocol, card-suppression,
+> order state machine, `transition_order`). One PR per Task below.
 
 ---
 
-## 1. Current state (verified in code, do NOT rebuild)
+## 0. Problem in one paragraph
+
+The referral **backend is already built and correct**. Attribution works end-to-end on
+**PWA/Web only**. On **mobile (native)** the attribution store is a silent no-op, and on
+**LINE OA** there is no referral capture at all. This plan makes one shareable referral link
+work across all three platforms via a **smart landing page (Model A)**, and retires the mock
+sales-portal that emits non-conformant codes.
+
+---
+
+## 1. Current state — DO NOT REBUILD (verified in code)
 
 | Layer | Artifact | Evidence |
 |---|---|---|
-| DB schema | `referrers`, `commission_entries`, `customers.referred_by/referred_at`, `orders.referrer_id`, `orders.commission_scheme_snapshot`, `tenants.attribution_window_days` + RLS | `supabase/migrations/20260611040000_miracare_v2_phase4_referrals.sql`, `20260611010000_...foundations.sql`, `20260611060000_a1_commission_scheme_snapshot.sql` |
-| `ref_code` | 6-char Crockford base32, server-generated, immutable, unique per tenant | `20260611062000_b8_referrer_contract.sql` (`miracare_generate_ref_code`, ref_code guard trigger) |
-| Commission compute | computed on `submitted → confirmed`, snapshot-based, status `pending` | `transition_order` in `20260612050000_...phase1_data_admin.sql`; `_shared/commissions.ts` (JS mirror) |
+| DB schema | `referrers`, `commission_entries`, `customers.referred_by/referred_at`, `orders.referrer_id`, `orders.commission_scheme_snapshot`, `tenants.attribution_window_days` + RLS | `supabase/migrations/20260611040000_...phase4_referrals.sql`, `20260611010000_...foundations.sql`, `20260611060000_a1_commission_scheme_snapshot.sql` |
+| `ref_code` | 6-char Crockford base32, server-generated, immutable, unique per tenant | `20260611062000_b8_referrer_contract.sql` |
+| Commission compute | on `submitted → confirmed`, snapshot-based, status `pending` | `transition_order` in `20260612050000_...phase1_data_admin.sql`; `_shared/commissions.ts` |
 | Chat attribution | `maybeApplyReferralCode` + `resolveAttributedReferrerId`; request schema accepts `ref_code` on `app`/`pwa`/`line` | `supabase/functions/_shared/orchestrate.ts`, `_shared/referrals.ts` |
 | Assisted purchase | `create_order` / `list_branches` / `payment_done` | `supabase/functions/referrer-order/index.ts`, `_shared/referrerOrder.ts` |
 | PWA capture | `/r/[ref_code]` → localStorage + cookie; carried in every chat call | `app/r/[ref_code].tsx`, `lib/referrals/attribution.ts`, `lib/ai/miraChat.ts` |
-| Referrer workspace (real) | reads referrer/commissions from DB, calls `referrer-order` | `app/partner.tsx` |
+| Referrer workspace (real) | reads referrer/commissions from DB, calls `referrer-order` | `app/partner.tsx` (use as the reference implementation) |
+
+**The `ref_code` is universal** — one code maps to one referrer regardless of platform.
+What differs per platform is only **how the customer lands** and **how the code is captured**.
+Capture is per-platform: a code stored on web does NOT carry into the app or LINE — the code
+is the bridge, not the storage.
 
 ---
 
-## 2. Owner decisions for this plan (2026-06-13)
+## 2. Decisions baked into this plan
 
-- **D1 — LINE binding mechanism: LIFF page + LINE login.** Referral links targeting LINE go
-  through a LIFF page that performs LINE login, reads the `ref_code`, and binds it to the
-  `line_user_id` server-side. (LINE `follow` events do not carry custom params, so a
-  message- or follow-only approach is rejected.)
-- **D2 — sales-portal: wire to the real backend.** `app/sales-portal.tsx` must use a real
-  referrer loaded from the DB and call `referrer-order` like `app/partner.tsx`. The
-  metadata-derived mock in `lib/marketplace/referralMock.ts` (10-char codes, hardcoded
-  rates) is retired to stop code-format drift.
-- **D3 — sequencing:** write this plan first (this document), then execute Phase A → E.
-
----
-
-## 3. Gap matrix (what is missing, per platform)
-
-| Capability | PWA / Web | Mobile (native) | LINE OA |
-|---|---|---|---|
-| Capture `ref_code` from link | ✅ `/r/[code]` | ⚠️ route exists, store no-ops | ❌ none |
-| Persist `ref_code` | ✅ localStorage+cookie | ❌ `globalThis.localStorage`/`document` undefined on RN (`lib/referrals/attribution.ts:10-16`) | ❌ none |
-| Send `ref_code` to chat | ✅ `miraChat.ts` | ✅ sends, but value always null | ❌ `orchestrateLine` never passed `ref_code` (`line-webhook/index.ts:103,117,130`) |
-| Deep-link scheme | n/a | ❌ `app.json` scheme `mirahealth://` vs `referralMock` `mira://` | n/a |
-| Assisted purchase real | ⚠️ `partner.tsx` real / `sales-portal.tsx` mock | same as web | n/a |
+- **D1 — LINE binding = LIFF + LINE login.** LINE `follow` events carry no custom params, so
+  binding happens through a LIFF page that logs the user in and binds `ref_code` ↔
+  `line_user_id` server-side.
+- **D2 — sales-portal wired to real backend.** `app/sales-portal.tsx` uses a real referrer
+  from the DB and calls `referrer-order` like `app/partner.tsx`. The metadata mock in
+  `lib/marketplace/referralMock.ts` (10-char codes, hardcoded rates) is retired.
+- **D3 — plan-first.** (Done: this document.)
+- **D4 — Model A: one smart link for all platforms.** The single canonical share URL is
+  `https://<web-host>/r/<CODE>`. The `/r/[ref_code]` landing captures the code, then
+  auto-routes / offers: open app (Universal/App Link), continue on LINE (LIFF link), or
+  continue on web. Referrers copy ONE link.
+- **D5 — `readStoredReferralCode` becomes async.** Native store (`expo-secure-store`) is
+  async; expose async read and update the (few) callers to await. Web path keeps working.
+- **D6 — LIFF endpoint = dedicated route** `app/line-referral.tsx` (registered as the LIFF
+  endpoint URL). `/r/[code]`'s "continue on LINE" button deep-links to the LIFF URL with the
+  code. Keeps LINE-SDK code out of the generic landing.
 
 ---
 
-## 4. Architecture per phase
+## 3. Owner / console prerequisites (blockers Codex CANNOT do — needed for live verification)
 
-### Phase A — Cross-platform attribution store (foundation)
+1. **Canonical web host decided.** `referralMock.ts` currently mixes `mira.health` and
+   `portal.mira.health`. Pick ONE host for `/r/<code>` and the LIFF endpoint. (Codex: use a
+   single `EXPO_PUBLIC_WEB_ORIGIN` env, do not hardcode.)
+2. **LIFF app registered** in LINE Developers → store `LINE_LIFF_ID__<tenant_slug>` as a
+   Supabase function secret (same convention as `LINE_CHANNEL_TOKEN__<slug>` in
+   `docs/line-setup.md`). LIFF endpoint URL = `https://<web-host>/line-referral`.
+3. **Universal / App Links hosting**: serve `/.well-known/apple-app-site-association` and
+   `/.well-known/assetlinks.json` on the web host; add `associatedDomains` (iOS) and intent
+   filters (Android) — requires the Apple Team ID / Android signing fingerprint from owner.
 
-Make `lib/referrals/attribution.ts` platform-aware behind the **same exported interface**
-(`storeReferralCode`, `readStoredReferralCode`, `normalizeRefCode`) so no caller changes.
-
-- Web: keep `localStorage` + cookie (cookie still needed for any non-Expo PWA entry).
-- Native: persist via `expo-secure-store` (already in `app.json` plugins) or AsyncStorage,
-  keyed `mira_ref`, with the same 30-day `expires_at` envelope.
-- Keep all reads/writes async-safe; `readStoredReferralCode` may need to become async on
-  native — if so, update the two callers (`app/r/[ref_code].tsx`, `lib/ai/miraChat.ts`)
-  additively. Confirm `miraChat.ts` awaits the code before building the request.
-
-DoD: on a native build, opening a `/r/<valid>` deep link then starting chat results in the
-order carrying `referrer_id` for that referrer (assert via `customers.referred_by`).
-
-### Phase B — Mobile app deep links
-
-- Unify the scheme on `mirahealth://` everywhere; delete `mira://` usage. Configure
-  Universal Links (iOS `associatedDomains`) / Android App Links so
-  `https://mira.health/r/<code>` opens the app when installed.
-- Ensure `app/r/[ref_code].tsx` runs on cold-start deep link (Expo Linking initial URL),
-  not just warm navigation.
-- After capture, route the user to chat/checkout (not back to `/`) so attribution converts.
-- Out of scope unless owner asks: deferred deep link for "app not installed" (note it as a
-  follow-up, do not silently skip — AGENTS.md §3).
-
-DoD: tapping the share link/QR with the app installed opens the app, stores the code, and a
-subsequent purchase is attributed.
-
-### Phase C — LINE OA referral via LIFF (D1)
-
-Flow: `https://mira.health/r/<code>?to=line` (or a dedicated LIFF URL) →
-LIFF page → `liff.login()` → read `ref_code` + LINE `userId` → POST to a new edge endpoint
-that binds the code to the customer keyed by `line_user_id`.
-
-Backend additions (all additive):
-1. New edge function `line-referral-bind` (verify LIFF ID token, resolve tenant, upsert
-   `customers` by `(tenant_id, line_user_id)`, set `referred_by`/`referred_at` if not already
-   referred — reuse the same guard logic as `maybeApplyReferralCode`).
-2. Extend `orchestrateLine` signature to accept optional `ref_code` and thread it from the
-   webhook (covers the case where the code arrives in-session). Additive param, schema
-   already allows `channel: 'line'` + `ref_code` pattern.
-3. LIFF config: document `LINE_LIFF_ID__<tenant_slug>` alongside existing
-   `LINE_CHANNEL_SECRET__/TOKEN__<tenant_slug>` (see `docs/line-setup.md`).
-
-Guardrails: `line-referral-bind` must verify the LIFF ID token (do not trust client-sent
-`userId`). Reuse attribution window + "already referred" rules; never write `orders.status`
-directly (use `transition_order` only inside existing order flow).
-
-DoD: scanning a referral link that targets LINE, adding the OA, and purchasing in LINE chat
-credits the referrer; `commission_entries` row appears on admin confirm.
-
-### Phase D — sales-portal real wiring + mock retirement (D2)
-
-- Refactor `app/sales-portal.tsx` to load the signed-in referrer from `referrers` (by
-  `tenant_id` + `auth_user_id`) and call `referrer-order` (`create_order` → `payment_done`)
-  exactly like `app/partner.tsx`. Reuse `partner.tsx` data-loading helpers where possible
-  rather than duplicating.
-- Replace the fixture commission dashboard with real `commission_entries` reads (or clearly
-  gate fixtures behind a not-signed-in/demo fallback, matching `partner.tsx`).
-- Retire `lib/marketplace/referralMock.ts` (or reduce it to pure formatting helpers that do
-  not invent codes). The displayed `ref_code` must be the real 6-char DB value.
-- Decide `app/staff-referral.tsx` (currently a redirect to `/sales-portal`): keep redirect
-  or remove — confirm with owner in §6.
-
-DoD: a code copied from sales-portal validates against `REF_CODE_PATTERN` and resolves to a
-real referrer; submitting an assisted order creates a real DB order in the admin queue.
-
-### Phase E — Verification & bookkeeping
-
-- `npm run typecheck` and `npm run v2:verify` green.
-- Add/extend tests: native attribution store unit test; `line-referral-bind` (token verify +
-  attribution guard) in `_shared/__tests__`; orchestrateLine `ref_code` threading.
-- Update the LINE manual sandbox checklist in `docs/line-setup.md` with a referral step.
-- Update DoD checkboxes in `docs/miracare-v2-product-plan.md` §10 truthfully (note any item
-  needing live LINE/native verification the agent could not run).
+Codex writes all the code regardless; mark DoD items needing the above as ❌ "pending live
+config" rather than faking them (AGENTS.md §3).
 
 ---
 
-## 5. Protected-core guardrails for this work (AGENTS.md §2)
+## 4. Model A architecture
 
-- Do **not** edit the published prompt, marker protocol, card-suppression guard, or order
-  state machine. No new order statuses are needed.
-- All schema changes ship as **new** migration files with RLS in the same file; never edit
+### 4.1 The single link
+- Canonical: `https://<web-host>/r/<CODE>` (plus a QR of the same URL).
+- Sales-portal and partner workspace show exactly this one link/QR. No per-channel links.
+
+### 4.2 Landing `app/r/[ref_code].tsx` (the router)
+On open it must:
+1. `storeReferralCode(code)` via the cross-platform store (Task 1).
+2. Detect environment and act:
+   - **Inside LINE in-app browser** (`liff.isInClient()` or UA contains `Line/`) → redirect
+     straight to the LIFF bind route `/line-referral?ref=<CODE>`.
+   - **Native app already open** (this route hit via deep link) → store + route to chat/checkout.
+   - **Mobile web** → attempt to open the app via Universal/App Link; always render fallback
+     CTAs.
+   - **Desktop web** → store + CTA to start chat on web.
+3. Always render 3 explicit CTAs as fallback: **เปิดในแอป** (Universal/App Link),
+   **คุยต่อทาง LINE** (→ `https://liff.line.me/<LIFF_ID>?ref=<CODE>`), **เล่นต่อบนเว็บ**
+   (→ chat/checkout).
+
+### 4.3 LIFF route `app/line-referral.tsx` (new)
+1. Load LIFF SDK, `liff.init({ liffId })` (liffId from public config per tenant).
+2. `liff.login()` if not logged in.
+3. Read `ref` from query; get the LIFF **ID token** (`liff.getIDToken()`).
+4. POST `{ tenant_slug, ref_code, id_token }` → `line-referral-bind`.
+5. On success → `liff.openWindow` to the OA chat (or `liff.closeWindow()` with a success note).
+
+### 4.4 Backend `supabase/functions/line-referral-bind/index.ts` (new, additive)
+1. Validate body (zod) in a new `_shared/lineReferralBind.ts` schema.
+2. **Verify the LIFF ID token server-side** against
+   `https://api.line.me/oauth2/v2.1/verify` (never trust a client-sent userId). Extract `sub`
+   = the trusted `line_user_id`.
+3. Resolve tenant; upsert `customers` by `(tenant_id, line_user_id)`.
+4. Apply the SAME guard as `maybeApplyReferralCode`: only set `referred_by`/`referred_at` if
+   the code is active/valid AND the customer is not already referred; respect
+   `attribution_window_days`. Reuse helpers from `_shared/orchestrate.ts` / `_shared/referrals.ts`
+   — do not duplicate the rule.
+5. Deploy note: `--no-verify-jwt` (LIFF calls it without a Supabase JWT), same as `line-webhook`.
+
+### 4.5 `orchestrateLine` ref_code threading (additive)
+Extend `orchestrateLine` to accept optional `ref_code` and pass it through from
+`line-webhook` (covers in-session codes). Additive param; schema already allows
+`channel:'line'` + the `ref_code` pattern. Do not script any Thai reply text in this path.
+
+### 4.6 What stays untouched (reused as-is)
+`referred_by` attribution, `resolveAttributedReferrerId` crediting at order creation,
+commission creation on admin confirm, `referrer-order`. LINE simply feeds the existing pipe.
+
+---
+
+## 5. Task breakdown for Codex (one PR each, in order)
+
+### Task 1 — Cross-platform attribution store  ·  (foundation)
+- Files: `lib/referrals/attribution.ts` (+ callers `app/r/[ref_code].tsx`, `lib/ai/miraChat.ts`).
+- Keep the exported interface names. Web: localStorage + cookie unchanged. Native: persist via
+  `expo-secure-store` (already in `app.json` plugins), key `mira_ref`, same 30-day envelope.
+- Make `readStoredReferralCode` async (D5); update callers to await.
+- DoD: native unit test stores+reads a code; web behavior unchanged.
+
+### Task 2 — Unify deep links + Model A smart landing
+- Files: `app/r/[ref_code].tsx`, `app.json`, `lib/marketplace/referralMock.ts` (kill `mira://`),
+  new public config for `EXPO_PUBLIC_WEB_ORIGIN`.
+- Unify scheme to `mirahealth://` everywhere; configure Universal Links (`associatedDomains`)
+  + Android App Links so `https://<web-host>/r/<code>` opens the app when installed.
+- Implement §4.2 routing + 3 CTAs; handle Expo Linking cold-start initial URL.
+- DoD: installed app opens from the https link and stores the code; desktop/mobile web render
+  the correct CTAs. (App-link OS routing = ❌ pending live config from §3.3.)
+
+### Task 3 — LINE LIFF binding (D1/D6)
+- Files: `app/line-referral.tsx` (new), `supabase/functions/line-referral-bind/index.ts` (new),
+  `supabase/functions/_shared/lineReferralBind.ts` (new schema),
+  `supabase/functions/_shared/orchestrate.ts` (additive `ref_code` param),
+  `supabase/functions/line-webhook/index.ts` (thread `ref_code`), docs/line-setup.md.
+- Implement §4.3 / §4.4 / §4.5. Verify ID token server-side. Reuse attribution guard.
+- DoD: with a valid LIFF ID token, the bind sets `customers.referred_by`; a subsequent LINE
+  purchase is attributed and a `commission_entries` row appears on admin confirm.
+  (Live LIFF run = ❌ pending §3.2.)
+
+### Task 4 — sales-portal real wiring + mock retirement (D2)
+- Files: `app/sales-portal.tsx`, `lib/marketplace/referralMock.ts`, `app/staff-referral.tsx`.
+- Load the signed-in referrer from `referrers` (by `tenant_id` + `auth_user_id`); call
+  `referrer-order` (`create_order` → `payment_done`) exactly like `app/partner.tsx` (reuse its
+  helpers, don't duplicate). Replace fixture commission dashboard with real
+  `commission_entries` reads (keep a not-signed-in demo fallback like `partner.tsx`).
+- Show ONE share link/QR = `https://<web-host>/r/<realRefCode>` (real 6-char DB code).
+- Retire `referralMock.ts` code generation (reduce to pure formatting helpers or delete).
+  Decide `staff-referral.tsx`: keep redirect to `/sales-portal`.
+- DoD: a code shown in sales-portal passes `REF_CODE_PATTERN` and resolves to a real referrer;
+  an assisted order creates a real DB order in the admin queue.
+
+### Task 5 — Verification & bookkeeping
+- `npm run typecheck` + `npm run v2:verify` green.
+- Tests: native attribution store; `line-referral-bind` (token verify + attribution guard, in
+  `_shared/__tests__`); `orchestrateLine` ref_code threading.
+- Update `docs/line-setup.md` (add a LIFF referral step + `LINE_LIFF_ID__<slug>`), and the DoD
+  checkboxes in `docs/miracare-v2-product-plan.md` §10 truthfully.
+
+---
+
+## 6. Protected-core guardrails (AGENTS.md §2)
+
+- No new order statuses; status changes only via `transition_order`.
+- New schema (if any) ships in a NEW migration file with RLS in the same file; never edit
   existing migrations.
-- `ChatOrchestratorRequest`, order shape, and action schema changes must be additive and
-  mirrored in `lib/types/api.ts` (CI enforces the mirror).
-- No Thai sales/conversation lines added to the reply path; LINE referral copy (if any) is a
-  templated system notice only, per §2 Conversation purity.
-- Agent does not deploy functions, set Supabase secrets, or configure the LINE/LIFF console —
-  those are owner steps; this plan documents them.
+- `ChatOrchestratorRequest` / order / action schema changes are additive and mirrored in
+  `lib/types/api.ts` (CI enforces the mirror).
+- No Thai sales/conversation lines in the reply path; any LINE referral copy is a templated
+  system notice only.
+- Agent does not deploy functions, set Supabase secrets, or configure LINE/LIFF/Apple/Android
+  consoles — those are owner steps documented in §3.
 
 ---
 
-## 6. Open questions for owner (blockers before coding the relevant phase)
+## 7. Open items still needing an owner answer (non-blocking for coding, blocking for live)
 
-1. **LIFF URL shape (Phase C):** dedicated LIFF endpoint URL vs reusing `/r/[code]` with a
-   `?to=line` branch? Need the LIFF app registered + `LINE_LIFF_ID__<slug>` provisioned.
-2. **`readStoredReferralCode` async (Phase A):** OK to make it async (SecureStore is async)
-   and update the two callers, or must it stay sync (use a cached in-memory value hydrated at
-   app start)?
-3. **`app/staff-referral.tsx` (Phase D):** keep the redirect, or remove the route entirely?
-4. **Demo fallback:** should sales-portal keep a not-signed-in demo mode like `partner.tsx`,
-   or require real auth always?
+1. Canonical web host for `/r/<code>` + LIFF endpoint (§3.1).
+2. LIFF app + `LINE_LIFF_ID__<slug>` provisioning (§3.2).
+3. Apple Team ID / Android signing fingerprint for Universal/App Links (§3.3).
+4. `sales-portal` demo fallback when not signed in: keep (like `partner.tsx`) — assumed YES
+   unless owner says otherwise.
 
 ---
 
-## 7. DoD checklist (fill ✅/❌ + date in the executing PR)
+## 8. DoD checklist (fill ✅/❌ + date in each Task PR)
 
-- [ ] A. Native attribution store persists + reads `ref_code`; web unchanged.
-- [ ] B. `mirahealth://` unified; Universal/App Links open `/r/<code>`; cold-start handled.
-- [ ] C. LIFF bind endpoint verifies token and credits referrer; LINE purchase attributed.
-- [ ] D. sales-portal uses real referrer + `referrer-order`; mock code generator retired.
-- [ ] E. typecheck + v2:verify green; tests added; v2 plan §10 + line-setup.md updated.
+- [ ] T1. Native attribution store persists + reads `ref_code`; read is async; web unchanged.
+- [ ] T2. `mirahealth://` unified; smart landing routes web/app/LINE + renders 3 CTAs; cold-start handled.
+- [ ] T3. LIFF route + `line-referral-bind` verify ID token and credit referrer; orchestrateLine threads `ref_code`.
+- [ ] T4. sales-portal uses real referrer + `referrer-order` + single share link; mock generator retired.
+- [ ] T5. typecheck + v2:verify green; tests added; line-setup.md + v2 plan §10 updated.
