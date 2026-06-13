@@ -72,6 +72,8 @@ export function BookingSheet({
   const isFormStep = order?.step === 'form';
   const isQrStep = order?.step === 'qr';
   const isTrackingStep = order?.step === 'tracking' || order?.step === 'cancelled';
+  const canUseStripeCheckout = Boolean(stripeEnabled && onStripeCheckout);
+  const shouldShowStripeCheckout = canUseStripeCheckout && !order?.qr_payload;
   const errors = useMemo(() => ({
     age: firstError(age, 'age'),
     firstName: firstError(firstName, 'firstName'),
@@ -229,23 +231,32 @@ export function BookingSheet({
 
           {isQrStep ? (
             <View style={styles.qrSection}>
-              <Text style={styles.heading}>สแกนจ่ายด้วย PromptPay</Text>
-              <View style={styles.qrBox}>
-                {order.qr_payload ? <QRCode backgroundColor="#FFFFFF" color={MiraDesign.color.ink} size={188} value={order.qr_payload} /> : null}
-              </View>
-              <Text style={styles.amount}>{formatMoney(order.amount_baht)}</Text>
-              <Text style={styles.helper}>สแกนด้วยแอปธนาคารใดก็ได้</Text>
-              <View style={styles.actionRow}>
-                <Pressable disabled={disabled || !onSlipSelected} onPress={selectSlipFile} style={[styles.secondaryButton, disabled || !onSlipSelected ? styles.disabled : null]}>
-                  <Text style={styles.secondaryText}>แนบสลิป</Text>
-                </Pressable>
-                <Pressable disabled={disabled} onPress={payDone} style={[styles.primaryButton, styles.actionGrow, disabled ? styles.disabled : null]}>
-                  <Text style={styles.primaryText}>จ่ายแล้ว</Text>
-                </Pressable>
-              </View>
-              {stripeEnabled && onStripeCheckout ? (
-                <Pressable disabled={disabled} onPress={() => onStripeCheckout(order.id)} style={[styles.stripeButton, disabled ? styles.disabled : null]}>
-                  <Text style={styles.stripeText}>Pay with Stripe</Text>
+              <Text style={styles.heading}>{order.qr_payload ? 'สแกนจ่ายด้วย PromptPay' : 'ชำระเงิน'}</Text>
+              {order.qr_payload ? (
+                <>
+                  <View style={styles.qrBox}>
+                    <QRCode backgroundColor="#FFFFFF" color={MiraDesign.color.ink} size={188} value={order.qr_payload} />
+                  </View>
+                  <Text style={styles.amount}>{formatMoney(order.amount_baht)}</Text>
+                  <Text style={styles.helper}>สแกนด้วยแอปธนาคารใดก็ได้</Text>
+                  <View style={styles.actionRow}>
+                    <Pressable disabled={disabled || !onSlipSelected} onPress={selectSlipFile} style={[styles.secondaryButton, disabled || !onSlipSelected ? styles.disabled : null]}>
+                      <Text style={styles.secondaryText}>แนบสลิป</Text>
+                    </Pressable>
+                    <Pressable disabled={disabled} onPress={payDone} style={[styles.primaryButton, styles.actionGrow, disabled ? styles.disabled : null]}>
+                      <Text style={styles.primaryText}>จ่ายแล้ว</Text>
+                    </Pressable>
+                  </View>
+                </>
+              ) : (
+                <>
+                  <Text style={styles.amount}>{formatMoney(order.amount_baht)}</Text>
+                  <Text style={styles.helper}>กดปุ่มด้านล่างเพื่อชำระผ่าน Stripe Checkout</Text>
+                </>
+              )}
+              {shouldShowStripeCheckout ? (
+                <Pressable disabled={disabled} onPress={() => onStripeCheckout?.(order.id)} style={[styles.stripeButton, disabled ? styles.disabled : null]}>
+                  <Text style={styles.stripeText}>{disabled ? 'กำลังเปิด Stripe' : 'จ่ายด้วย Stripe'}</Text>
                 </Pressable>
               ) : null}
             </View>

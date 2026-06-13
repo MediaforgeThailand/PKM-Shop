@@ -21,6 +21,7 @@ const files = {
   referrerOrder: 'supabase/functions/referrer-order/index.ts',
   stripe: 'supabase/functions/_shared/stripe.ts',
   stripeCheckout: 'supabase/functions/stripe-checkout/index.ts',
+  stripePromptpayQr: 'supabase/functions/stripe-promptpay-qr/index.ts',
   stripeWebhook: 'supabase/functions/stripe-webhook/index.ts',
   storage: 'supabase/functions/_shared/storage.ts',
   systemNoticeMigration: 'supabase/migrations/20260611061000_a2_system_notice_single_source.sql',
@@ -39,6 +40,7 @@ const v2EdgeFunctions = {
   pdpaExport: files.pdpaExport,
   referrerOrder: files.referrerOrder,
   stripeCheckout: files.stripeCheckout,
+  stripePromptpayQr: files.stripePromptpayQr,
   stripeWebhook: files.stripeWebhook,
   wearableIngest: files.wearableIngest,
 };

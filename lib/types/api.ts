@@ -120,6 +120,10 @@ export type OrderPanelState = {
   branches?: OrderPanelBranch[];
   id: string;
   missing_fields: string[];
+  payment_provider: 'promptpay' | 'stripe' | null;
+  preferred_date: string | null;
+  preferred_date_end: string | null;
+  preferred_time_window: string | null;
   product_name: string;
   qr_payload?: string;
   show_form?: boolean;
@@ -156,6 +160,8 @@ export type ChatAction =
       buyer_phone: string;
       order_id: string;
       preferred_date?: string;
+      preferred_date_end?: string;
+      preferred_time_window?: string;
       type: 'order_form_submit';
     }
   | {
@@ -209,6 +215,8 @@ export type ChatSlipUploadResponse = {
 
 export type StripeCheckoutRequest = {
   order_id: string;
+  return_path?: string;
+  return_url_base?: string;
   session_id?: string | null;
   tenant_slug: string;
 };
@@ -217,6 +225,57 @@ export type StripeCheckoutResponse = {
   checkout_url: string;
   order: OrderPanelState;
   stripe_checkout_session_id: string;
+};
+
+export type StripePromptPayQrRequest = {
+  action?: 'create' | 'status';
+  order_id: string;
+  return_url_base?: string;
+  session_id?: string | null;
+  tenant_slug: string;
+};
+
+export type StripePromptPayQr = {
+  data: string;
+  hosted_instructions_url: string;
+  image_url_png: string;
+  image_url_svg: string;
+};
+
+export type StripePromptPayQrResponse = {
+  order: OrderPanelState;
+  qr: StripePromptPayQr | null;
+  status_checked_at: string;
+  stripe_payment_intent_id: string;
+  stripe_payment_status: string;
+  submitted: boolean;
+};
+
+export type AdminStripeProductSyncRequest = {
+  product_id: string;
+};
+
+export type AdminStripeProductSyncProduct = {
+  active: boolean;
+  catalog_key: string;
+  category: CatalogCategory;
+  description: string;
+  id: string;
+  image_url: string | null;
+  name: string;
+  price_baht: number;
+  requires_appointment: boolean;
+  stripe_price_id: string;
+  stripe_product_id: string;
+  tenant_id: string;
+};
+
+export type AdminStripeProductSyncResponse = {
+  price_action: 'created' | 'reused';
+  product: AdminStripeProductSyncProduct;
+  product_action: 'created' | 'updated';
+  stripe_price_id: string;
+  stripe_product_id: string;
 };
 
 export type FactExtractorRequest = {
@@ -329,6 +388,8 @@ export type OrderRow = {
   payment_provider: 'promptpay' | 'stripe' | null;
   preferred_branch: string | null;
   preferred_date: string | null;
+  preferred_date_end: string | null;
+  preferred_time_window: string | null;
   product_id: string;
   qty: number;
   referrer_id: string | null;

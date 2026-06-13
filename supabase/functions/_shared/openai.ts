@@ -247,6 +247,9 @@ export async function callOrderFieldExtractor(message: string) {
   const schema = {
     additionalProperties: false,
     properties: {
+      buyer_age: {
+        type: ['number', 'null'],
+      },
       buyer_name: {
         type: ['string', 'null'],
       },
@@ -257,7 +260,7 @@ export async function callOrderFieldExtractor(message: string) {
         type: ['string', 'null'],
       },
     },
-    required: ['buyer_name', 'buyer_phone', 'preferred_date'],
+    required: ['buyer_age', 'buyer_name', 'buyer_phone', 'preferred_date'],
     type: 'object',
   };
   const payload = await postResponses(
@@ -265,7 +268,7 @@ export async function callOrderFieldExtractor(message: string) {
       input: [
         {
           content:
-            'Extract only explicitly stated order form fields from the Thai user message. Do not infer. preferred_date must be ISO YYYY-MM-DD when explicit enough, otherwise null.',
+            'Extract only explicitly stated order form fields from the Thai user message. Do not infer. buyer_age must be a numeric age in years when explicit, otherwise null. preferred_date must be ISO YYYY-MM-DD when explicit enough, otherwise null.',
           role: 'system',
         },
         {
@@ -290,8 +293,12 @@ export async function callOrderFieldExtractor(message: string) {
 
   try {
     const parsed = JSON.parse(text) as Record<string, unknown>;
+    const buyerAge = typeof parsed.buyer_age === 'number' && Number.isInteger(parsed.buyer_age) && parsed.buyer_age >= 1 && parsed.buyer_age <= 120
+      ? parsed.buyer_age
+      : undefined;
 
     return {
+      buyer_age: buyerAge,
       buyer_name: typeof parsed.buyer_name === 'string' && parsed.buyer_name.trim() ? parsed.buyer_name.trim() : undefined,
       buyer_phone: typeof parsed.buyer_phone === 'string' && parsed.buyer_phone.trim() ? parsed.buyer_phone.trim() : undefined,
       preferred_date:

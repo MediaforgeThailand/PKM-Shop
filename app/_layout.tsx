@@ -57,10 +57,13 @@ function RootLayoutNav() {
           <Stack.Screen name="orders" options={{ headerShown: false }} />
           <Stack.Screen name="order-status" options={{ headerShown: false }} />
           <Stack.Screen name="partner" options={{ headerShown: false }} />
+          <Stack.Screen name="admin-panel" options={{ headerShown: false }} />
           <Stack.Screen name="admin/branches" options={{ headerShown: false }} />
           <Stack.Screen name="admin/catalog" options={{ headerShown: false }} />
           <Stack.Screen name="admin/orders" options={{ headerShown: false }} />
           <Stack.Screen name="admin/referrers" options={{ headerShown: false }} />
+          <Stack.Screen name="sales-portal" options={{ headerShown: false }} />
+          <Stack.Screen name="staff-referral" options={{ headerShown: false }} />
           <Stack.Screen name="user-profile" options={{ headerShown: false }} />
           <Stack.Screen name="prototype" options={{ headerShown: false }} />
           <Stack.Screen name="r/[ref_code]" options={{ headerShown: false }} />

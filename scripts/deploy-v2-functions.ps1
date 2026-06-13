@@ -45,9 +45,11 @@ Write-Output "Deploying MiraCare v2 edge functions to Supabase project $projectR
 npx supabase functions deploy chat-orchestrator --project-ref $projectRef
 npx supabase functions deploy fact-extractor --project-ref $projectRef
 npx supabase functions deploy admin-order-action --project-ref $projectRef
+npx supabase functions deploy admin-stripe-product-sync --project-ref $projectRef
 npx supabase functions deploy referrer-order --project-ref $projectRef
 npx supabase functions deploy line-webhook --project-ref $projectRef --no-verify-jwt
 npx supabase functions deploy stripe-checkout --project-ref $projectRef
+npx supabase functions deploy stripe-promptpay-qr --project-ref $projectRef
 npx supabase functions deploy stripe-webhook --project-ref $projectRef --no-verify-jwt
 npx supabase functions deploy lab-ingest --project-ref $projectRef
 npx supabase functions deploy lab-confirm --project-ref $projectRef

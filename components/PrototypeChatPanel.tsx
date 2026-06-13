@@ -1,5 +1,6 @@
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
@@ -16,13 +17,24 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import QRCode from 'react-native-qrcode-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Circle, Defs, LinearGradient as SvgGradient, Path, Rect, Stop } from 'react-native-svg';
 
-import { aiChatConfigStatus, askAiWithRag, DEFAULT_USER_NICKNAME, type ChatMessage } from '@/lib/ai/miraChat';
+import {
+  aiChatConfigStatus,
+  askAiWithRag,
+  checkStripePromptPayQrStatus,
+  createStripePromptPayQr,
+  DEFAULT_USER_NICKNAME,
+  getCurrentChatSessionId,
+  loadLatestChatHistoryPage,
+  refreshActiveOrderPanel,
+  type ChatMessage,
+} from '@/lib/ai/miraChat';
 import type { ChatProductCard, ChatUiCard } from '@/lib/ai/healthChatTypes';
 import { useAuthSession } from '@/lib/auth/useAuthSession';
-import type { OrderPanelState } from '@/lib/types/api';
+import type { OrderPanelState, StripePromptPayQrResponse } from '@/lib/types/api';
 
 const logo = require('@/assets/images/mira-care-logo.png');
 const logoMark = require('@/assets/images/mira-care-mark.png');
@@ -41,6 +53,8 @@ type OrderInfoFormSubmit = {
   buyerPhone: string;
   orderId: string;
   preferredDate?: string;
+  preferredDateEnd?: string;
+  preferredTimeWindow?: string;
 };
 
 function createMessage(
@@ -567,7 +581,7 @@ function orderHint(order: NonNullable<OrderPanelState>) {
   }
 
   if (order.step === 'qr') {
-    return 'สแกน PromptPay แล้วแจ้งชำระเงิน';
+    return 'สแกน QR ที่ออกโดย Stripe แล้วระบบจะตรวจสถานะให้อัตโนมัติ';
   }
 
   if (order.step === 'tracking') {
@@ -655,6 +669,8 @@ function PrototypeOrderFormCard({
         buyerPhone: phoneDigits,
         orderId: order.id,
         preferredDate: rangeStartKey || undefined,
+        preferredDateEnd: rangeEndKey || rangeStartKey || undefined,
+        preferredTimeWindow: selectedTimeSlot ? `${selectedTimeSlot.label} ${selectedTimeSlot.detail}` : undefined,
       });
       setDidSubmit(true);
     } catch {
@@ -828,19 +844,143 @@ function PrototypeOrderFormCard({
 
 function PrototypeOrderCard({
   isSending,
+  onStripePromptPayQr,
+  onStripePromptPayStatus,
   onSubmitOrderInfo,
   order,
 }: {
   isSending: boolean;
+  onStripePromptPayQr: (orderId: string) => Promise<StripePromptPayQrResponse>;
+  onStripePromptPayStatus: (orderId: string) => Promise<StripePromptPayQrResponse>;
   onSubmitOrderInfo: (payload: OrderInfoFormSubmit) => Promise<void>;
   order: NonNullable<OrderPanelState>;
 }) {
-  if (order.step === 'form' || order.show_form) {
-    return <PrototypeOrderFormCard isSending={isSending} onSubmitOrderInfo={onSubmitOrderInfo} order={order} />;
-  }
+  const [stripeQrResult, setStripeQrResult] = useState<StripePromptPayQrResponse | null>(null);
+  const [stripeQrError, setStripeQrError] = useState<string | null>(null);
+  const [isCreatingQr, setIsCreatingQr] = useState(false);
+  const [isCheckingPayment, setIsCheckingPayment] = useState(false);
+  const autoCreateAttemptKeyRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    autoCreateAttemptKeyRef.current = null;
+    setStripeQrResult(null);
+    setStripeQrError(null);
+  }, [order.id]);
+
+  useEffect(() => {
+    if (order.step === 'qr') {
+      return;
+    }
+
+    autoCreateAttemptKeyRef.current = null;
+    setStripeQrResult(null);
+    setStripeQrError(null);
+  }, [order.step]);
+
+  useEffect(() => {
+    if (order.step !== 'qr' || !stripeQrResult?.stripe_payment_intent_id || stripeQrResult.submitted) {
+      return undefined;
+    }
+
+    let cancelled = false;
+    const timer = setInterval(() => {
+      setIsCheckingPayment(true);
+      onStripePromptPayStatus(order.id)
+        .then((response) => {
+          if (cancelled) {
+            return;
+          }
+
+          setStripeQrError(null);
+          setStripeQrResult((current) => ({
+            ...response,
+            qr: response.qr ?? current?.qr ?? null,
+          }));
+        })
+        .catch((error) => {
+          if (!cancelled) {
+            setStripeQrError(error instanceof Error ? error.message : 'ตรวจสอบสถานะ Stripe ไม่สำเร็จ');
+          }
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setIsCheckingPayment(false);
+          }
+        });
+    }, 5000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [onStripePromptPayStatus, order.id, order.step, stripeQrResult?.stripe_payment_intent_id, stripeQrResult?.submitted]);
 
   const steps: Array<NonNullable<OrderPanelState>['step']> = ['branch', 'form', 'qr', 'tracking'];
   const activeIndex = order.step === 'cancelled' ? -1 : Math.max(0, steps.indexOf(order.step));
+  const busy = isSending || isCreatingQr || isCheckingPayment;
+  const stripeQr = stripeQrResult?.qr ?? null;
+  const hasStripePaymentIntent = Boolean(stripeQrResult?.stripe_payment_intent_id);
+  const stripeQrTitle = stripeQr
+    ? 'QR PromptPay จาก Stripe'
+    : stripeQrError
+      ? 'สร้าง QR PromptPay ไม่สำเร็จ'
+      : 'กำลังเตรียม QR PromptPay จาก Stripe';
+
+  async function createQr() {
+    if (busy) {
+      return;
+    }
+
+    setStripeQrError(null);
+    setIsCreatingQr(true);
+
+    try {
+      const response = await onStripePromptPayQr(order.id);
+      setStripeQrResult(response);
+    } catch (error) {
+      setStripeQrError(error instanceof Error ? error.message : 'สร้าง QR Stripe ไม่สำเร็จ');
+    } finally {
+      setIsCreatingQr(false);
+    }
+  }
+
+  useEffect(() => {
+    if (order.step !== 'qr' || stripeQr || hasStripePaymentIntent || isSending || isCreatingQr || isCheckingPayment) {
+      return;
+    }
+
+    if (autoCreateAttemptKeyRef.current === order.id) {
+      return;
+    }
+
+    autoCreateAttemptKeyRef.current = order.id;
+    void createQr();
+  }, [hasStripePaymentIntent, isCheckingPayment, isCreatingQr, isSending, order.id, order.step, stripeQr, stripeQrError]);
+
+  async function checkPaymentNow() {
+    if (busy || !stripeQrResult?.stripe_payment_intent_id) {
+      return;
+    }
+
+    setStripeQrError(null);
+    setIsCheckingPayment(true);
+
+    try {
+      const response = await onStripePromptPayStatus(order.id);
+      setStripeQrResult((current) => ({
+        ...response,
+        qr: response.qr ?? current?.qr ?? null,
+      }));
+    } catch (error) {
+      setStripeQrError(error instanceof Error ? error.message : 'ตรวจสอบสถานะ Stripe ไม่สำเร็จ');
+    } finally {
+      setIsCheckingPayment(false);
+    }
+  }
+
+  if (order.step === 'form' || order.show_form) {
+    return <PrototypeOrderFormCard isSending={isSending} onSubmitOrderInfo={onSubmitOrderInfo} order={order} />;
+  }
 
   return (
     <View style={styles.orderCard}>
@@ -872,6 +1012,51 @@ function PrototypeOrderCard({
       </View>
 
       <Text style={styles.orderHint}>{orderHint(order)}</Text>
+      {order.step === 'qr' ? (
+        <View style={styles.orderStripeQrPanel}>
+          {stripeQr ? (
+            <View style={styles.orderStripeQrFrame}>
+              <QRCode backgroundColor="#FFFFFF" color="#243761" size={132} value={stripeQr.data} />
+            </View>
+          ) : null}
+
+          <Text style={styles.orderStripeQrTitle}>{stripeQrTitle}</Text>
+          <Text style={styles.orderStripeQrMeta}>
+            {stripeQrResult?.stripe_payment_status
+              ? `สถานะ Stripe: ${stripeQrResult.stripe_payment_status}`
+              : `${order.amount_baht.toLocaleString('th-TH')} THB · ใช้ QR ที่ผูกกับรายการนี้เท่านั้น`}
+          </Text>
+
+          {stripeQrError ? <Text style={styles.orderStripeQrError}>{stripeQrError}</Text> : null}
+
+          {!stripeQr && !stripeQrError ? (
+            <View style={styles.orderStripeLoadingRow}>
+              <ActivityIndicator color="#635BFF" size="small" />
+              <Text style={styles.orderStripeLoadingText}>{isCreatingQr ? 'กำลังสร้าง QR...' : 'กำลังรอสร้าง QR...'}</Text>
+            </View>
+          ) : null}
+
+          {!stripeQr && stripeQrError ? (
+            <Pressable
+              disabled={busy}
+              onPress={() => void createQr()}
+              style={({ pressed }) => [styles.orderStripeButton, busy ? styles.orderStripeButtonDisabled : null, pressed && !busy ? styles.orderStripeButtonPressed : null]}
+            >
+              <Text style={styles.orderStripeButtonText}>{isCreatingQr ? 'กำลังสร้าง QR...' : 'ลองสร้าง QR ใหม่'}</Text>
+            </Pressable>
+          ) : null}
+
+          {stripeQr ? (
+            <Pressable
+              disabled={busy}
+              onPress={() => void checkPaymentNow()}
+              style={({ pressed }) => [styles.orderStripeButton, busy ? styles.orderStripeButtonDisabled : null, pressed && !busy ? styles.orderStripeButtonPressed : null]}
+            >
+              <Text style={styles.orderStripeButtonText}>{isCheckingPayment ? 'กำลังตรวจสอบ...' : 'ตรวจสอบการชำระเงิน'}</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -982,6 +1167,8 @@ function ChatMessageBubble({
   onBrowseCategory,
   onSelectBranch,
   onSelectProduct,
+  onStripePromptPayQr,
+  onStripePromptPayStatus,
   onSubmitOrderInfo,
 }: {
   index: number;
@@ -990,6 +1177,8 @@ function ChatMessageBubble({
   onBrowseCategory: (category: string, label: string) => void;
   onSelectBranch: (productId: string, branchId: string) => void;
   onSelectProduct: (productId: string, productTitle: string) => void;
+  onStripePromptPayQr: (orderId: string) => Promise<StripePromptPayQrResponse>;
+  onStripePromptPayStatus: (orderId: string) => Promise<StripePromptPayQrResponse>;
   onSubmitOrderInfo: (payload: OrderInfoFormSubmit) => Promise<void>;
 }) {
   const opacity = useRef(new Animated.Value(0)).current;
@@ -1022,7 +1211,15 @@ function ChatMessageBubble({
         {message.uiCards?.map((card) => (
           <ChatUiCardRenderer key={card.id} card={card} onBrowseCategory={onBrowseCategory} onSelectBranch={onSelectBranch} onSelectProduct={onSelectProduct} />
         ))}
-        {message.order ? <PrototypeOrderCard isSending={isSending} onSubmitOrderInfo={onSubmitOrderInfo} order={message.order} /> : null}
+        {message.order ? (
+          <PrototypeOrderCard
+            isSending={isSending}
+            onStripePromptPayQr={onStripePromptPayQr}
+            onStripePromptPayStatus={onStripePromptPayStatus}
+            onSubmitOrderInfo={onSubmitOrderInfo}
+            order={message.order}
+          />
+        ) : null}
       </View>
     </Animated.View>
   );
@@ -1127,12 +1324,16 @@ function BackgroundSheen() {
 
 export function PrototypeChatPanel() {
   const auth = useAuthSession();
+  const router = useRouter();
+  const searchParams = useLocalSearchParams<{ orderId?: string; payment?: string; stripeSessionId?: string }>();
   const { height, width } = useWindowDimensions();
   const browserWidth = Platform.OS === 'web' && typeof window !== 'undefined' ? window.innerWidth : 390;
   const browserHeight = Platform.OS === 'web' && typeof window !== 'undefined' ? window.innerHeight : 640;
   const viewportWidth = width > 0 ? width : browserWidth;
   const viewportHeight = height > 0 ? height : browserHeight;
   const scrollRef = useRef<ScrollView>(null);
+  const didRestoreChat = useRef(false);
+  const announcedPaidOrderIds = useRef(new Set<string>());
   const [input, setInput] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [messages, setMessages] = useState<PrototypeChatMessage[]>([]);
@@ -1156,6 +1357,54 @@ export function PrototypeChatPanel() {
     }
     return undefined;
   }, [isSending, messages, viewMode]);
+
+  useEffect(() => {
+    if (!canUseLiveAi || didRestoreChat.current) {
+      return;
+    }
+
+    didRestoreChat.current = true;
+    const payment = Array.isArray(searchParams.payment) ? searchParams.payment[0] : searchParams.payment;
+    const orderId = Array.isArray(searchParams.orderId) ? searchParams.orderId[0] : searchParams.orderId;
+
+    void (async () => {
+      const restoredMessages: PrototypeChatMessage[] = [];
+
+      try {
+        const history = await loadLatestChatHistoryPage();
+        restoredMessages.push(...history.messages);
+      } catch {
+        restoredMessages.push(createMessage('system_notice', 'ยังโหลดประวัติแชทล่าสุดไม่ได้ค่ะ'));
+      }
+
+      if (payment === 'stripe_success') {
+        restoredMessages.push(createMessage('system_notice', 'ชำระเงินผ่าน Stripe สำเร็จแล้วค่ะ กำลังอัปเดตสถานะคำสั่งซื้อ'));
+      } else if (payment === 'stripe_cancelled') {
+        restoredMessages.push(createMessage('system_notice', 'ยังไม่ได้ชำระเงินค่ะ สามารถสร้าง QR Stripe เพื่อชำระอีกครั้งได้'));
+      }
+
+      if (restoredMessages.length > 0) {
+        setMessages(restoredMessages);
+        setViewMode('chat');
+      }
+
+      if (payment === 'stripe_success' && orderId) {
+        try {
+          const refreshed = await refreshActiveOrderPanel(getCurrentChatSessionId());
+
+          if (refreshed.order) {
+            setMessages((current) => [...current, createMessage('system_notice', 'อัปเดตสถานะคำสั่งซื้อแล้วค่ะ', undefined, undefined, refreshed.order)]);
+          }
+        } catch (error) {
+          setMessages((current) => [...current, createMessage('system_notice', error instanceof Error ? `อัปเดต order ไม่สำเร็จ: ${error.message}` : 'อัปเดต order ไม่สำเร็จ')]);
+        }
+      }
+
+      if (payment === 'stripe_success' || payment === 'stripe_cancelled') {
+        router.replace('/prototype');
+      }
+    })();
+  }, [canUseLiveAi, router, searchParams.orderId, searchParams.payment]);
 
   function toggleVoiceRecording() {
     setVoiceStatus(VOICE_INPUT_DISABLED_MESSAGE);
@@ -1255,7 +1504,29 @@ export function PrototypeChatPanel() {
     appendSystemNotice('การเลือกสาขาต้องมาจาก order step ของ backend จริงค่ะ');
   }
 
-  async function submitOrderInfo({ buyerAge, buyerName, buyerPhone, orderId, preferredDate }: OrderInfoFormSubmit) {
+  function updateOrderInMessages(order: OrderPanelState) {
+    if (!order) {
+      return;
+    }
+
+    setMessages((current) => current.map((message) => (message.order?.id === order.id ? { ...message, order } : message)));
+  }
+
+  function announceStripePaymentIfSubmitted(response: StripePromptPayQrResponse) {
+    const order = response.order;
+
+    if (!order || !response.submitted || announcedPaidOrderIds.current.has(order.id)) {
+      return;
+    }
+
+    announcedPaidOrderIds.current.add(order.id);
+    setMessages((current) => [
+      ...current,
+      createMessage('system_notice', 'ชำระเงินผ่าน Stripe สำเร็จแล้วค่ะ รายการถูกส่งเข้า queue ให้โรงพยาบาลตรวจสอบต่อแล้ว'),
+    ]);
+  }
+
+  async function submitOrderInfo({ buyerAge, buyerName, buyerPhone, orderId, preferredDate, preferredDateEnd, preferredTimeWindow }: OrderInfoFormSubmit) {
     if (isSending) {
       return;
     }
@@ -1280,6 +1551,8 @@ export function PrototypeChatPanel() {
           buyer_phone: buyerPhone,
           order_id: orderId,
           preferred_date: preferredDate,
+          preferred_date_end: preferredDateEnd,
+          preferred_time_window: preferredTimeWindow,
           type: 'order_form_submit',
         },
         messages: nextMessages,
@@ -1292,6 +1565,45 @@ export function PrototypeChatPanel() {
       throw error;
     } finally {
       setIsSending(false);
+    }
+  }
+
+  async function createPrototypeStripeQr(orderId: string) {
+    if (!canUseLiveAi) {
+      appendSystemNotice(liveUnavailableMessage());
+      throw new Error('Live AI chat is unavailable.');
+    }
+
+    try {
+      const result = await createStripePromptPayQr({
+        orderId,
+        sessionId: getCurrentChatSessionId(),
+      });
+      updateOrderInMessages(result.order);
+      announceStripePaymentIfSubmitted(result);
+      return result;
+    } catch (error) {
+      appendSystemNotice(error instanceof Error ? `สร้าง QR Stripe ไม่สำเร็จ: ${error.message}` : 'สร้าง QR Stripe ไม่สำเร็จ');
+      throw error;
+    }
+  }
+
+  async function checkPrototypeStripeQrStatus(orderId: string) {
+    if (!canUseLiveAi) {
+      appendSystemNotice(liveUnavailableMessage());
+      throw new Error('Live AI chat is unavailable.');
+    }
+
+    try {
+      const result = await checkStripePromptPayQrStatus({
+        orderId,
+        sessionId: getCurrentChatSessionId(),
+      });
+      updateOrderInMessages(result.order);
+      announceStripePaymentIfSubmitted(result);
+      return result;
+    } catch (error) {
+      throw error instanceof Error ? error : new Error('ตรวจสอบสถานะ Stripe ไม่สำเร็จ');
     }
   }
 
@@ -1399,6 +1711,8 @@ export function PrototypeChatPanel() {
                           onBrowseCategory={browseCategory}
                           onSelectBranch={selectBranch}
                           onSelectProduct={selectProduct}
+                          onStripePromptPayQr={createPrototypeStripeQr}
+                          onStripePromptPayStatus={checkPrototypeStripeQrStatus}
                           onSubmitOrderInfo={submitOrderInfo}
                         />
                       ))
@@ -2255,6 +2569,81 @@ const styles = StyleSheet.create({
     fontSize: 9.4,
     fontWeight: '800',
     lineHeight: 13,
+  },
+  orderStripeQrPanel: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.34)',
+    borderColor: 'rgba(255,255,255,0.62)',
+    borderRadius: 15,
+    borderWidth: 1,
+    gap: 7,
+    padding: 9,
+  },
+  orderStripeQrFrame: {
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderColor: 'rgba(70,93,144,0.12)',
+    borderRadius: 12,
+    borderWidth: 1,
+    justifyContent: 'center',
+    padding: 8,
+  },
+  orderStripeQrTitle: {
+    color: '#31446F',
+    fontSize: 10.4,
+    fontWeight: '900',
+    lineHeight: 13,
+    textAlign: 'center',
+  },
+  orderStripeQrMeta: {
+    color: '#63749D',
+    fontSize: 8.8,
+    fontWeight: '800',
+    lineHeight: 12,
+    textAlign: 'center',
+  },
+  orderStripeQrError: {
+    color: '#D9536F',
+    fontSize: 8.7,
+    fontWeight: '800',
+    lineHeight: 12,
+    textAlign: 'center',
+  },
+  orderStripeLoadingRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 7,
+    justifyContent: 'center',
+    minHeight: 34,
+  },
+  orderStripeLoadingText: {
+    color: '#536491',
+    fontSize: 9.5,
+    fontWeight: '900',
+    lineHeight: 13,
+  },
+  orderStripeButton: {
+    alignItems: 'center',
+    backgroundColor: '#635BFF',
+    borderColor: 'rgba(255,255,255,0.7)',
+    borderRadius: 12,
+    borderWidth: 1,
+    justifyContent: 'center',
+    minHeight: 34,
+    paddingHorizontal: 10,
+  },
+  orderStripeButtonDisabled: {
+    opacity: 0.55,
+  },
+  orderStripeButtonPressed: {
+    opacity: 0.84,
+    transform: [{ scale: 0.98 }],
+  },
+  orderStripeButtonText: {
+    color: '#FFFFFF',
+    fontSize: 10.5,
+    fontWeight: '900',
+    lineHeight: 14,
   },
   orderStatusRow: {
     alignItems: 'flex-start',

@@ -18,6 +18,7 @@ const EXCLUDED_ROUTES = new Map([
   ['/checkout', 'legacy checkout kept out of the tour until chat checkout cleanup'],
   ['/order-status', 'legacy Stripe return redirect to /user-profile'],
   ['/ai-body-overview', 'legacy redirect to /body-overview'],
+  ['/staff-referral', 'legacy staff entry redirect to /sales-portal'],
 ]);
 
 function normalizePath(value) {

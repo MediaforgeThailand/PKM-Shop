@@ -1,7 +1,7 @@
 ﻿import { insertRow, selectOne, updateRows } from '../_shared/db.ts';
 import { handleOptions, HttpError, json, toErrorResponse } from '../_shared/http.ts';
 import { transition } from '../_shared/orders.ts';
-import { asStripeCheckoutSession, stripeMinorUnitsForBaht, verifyStripeWebhookEvent } from '../_shared/stripe.ts';
+import { asStripeCheckoutSession, asStripePaymentIntent, stripeMinorUnitsForBaht, verifyStripeWebhookEvent } from '../_shared/stripe.ts';
 import { ORDER_PAYMENT_SUBMITTED_NOTICE_TH } from '../_shared/templates.ts';
 import type { ChatMessageRow, OrderRow } from '../_shared/types.ts';
 
@@ -52,7 +52,7 @@ async function loadOrder(orderId: string, tenantId?: string | null) {
   return selectOne<StripeOrderRow>('orders', {
     id: `eq.${orderId}`,
     select:
-      'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,channel,referrer_id,commission_scheme_snapshot,status,slip_url,booking_at,branch_id,buyer_age,admin_note,created_at,updated_at,payment_provider,stripe_checkout_session_id,stripe_payment_intent_id,stripe_payment_status,paid_at,products(name)',
+      'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,preferred_date_end,preferred_time_window,channel,referrer_id,commission_scheme_snapshot,status,slip_url,booking_at,branch_id,buyer_age,admin_note,created_at,updated_at,payment_provider,stripe_checkout_session_id,stripe_payment_intent_id,stripe_payment_status,paid_at,products(name)',
     ...(tenantId ? { tenant_id: `eq.${tenantId}` } : {}),
   });
 }
@@ -106,7 +106,7 @@ async function markStripeSessionPaid(eventId: string, session: NonNullable<Retur
     {
       id: `eq.${order.id}`,
       select:
-        'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,channel,referrer_id,commission_scheme_snapshot,status,slip_url,booking_at,branch_id,buyer_age,admin_note,created_at,updated_at,payment_provider,stripe_checkout_session_id,stripe_payment_intent_id,stripe_payment_status,paid_at',
+        'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,preferred_date_end,preferred_time_window,channel,referrer_id,commission_scheme_snapshot,status,slip_url,booking_at,branch_id,buyer_age,admin_note,created_at,updated_at,payment_provider,stripe_checkout_session_id,stripe_payment_intent_id,stripe_payment_status,paid_at',
       tenant_id: `eq.${order.tenant_id}`,
     },
   );
@@ -175,7 +175,135 @@ async function markStripeSessionUnpaid(eventId: string, session: NonNullable<Ret
     {
       id: `eq.${order.id}`,
       select:
-        'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,channel,referrer_id,commission_scheme_snapshot,status,slip_url,booking_at,branch_id,buyer_age,admin_note,created_at,updated_at,payment_provider,stripe_checkout_session_id,stripe_payment_intent_id,stripe_payment_status,paid_at',
+        'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,preferred_date_end,preferred_time_window,channel,referrer_id,commission_scheme_snapshot,status,slip_url,booking_at,branch_id,buyer_age,admin_note,created_at,updated_at,payment_provider,stripe_checkout_session_id,stripe_payment_intent_id,stripe_payment_status,paid_at',
+      tenant_id: `eq.${order.tenant_id}`,
+    },
+  );
+
+  return {
+    event_id: eventId,
+    handled: true,
+    order_id: order.id,
+    reason: status,
+  };
+}
+
+async function markStripePaymentIntentPaid(eventId: string, paymentIntent: NonNullable<ReturnType<typeof asStripePaymentIntent>>): Promise<StripeWebhookResult> {
+  const orderId = paymentIntent.metadata?.order_id;
+  const tenantId = paymentIntent.metadata?.tenant_id ?? null;
+
+  if (!orderId) {
+    return {
+      event_id: eventId,
+      handled: false,
+      order_id: null,
+      reason: 'missing_order_id',
+    };
+  }
+
+  if (paymentIntent.status !== 'succeeded') {
+    return {
+      event_id: eventId,
+      handled: false,
+      order_id: orderId,
+      reason: 'payment_intent_not_succeeded',
+    };
+  }
+
+  const order = await loadOrder(orderId, tenantId);
+
+  if (!order) {
+    throw new HttpError('VALIDATION', 'Stripe PromptPay order was not found.', 404);
+  }
+
+  if ((paymentIntent.currency ?? '').toLowerCase() !== 'thb') {
+    throw new HttpError('VALIDATION', 'Stripe PromptPay currency does not match THB orders.', 400);
+  }
+
+  if (paymentIntent.amount !== stripeMinorUnitsForBaht(order.amount_baht)) {
+    throw new HttpError('VALIDATION', 'Stripe PromptPay amount does not match the order amount.', 400);
+  }
+
+  await updateRows<OrderRow>(
+    'orders',
+    {
+      paid_at: new Date().toISOString(),
+      payment_provider: 'stripe',
+      stripe_payment_intent_id: paymentIntent.id,
+      stripe_payment_status: paymentIntent.status,
+      updated_at: new Date().toISOString(),
+    },
+    {
+      id: `eq.${order.id}`,
+      select:
+        'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,preferred_date_end,preferred_time_window,channel,referrer_id,commission_scheme_snapshot,status,slip_url,booking_at,branch_id,buyer_age,admin_note,created_at,updated_at,payment_provider,stripe_checkout_session_id,stripe_payment_intent_id,stripe_payment_status,paid_at',
+      tenant_id: `eq.${order.tenant_id}`,
+    },
+  );
+
+  if (order.status !== 'awaiting_payment') {
+    return {
+      event_id: eventId,
+      handled: true,
+      order_id: order.id,
+      reason: `order_already_${order.status}`,
+    };
+  }
+
+  const updatedOrder = await transition(order.id, 'submitted', 'system', {
+    provider: 'stripe',
+    stripe_event_id: eventId,
+    stripe_payment_intent_id: paymentIntent.id,
+  });
+
+  if (order.session_id && order.status !== updatedOrder.status) {
+    await persistSystemNotice(order.session_id, ORDER_PAYMENT_SUBMITTED_NOTICE_TH);
+    await updateSessionTimestamp(order.session_id, order.tenant_id);
+  }
+
+  return {
+    event_id: eventId,
+    handled: true,
+    order_id: order.id,
+  };
+}
+
+async function markStripePaymentIntentUnpaid(eventId: string, paymentIntent: NonNullable<ReturnType<typeof asStripePaymentIntent>>, status: string) {
+  const orderId = paymentIntent.metadata?.order_id;
+  const tenantId = paymentIntent.metadata?.tenant_id ?? null;
+
+  if (!orderId) {
+    return {
+      event_id: eventId,
+      handled: false,
+      order_id: null,
+      reason: 'missing_order_id',
+    };
+  }
+
+  const order = await loadOrder(orderId, tenantId);
+
+  if (!order) {
+    return {
+      event_id: eventId,
+      handled: false,
+      order_id: orderId,
+      reason: 'order_not_found',
+    };
+  }
+
+  await updateRows<OrderRow>(
+    'orders',
+    {
+      payment_provider: 'stripe',
+      stripe_payment_intent_id: paymentIntent.id,
+      stripe_payment_status: status,
+      updated_at: new Date().toISOString(),
+    },
+    {
+      id: `eq.${order.id}`,
+      select:
+        'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,preferred_date_end,preferred_time_window,channel,referrer_id,commission_scheme_snapshot,status,slip_url,booking_at,branch_id,buyer_age,admin_note,created_at,updated_at,payment_provider,stripe_checkout_session_id,stripe_payment_intent_id,stripe_payment_status,paid_at',
       tenant_id: `eq.${order.tenant_id}`,
     },
   );
@@ -205,6 +333,18 @@ Deno.serve(async (req) => {
     const session = asStripeCheckoutSession(event.data.object);
 
     if (!session) {
+      const paymentIntent = asStripePaymentIntent(event.data.object);
+
+      if (paymentIntent) {
+        if (event.type === 'payment_intent.succeeded') {
+          return json(await markStripePaymentIntentPaid(event.id, paymentIntent));
+        }
+
+        if (event.type === 'payment_intent.payment_failed' || event.type === 'payment_intent.canceled') {
+          return json(await markStripePaymentIntentUnpaid(event.id, paymentIntent, paymentIntent.status));
+        }
+      }
+
       return json<StripeWebhookResult>({
         event_id: event.id,
         handled: false,

@@ -10,12 +10,15 @@ import {
   defaultTenantSlug,
   getProductCategories,
   getProductCategoryLabel,
+  hasStripeCatalogMapping,
   loadBranches,
   loadTenantMemberContext,
   loadManagedHospitalProducts,
   loadProductCategories,
   saveCatalogProduct,
   saveProductCategory,
+  shouldSyncCatalogStatusToStripe,
+  syncHospitalProductToStripe,
   updateHospitalProductStatus,
   uploadProductImage,
   type BranchSummary,
@@ -68,6 +71,7 @@ export function CatalogCrud({ title = 'Catalog CRUD' }: { title?: string }) {
   const [tenantContext, setTenantContext] = useState<TenantMemberContext | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isBulkSyncing, setIsBulkSyncing] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [busyProductId, setBusyProductId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -124,8 +128,13 @@ export function CatalogCrud({ title = 'Catalog CRUD' }: { title?: string }) {
     () => ({
       active: products.filter((product) => product.status === 'active').length,
       archived: products.filter((product) => product.status === 'archived').length,
+      stripeMissing: products.filter((product) => product.status === 'active' && !hasStripeCatalogMapping(product)).length,
       total: products.length,
     }),
+    [products],
+  );
+  const stripeSyncTargets = useMemo(
+    () => products.filter((product) => product.status === 'active' && !hasStripeCatalogMapping(product)),
     [products],
   );
 
@@ -262,6 +271,19 @@ export function CatalogCrud({ title = 'Catalog CRUD' }: { title?: string }) {
     }
   }
 
+  function mergeProduct(updatedProduct: HospitalProduct, selectProduct = false) {
+    setProducts((current) =>
+      current.some((product) => product.id === updatedProduct.id)
+        ? current.map((product) => (product.id === updatedProduct.id ? updatedProduct : product))
+        : [updatedProduct, ...current],
+    );
+
+    if (selectProduct || editingProduct?.id === updatedProduct.id) {
+      setEditingProduct(updatedProduct);
+      setDraft(draftFromProduct(updatedProduct));
+    }
+  }
+
   async function saveDraft() {
     if (!canSave || isSaving) {
       return;
@@ -272,10 +294,17 @@ export function CatalogCrud({ title = 'Catalog CRUD' }: { title?: string }) {
       setError(null);
       setMessage(null);
       const result = await saveCatalogProduct(draft, editingProduct?.id);
-      setProducts((current) => [result.product, ...current.filter((product) => product.id !== result.product.id)]);
-      setEditingProduct(result.product);
-      setDraft(draftFromProduct(result.product));
-      setMessage(`Saved ${result.product.title} as ${result.catalogKey}.`);
+      mergeProduct(result.product, true);
+
+      try {
+        const syncResult = await syncHospitalProductToStripe(result.product);
+
+        mergeProduct(syncResult.product, true);
+        setMessage(`Saved ${syncResult.product.title} as ${result.catalogKey}. Auto-synced Stripe: ${syncResult.summary}.`);
+      } catch (syncError) {
+        setMessage(`Saved ${result.product.title} as ${result.catalogKey}.`);
+        setError(syncError instanceof Error ? `Saved product, but Stripe auto-sync failed: ${syncError.message}` : 'Saved product, but Stripe auto-sync failed.');
+      }
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : 'Unable to save product.');
     } finally {
@@ -342,15 +371,91 @@ export function CatalogCrud({ title = 'Catalog CRUD' }: { title?: string }) {
       setError(null);
       setMessage(null);
       const updatedProduct = await updateHospitalProductStatus(product, nextStatus);
-      setProducts((current) => current.map((item) => (item.id === updatedProduct.id ? updatedProduct : item)));
-      if (editingProduct?.id === updatedProduct.id) {
-        setEditingProduct(updatedProduct);
+      mergeProduct(updatedProduct);
+
+      if (shouldSyncCatalogStatusToStripe(updatedProduct, nextStatus)) {
+        try {
+          const syncResult = await syncHospitalProductToStripe(updatedProduct);
+
+          mergeProduct(syncResult.product);
+          setMessage(`${syncResult.product.title} is now ${nextStatus}. Auto-synced Stripe: ${syncResult.summary}.`);
+        } catch (syncError) {
+          setMessage(`${updatedProduct.title} is now ${nextStatus}.`);
+          setError(syncError instanceof Error ? `Status saved, but Stripe auto-sync failed: ${syncError.message}` : 'Status saved, but Stripe auto-sync failed.');
+        }
+      } else {
+        setMessage(`${updatedProduct.title} is now ${nextStatus}.`);
       }
-      setMessage(`${updatedProduct.title} is now ${nextStatus}.`);
     } catch (statusError) {
       setError(statusError instanceof Error ? statusError.message : 'Unable to update product status.');
     } finally {
       setBusyProductId(null);
+    }
+  }
+
+  async function syncStripeProduct(product: HospitalProduct) {
+    if (busyProductId || !canEditCatalog) {
+      return;
+    }
+
+    try {
+      setBusyProductId(product.id);
+      setError(null);
+      setMessage(null);
+      const result = await syncHospitalProductToStripe(product);
+      mergeProduct(result.product);
+      setMessage(`Stripe synced for ${result.product.title}: ${result.summary}.`);
+    } catch (syncError) {
+      setError(syncError instanceof Error ? syncError.message : 'Unable to sync product to Stripe.');
+    } finally {
+      setBusyProductId(null);
+    }
+  }
+
+  async function syncMissingStripeProducts() {
+    if (isBulkSyncing || busyProductId || !canEditCatalog || stripeSyncTargets.length === 0) {
+      return;
+    }
+
+    try {
+      setIsBulkSyncing(true);
+      setError(null);
+      setMessage(null);
+      const syncedProducts: HospitalProduct[] = [];
+      const failures: string[] = [];
+
+      for (const product of stripeSyncTargets) {
+        try {
+          const result = await syncHospitalProductToStripe(product);
+
+          syncedProducts.push(result.product);
+        } catch (syncError) {
+          const detail = syncError instanceof Error ? syncError.message : 'unknown error';
+
+          failures.push(`${product.title}: ${detail}`);
+        }
+      }
+
+      if (syncedProducts.length > 0) {
+        setProducts((current) =>
+          current.map((product) => syncedProducts.find((syncedProduct) => syncedProduct.id === product.id) ?? product),
+        );
+
+        const syncedEditingProduct = editingProduct ? syncedProducts.find((product) => product.id === editingProduct.id) : null;
+
+        if (syncedEditingProduct) {
+          setEditingProduct(syncedEditingProduct);
+          setDraft(draftFromProduct(syncedEditingProduct));
+        }
+      }
+
+      setMessage(`Stripe auto-sync completed for ${syncedProducts.length}/${stripeSyncTargets.length} active products.`);
+
+      if (failures.length > 0) {
+        setError(`Stripe auto-sync failed for ${failures.length} products: ${failures.slice(0, 2).join('; ')}`);
+      }
+    } finally {
+      setIsBulkSyncing(false);
     }
   }
 
@@ -384,6 +489,17 @@ export function CatalogCrud({ title = 'Catalog CRUD' }: { title?: string }) {
             <Pressable disabled={isLoading} onPress={refreshProducts} style={[styles.secondaryButton, isLoading ? styles.disabled : null]}>
               <Text style={styles.secondaryButtonText}>{isLoading ? 'Refreshing' : 'Refresh'}</Text>
             </Pressable>
+            {canEditCatalog ? (
+              <Pressable
+                disabled={isBulkSyncing || busyProductId !== null || stripeSyncTargets.length === 0}
+                onPress={syncMissingStripeProducts}
+                style={[styles.secondaryButton, isBulkSyncing || busyProductId !== null || stripeSyncTargets.length === 0 ? styles.disabled : null]}
+              >
+                <Text style={styles.secondaryButtonText}>
+                  {isBulkSyncing ? 'Syncing Stripe' : `Sync missing Stripe (${stripeSyncTargets.length})`}
+                </Text>
+              </Pressable>
+            ) : null}
             <Link href="/admin/branches" asChild>
               <Pressable style={styles.secondaryButton}>
                 <Text style={styles.secondaryButtonText}>Branches</Text>
@@ -596,6 +712,7 @@ export function CatalogCrud({ title = 'Catalog CRUD' }: { title?: string }) {
                 <Metric label="Total" value={`${summary.total}`} />
                 <Metric label="Active" value={`${summary.active}`} />
                 <Metric label="Archived" value={`${summary.archived}`} />
+                <Metric label="Stripe missing" value={`${summary.stripeMissing}`} />
               </View>
             </View>
 
@@ -625,11 +742,12 @@ export function CatalogCrud({ title = 'Catalog CRUD' }: { title?: string }) {
               filteredProducts.map((product) => (
                 <ProductRow
                   key={product.id}
-                  disabled={Boolean(busyProductId) || !canEditCatalog}
+                  disabled={Boolean(busyProductId) || isBulkSyncing || !canEditCatalog}
                   isBusy={busyProductId === product.id}
                   onArchive={() => changeStatus(product, 'archived')}
                   onEdit={() => editProduct(product)}
                   onRestore={() => changeStatus(product, 'active')}
+                  onSyncStripe={() => syncStripeProduct(product)}
                   product={product}
                   productCategoryLabel={categoryOptions.find((category) => category.key === product.category)?.labelTh ?? getProductCategoryLabel(product.category)}
                   selected={editingProduct?.id === product.id}
@@ -717,6 +835,7 @@ function ProductRow({
   onArchive,
   onEdit,
   onRestore,
+  onSyncStripe,
   product,
   productCategoryLabel,
   selected,
@@ -726,12 +845,14 @@ function ProductRow({
   onArchive: () => void;
   onEdit: () => void;
   onRestore: () => void;
+  onSyncStripe: () => void;
   product: HospitalProduct;
   productCategoryLabel: string;
   selected: boolean;
 }) {
   const isActive = product.status === 'active';
   const branchNames = product.branches.map((branch) => branch.name).join(', ');
+  const stripeStatus = getStripeStatus(product);
 
   return (
     <View style={[styles.productRow, selected ? styles.productRowSelected : null]}>
@@ -752,11 +873,26 @@ function ProductRow({
         <Meta label="Price" value={`${product.priceAmount.toLocaleString('th-TH')} THB`} />
         <Meta label="Booking" value={product.requiresAppointment ? 'Appointment' : 'Walk-in'} />
         <Meta label="Branches" value={branchNames || 'Not assigned'} />
+        <Meta label="Stripe" value={stripeStatus.label} />
+      </View>
+      <View style={styles.stripePanel}>
+        <Pill label={stripeStatus.label} tone={stripeStatus.tone} />
+        <Text numberOfLines={1} style={styles.stripeId}>
+          Product: {product.stripeProductId ?? 'not synced'}
+        </Text>
+        <Text numberOfLines={1} style={styles.stripeId}>
+          Price: {product.stripePriceId ?? 'not synced'}
+        </Text>
       </View>
       {product.hospitalAddress ? <Text style={styles.helperText}>Legacy branch_info TODO: {product.hospitalAddress}</Text> : null}
       <View style={styles.productFooter}>
         <Pressable onPress={onEdit} style={styles.editButton}>
           <Text style={styles.editButtonText}>Edit</Text>
+        </Pressable>
+        <Pressable disabled={disabled} onPress={onSyncStripe} style={[styles.stripeButton, disabled ? styles.disabled : null]}>
+          <Text style={styles.stripeButtonText}>
+            {isBusy ? 'Syncing' : product.stripeProductId && product.stripePriceId ? 'Re-sync Stripe' : 'Sync Stripe'}
+          </Text>
         </Pressable>
         {isActive ? (
           <Pressable disabled={disabled} onPress={onArchive} style={[styles.dangerButton, disabled ? styles.disabled : null]}>
@@ -770,6 +906,27 @@ function ProductRow({
       </View>
     </View>
   );
+}
+
+function getStripeStatus(product: HospitalProduct): { label: string; tone: 'amber' | 'blue' | 'danger' | 'mint' } {
+  if (product.stripeProductId && product.stripePriceId) {
+    return {
+      label: 'Synced',
+      tone: 'mint',
+    };
+  }
+
+  if (product.stripeProductId && !product.stripePriceId) {
+    return {
+      label: 'Stripe price missing',
+      tone: 'danger',
+    };
+  }
+
+  return {
+    label: 'Not synced',
+    tone: 'amber',
+  };
 }
 
 function Field({
@@ -1377,6 +1534,35 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 10,
     justifyContent: 'flex-end',
+  },
+  stripePanel: {
+    backgroundColor: '#F7FBFA',
+    borderColor: MiraDesign.color.line,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 6,
+    padding: 10,
+  },
+  stripeId: {
+    color: MiraDesign.color.inkSoft,
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  stripeButton: {
+    alignItems: 'center',
+    backgroundColor: '#EAF3F2',
+    borderColor: MiraDesign.color.line,
+    borderRadius: 8,
+    borderWidth: 1,
+    justifyContent: 'center',
+    minHeight: 38,
+    minWidth: 122,
+    paddingHorizontal: 12,
+  },
+  stripeButtonText: {
+    color: MiraDesign.color.primaryDeep,
+    fontSize: 12,
+    fontWeight: '900',
   },
   editButton: {
     alignItems: 'center',
