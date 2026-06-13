@@ -406,6 +406,17 @@ export type WearableMetricRow = {
   value: number;
 };
 
+export type WearableImportRow = {
+  customer_id: string;
+  file_path: string | null;
+  filename: string | null;
+  id: string;
+  imported_at: string;
+  metric_count: number;
+  source: 'apple_export' | 'healthkit' | 'manual';
+  tenant_id: string;
+};
+
 export type TenantSummary = {
   display_name: string;
   id: string;
