@@ -52,6 +52,18 @@ type OrderMutationAction = Extract<AdminOrderActionRequest, { action: 'book' | '
 
 const activeStatuses: OrderStatus[] = ['selecting_branch', 'collecting_info', 'awaiting_payment', 'submitted', 'confirmed', 'booked'];
 const notePresets = ['โทรแล้ว-ไม่รับ', 'โทรแล้ว-เลื่อน'] as const;
+const actionLabels: Record<OrderMutationAction, string> = {
+  book: 'Book appointment',
+  cancel: 'Cancel',
+  confirm: 'Confirm payment',
+  done: 'Mark done',
+};
+
+const calendarWeekdays = ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'] as const;
+const bookingHourOptions = Array.from({ length: 11 }, (_, index) => String(index + 8).padStart(2, '0'));
+const bookingMinuteOptions = ['00', '10', '20', '30', '40', '50'] as const;
+const defaultBookingHour = bookingHourOptions[0] ?? '08';
+const defaultBookingMinute = bookingMinuteOptions[0] ?? '00';
 
 function fromJoin<T>(value: T | T[] | null | undefined) {
   return Array.isArray(value) ? value[0] ?? null : value ?? null;
@@ -109,6 +121,145 @@ function bangkokDateTimeParts(value: string | null) {
   };
 }
 
+function bangkokTodayDate() {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    day: '2-digit',
+    month: '2-digit',
+    timeZone: 'Asia/Bangkok',
+    year: 'numeric',
+  }).formatToParts(new Date());
+  const byType = new Map(parts.map((part) => [part.type, part.value]));
+
+  return new Date(Number(byType.get('year')), Number(byType.get('month')) - 1, Number(byType.get('day')));
+}
+
+function formatDateValue(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function parseDateValue(value: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+
+  if (!match) {
+    return null;
+  }
+
+  const year = Number(match[1]);
+  const month = Number(match[2]) - 1;
+  const day = Number(match[3]);
+  const date = new Date(year, month, day);
+
+  if (date.getFullYear() !== year || date.getMonth() !== month || date.getDate() !== day) {
+    return null;
+  }
+
+  return date;
+}
+
+function fullDateLabel(value: string) {
+  const date = parseDateValue(value);
+
+  if (!date) {
+    return value || 'ยังไม่ได้เลือกวันที่';
+  }
+
+  return new Intl.DateTimeFormat('th-TH', {
+    day: '2-digit',
+    month: 'long',
+    weekday: 'long',
+    year: 'numeric',
+  }).format(date);
+}
+
+function monthStart(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+
+function addMonths(date: Date, amount: number) {
+  return new Date(date.getFullYear(), date.getMonth() + amount, 1);
+}
+
+function monthValue(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function monthDateFromValue(value: string) {
+  const match = /^(\d{4})-(\d{2})$/.exec(value);
+
+  if (!match) {
+    return monthStart(bangkokTodayDate());
+  }
+
+  return new Date(Number(match[1]), Number(match[2]) - 1, 1);
+}
+
+function calendarMonthForDate(value: string) {
+  return monthValue(monthStart(parseDateValue(value) ?? bangkokTodayDate()));
+}
+
+function calendarMonthLabel(value: string) {
+  return new Intl.DateTimeFormat('th-TH', {
+    month: 'long',
+    year: 'numeric',
+  }).format(monthDateFromValue(value));
+}
+
+function calendarCells(month: string, selectedValue: string) {
+  const visibleMonth = monthDateFromValue(month);
+  const today = bangkokTodayDate();
+  const selectedDate = parseDateValue(selectedValue);
+  const firstCell = new Date(visibleMonth);
+  firstCell.setDate(1 - visibleMonth.getDay());
+
+  return Array.from({ length: 42 }, (_, index) => {
+    const date = new Date(firstCell);
+    date.setDate(firstCell.getDate() + index);
+    const value = formatDateValue(date);
+    const isSelected = selectedDate ? value === formatDateValue(selectedDate) : false;
+
+    return {
+      day: date.getDate(),
+      isCurrentMonth: date.getMonth() === visibleMonth.getMonth(),
+      isDisabled: date < today && !isSelected,
+      isSelected,
+      isToday: value === formatDateValue(today),
+      value,
+    };
+  });
+}
+
+function parseTimeValue(value: string) {
+  const match = /^(\d{1,2}):(\d{2})$/.exec(value);
+
+  if (!match) {
+    return null;
+  }
+
+  const hourNumber = Number(match[1]);
+  const minuteNumber = Number(match[2]);
+
+  if (hourNumber > 23 || minuteNumber > 59) {
+    return null;
+  }
+
+  return {
+    hour: String(hourNumber).padStart(2, '0'),
+    minute: String(minuteNumber).padStart(2, '0'),
+  };
+}
+
+function mergeTimeOption(options: readonly string[], selected: string | undefined) {
+  if (!selected || options.includes(selected)) {
+    return [...options];
+  }
+
+  return [...options, selected].sort((first, second) => Number(first) - Number(second));
+}
+
+function composeTimeValue(hour: string, minute: string) {
+  return `${hour}:${minute}`;
+}
+
 function composeBangkokIso(dateValue: string, timeValue: string) {
   const date = dateValue.trim();
   const time = timeValue.trim();
@@ -151,6 +302,25 @@ function statusTone(status: OrderStatus): 'amber' | 'blue' | 'danger' | 'mint' {
   }
 
   return 'amber';
+}
+
+function formatPayment(order: Pick<OrderQueueRow, 'payment_provider' | 'stripe_payment_status'>) {
+  if (!order.payment_provider) {
+    return 'not set';
+  }
+
+  return order.stripe_payment_status ? `${order.payment_provider}: ${order.stripe_payment_status}` : order.payment_provider;
+}
+
+function formatPreferredDateRange(order: Pick<OrderQueueRow, 'preferred_date' | 'preferred_date_end'>) {
+  const start = order.preferred_date;
+  const end = order.preferred_date_end && order.preferred_date_end !== start ? order.preferred_date_end : null;
+
+  return start ? (end ? `${start} - ${end}` : start) : '-';
+}
+
+function formatPreferredTimeWindow(order: Pick<OrderQueueRow, 'preferred_time_window'>) {
+  return order.preferred_time_window?.trim() || '-';
 }
 
 function canAct(order: OrderQueueRow, action: OrderMutationAction) {
@@ -207,6 +377,9 @@ export function OrdersQueue({ title = 'Orders Queue' }: { title?: string }) {
         order.buyer_age,
         order.channel,
         order.status,
+        order.preferred_date,
+        order.preferred_date_end,
+        order.preferred_time_window,
         product?.catalog_key,
         product?.name,
         customer?.nickname,
@@ -287,6 +460,8 @@ export function OrdersQueue({ title = 'Orders Queue' }: { title?: string }) {
             'buyer_phone',
             'preferred_branch',
             'preferred_date',
+            'preferred_date_end',
+            'preferred_time_window',
             'channel',
             'referrer_id',
             'commission_scheme_snapshot',
@@ -296,6 +471,11 @@ export function OrdersQueue({ title = 'Orders Queue' }: { title?: string }) {
             'branch_id',
             'buyer_age',
             'admin_note',
+            'payment_provider',
+            'stripe_checkout_session_id',
+            'stripe_payment_intent_id',
+            'stripe_payment_status',
+            'paid_at',
             'created_at',
             'updated_at',
             'branches(name,address,district)',
@@ -485,7 +665,7 @@ export function OrdersQueue({ title = 'Orders Queue' }: { title?: string }) {
         note: note.trim() || undefined,
         order_id: selectedOrder.id,
       });
-      setMessage(`Order moved to ${result.order.status}.`);
+      setMessage(actionSuccessMessage(action, result.order));
       await refreshOrders(result.order.tenant_id);
     } catch (actionError) {
       setError(actionError instanceof Error ? actionError.message : 'Unable to update order.');
@@ -676,6 +856,9 @@ function OrderRowCard({ onSelect, order, selected }: { onSelect: () => void; ord
         <Meta label="Phone" value={phone} />
         <Meta label="Branch" value={branch?.name ?? 'ไม่ระบุสาขา'} />
         <Meta label="Channel" value={order.channel} />
+        <Meta label="Payment" value={formatPayment(order)} />
+        <Meta label="Customer date" value={formatPreferredDateRange(order)} />
+        <Meta label="Customer time" value={formatPreferredTimeWindow(order)} />
         <Meta label="Referrer" value={referrer ? `${referrer.name} (${referrer.ref_code})` : '-'} />
         <Meta label="Amount" value={formatMoney(order.amount_baht)} />
       </View>
@@ -737,10 +920,14 @@ function OrderDetail({
         <Meta label="Phone" value={order.buyer_phone || customer?.phone || '-'} />
         <Meta label="Branch" value={branch?.name ?? 'ไม่ระบุสาขา'} />
         <Meta label="Channel" value={order.channel} />
+        <Meta label="Payment" value={formatPayment(order)} />
+        <Meta label="Paid at" value={formatDateTime(order.paid_at)} />
         <Meta label="Amount" value={formatMoney(order.amount_baht)} />
         <Meta label="Referrer" value={referrer ? `${referrer.name} (${referrer.ref_code})` : '-'} />
-        <Meta label="Preferred date" value={order.preferred_date ?? '-'} />
+        <Meta label="Customer date" value={formatPreferredDateRange(order)} />
+        <Meta label="Customer time" value={formatPreferredTimeWindow(order)} />
         <Meta label="Booked at" value={formatDateTime(order.booking_at)} />
+        <Meta label="Stripe session" value={order.stripe_checkout_session_id ? order.stripe_checkout_session_id.slice(-12) : '-'} />
       </View>
 
       {order.slip_url ? (
@@ -758,26 +945,8 @@ function OrderDetail({
       <View style={styles.formBlock}>
         <Text style={styles.sectionTitle}>Booking</Text>
         <View style={styles.dateTimeRow}>
-          <View style={styles.dateTimeField}>
-            <Text style={styles.formLabel}>Date</Text>
-            <TextInput
-              onChangeText={onBookingDateChange}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor={MiraDesign.color.muted}
-              style={styles.input}
-              value={bookingDate}
-            />
-          </View>
-          <View style={styles.dateTimeField}>
-            <Text style={styles.formLabel}>Time</Text>
-            <TextInput
-              onChangeText={onBookingTimeChange}
-              placeholder="HH:mm"
-              placeholderTextColor={MiraDesign.color.muted}
-              style={styles.input}
-              value={bookingTime}
-            />
-          </View>
+          <BookingDatePicker onChange={onBookingDateChange} value={bookingDate} />
+          <BookingTimePicker onChange={onBookingTimeChange} value={bookingTime} />
         </View>
         <TextInput
           multiline
@@ -809,7 +978,7 @@ function OrderDetail({
 
       <View style={styles.actions}>
         <ActionButton action="confirm" busyAction={busyAction} disabled={!canAct(order, 'confirm')} onAction={onAction} />
-        <ActionButton action="book" busyAction={busyAction} disabled={!canAct(order, 'book')} onAction={onAction} />
+        <ActionButton action="book" busyAction={busyAction} disabled={!canAct(order, 'book') || !bookingDate || !bookingTime} onAction={onAction} />
         <ActionButton action="done" busyAction={busyAction} disabled={!canAct(order, 'done')} onAction={onAction} />
         <ActionButton action="cancel" busyAction={busyAction} disabled={!canAct(order, 'cancel')} danger onAction={onAction} />
       </View>
@@ -833,6 +1002,152 @@ function OrderDetail({
   );
 }
 
+function BookingDatePicker({ onChange, value }: { onChange: (value: string) => void; value: string }) {
+  const [visibleMonth, setVisibleMonth] = useState(() => calendarMonthForDate(value));
+  const cells = useMemo(() => calendarCells(visibleMonth, value), [value, visibleMonth]);
+
+  useEffect(() => {
+    if (value) {
+      setVisibleMonth(calendarMonthForDate(value));
+    }
+  }, [value]);
+
+  const moveMonth = useCallback((amount: number) => {
+    setVisibleMonth((current) => monthValue(addMonths(monthDateFromValue(current), amount)));
+  }, []);
+
+  return (
+    <View style={styles.pickerField}>
+      <View style={styles.pickerLabelRow}>
+        <Text style={styles.formLabel}>Date</Text>
+        <Text numberOfLines={1} style={styles.selectedPickerValue}>
+          {value ? fullDateLabel(value) : 'เลือกวันที่'}
+        </Text>
+      </View>
+      <View style={styles.calendarPanel}>
+        <View style={styles.calendarHeader}>
+          <Pressable accessibilityRole="button" onPress={() => moveMonth(-1)} style={styles.calendarNavButton}>
+            <Text style={styles.calendarNavText}>Prev</Text>
+          </Pressable>
+          <Text numberOfLines={1} style={styles.calendarMonthTitle}>
+            {calendarMonthLabel(visibleMonth)}
+          </Text>
+          <Pressable accessibilityRole="button" onPress={() => moveMonth(1)} style={styles.calendarNavButton}>
+            <Text style={styles.calendarNavText}>Next</Text>
+          </Pressable>
+        </View>
+        <View style={styles.calendarWeekRow}>
+          {calendarWeekdays.map((day) => (
+            <Text key={day} style={styles.calendarWeekday}>
+              {day}
+            </Text>
+          ))}
+        </View>
+        <View style={styles.calendarGrid}>
+          {cells.map((cell) => (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ disabled: cell.isDisabled, selected: cell.isSelected }}
+              disabled={cell.isDisabled}
+              key={cell.value}
+              onPress={() => onChange(cell.value)}
+              style={[
+                styles.calendarCell,
+                !cell.isCurrentMonth ? styles.calendarCellMuted : null,
+                cell.isToday ? styles.calendarCellToday : null,
+                cell.isSelected ? styles.calendarCellSelected : null,
+                cell.isDisabled ? styles.calendarCellDisabled : null,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.calendarCellText,
+                  !cell.isCurrentMonth ? styles.calendarCellTextMuted : null,
+                  cell.isSelected ? styles.calendarCellTextSelected : null,
+                  cell.isDisabled ? styles.calendarCellTextDisabled : null,
+                ]}
+              >
+                {cell.day}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function BookingTimePicker({ onChange, value }: { onChange: (value: string) => void; value: string }) {
+  const parsed = parseTimeValue(value);
+  const selectedHour = parsed?.hour;
+  const selectedMinute = parsed?.minute;
+  const hourOptions = useMemo(() => mergeTimeOption(bookingHourOptions, selectedHour), [selectedHour]);
+  const minuteOptions = useMemo(() => mergeTimeOption(bookingMinuteOptions, selectedMinute), [selectedMinute]);
+  const chooseHour = useCallback(
+    (hour: string) => {
+      onChange(composeTimeValue(hour, selectedMinute ?? defaultBookingMinute));
+    },
+    [onChange, selectedMinute],
+  );
+  const chooseMinute = useCallback(
+    (minute: string) => {
+      onChange(composeTimeValue(selectedHour ?? defaultBookingHour, minute));
+    },
+    [onChange, selectedHour],
+  );
+
+  return (
+    <View style={styles.pickerField}>
+      <View style={styles.pickerLabelRow}>
+        <Text style={styles.formLabel}>Time</Text>
+        <Text style={styles.selectedPickerValue}>{value || 'เลือกเวลา'}</Text>
+      </View>
+      <View style={styles.timePickerPanel}>
+        <View style={styles.timePickerColumn}>
+          <Text style={styles.timePickerColumnTitle}>Hour</Text>
+          <View style={styles.timePickerGrid}>
+            {hourOptions.map((hour) => {
+              const isSelected = hour === selectedHour;
+
+              return (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: isSelected }}
+                  key={hour}
+                  onPress={() => chooseHour(hour)}
+                  style={[styles.timePickerButton, isSelected ? styles.timePickerButtonActive : null]}
+                >
+                  <Text style={[styles.timePickerButtonText, isSelected ? styles.timePickerButtonTextActive : null]}>{hour}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+        <View style={styles.timePickerColumn}>
+          <Text style={styles.timePickerColumnTitle}>Minute</Text>
+          <View style={styles.timePickerGrid}>
+            {minuteOptions.map((minute) => {
+              const isSelected = minute === selectedMinute;
+
+              return (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: isSelected }}
+                  key={minute}
+                  onPress={() => chooseMinute(minute)}
+                  style={[styles.timePickerButton, isSelected ? styles.timePickerButtonActive : null]}
+                >
+                  <Text style={[styles.timePickerButtonText, isSelected ? styles.timePickerButtonTextActive : null]}>{minute}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+      </View>
+    </View>
+  );
+}
+
 function ActionButton({
   action,
   busyAction,
@@ -847,6 +1162,7 @@ function ActionButton({
   onAction: (action: OrderMutationAction) => void;
 }) {
   const isBusy = busyAction === action;
+  const label = actionLabels[action];
 
   return (
     <Pressable
@@ -854,9 +1170,25 @@ function ActionButton({
       onPress={() => onAction(action)}
       style={[styles.actionButton, danger ? styles.dangerActionButton : null, disabled || busyAction ? styles.disabled : null]}
     >
-      <Text style={[styles.actionButtonText, danger ? styles.dangerActionButtonText : null]}>{isBusy ? 'Saving' : action}</Text>
+      <Text style={[styles.actionButtonText, danger ? styles.dangerActionButtonText : null]}>{isBusy ? 'Saving' : label}</Text>
     </Pressable>
   );
+}
+
+function actionSuccessMessage(action: OrderMutationAction, order: OrderRow) {
+  if (action === 'confirm') {
+    return 'Payment confirmed. Call the customer, choose a booking date/time, then book the appointment.';
+  }
+
+  if (action === 'book') {
+    return `Appointment booked for ${formatDateTime(order.booking_at)}.`;
+  }
+
+  if (action === 'done') {
+    return 'Order marked done.';
+  }
+
+  return `Order moved to ${order.status}.`;
 }
 
 function Meta({ label, value }: { label: string; value: string }) {
@@ -1202,17 +1534,170 @@ const styles = StyleSheet.create({
   },
   dateTimeRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 10,
   },
-  dateTimeField: {
+  pickerField: {
     flex: 1,
-    gap: 5,
+    gap: 8,
+    minWidth: 280,
+  },
+  pickerLabelRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 8,
+    justifyContent: 'space-between',
   },
   formLabel: {
     color: MiraDesign.color.inkSoft,
     fontSize: 11,
     fontWeight: '900',
     textTransform: 'uppercase',
+  },
+  selectedPickerValue: {
+    color: MiraDesign.color.primary,
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  calendarPanel: {
+    backgroundColor: '#F7FBFA',
+    borderColor: MiraDesign.color.line,
+    borderRadius: 8,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  calendarHeader: {
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderBottomColor: MiraDesign.color.line,
+    borderBottomWidth: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    minHeight: 44,
+    paddingHorizontal: 10,
+  },
+  calendarMonthTitle: {
+    color: MiraDesign.color.ink,
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '900',
+    textAlign: 'center',
+  },
+  calendarNavButton: {
+    alignItems: 'center',
+    borderColor: MiraDesign.color.line,
+    borderRadius: 8,
+    borderWidth: 1,
+    justifyContent: 'center',
+    minHeight: 32,
+    minWidth: 54,
+    paddingHorizontal: 10,
+  },
+  calendarNavText: {
+    color: MiraDesign.color.primaryDeep,
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  calendarWeekRow: {
+    backgroundColor: '#FFFFFF',
+    flexDirection: 'row',
+    paddingHorizontal: 6,
+    paddingTop: 8,
+  },
+  calendarWeekday: {
+    color: MiraDesign.color.inkSoft,
+    fontSize: 11,
+    fontWeight: '900',
+    textAlign: 'center',
+    width: `${100 / 7}%`,
+  },
+  calendarGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    padding: 6,
+  },
+  calendarCell: {
+    alignItems: 'center',
+    aspectRatio: 1,
+    borderColor: 'transparent',
+    borderRadius: 8,
+    borderWidth: 1,
+    justifyContent: 'center',
+    width: `${100 / 7}%`,
+  },
+  calendarCellMuted: {
+    opacity: 0.55,
+  },
+  calendarCellToday: {
+    borderColor: MiraDesign.color.primary,
+  },
+  calendarCellSelected: {
+    backgroundColor: MiraDesign.color.primary,
+    borderColor: MiraDesign.color.primary,
+  },
+  calendarCellDisabled: {
+    opacity: 0.28,
+  },
+  calendarCellText: {
+    color: MiraDesign.color.ink,
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  calendarCellTextMuted: {
+    color: MiraDesign.color.inkSoft,
+  },
+  calendarCellTextSelected: {
+    color: '#FFFFFF',
+  },
+  calendarCellTextDisabled: {
+    color: MiraDesign.color.inkSoft,
+  },
+  timePickerPanel: {
+    backgroundColor: '#F7FBFA',
+    borderColor: MiraDesign.color.line,
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 10,
+    padding: 10,
+  },
+  timePickerColumn: {
+    flex: 1,
+    gap: 8,
+  },
+  timePickerColumnTitle: {
+    color: MiraDesign.color.inkSoft,
+    fontSize: 11,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+  },
+  timePickerGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 7,
+  },
+  timePickerButton: {
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderColor: MiraDesign.color.line,
+    borderRadius: 8,
+    borderWidth: 1,
+    justifyContent: 'center',
+    minHeight: 36,
+    minWidth: 48,
+    paddingHorizontal: 8,
+  },
+  timePickerButtonActive: {
+    backgroundColor: MiraDesign.color.primary,
+    borderColor: MiraDesign.color.primary,
+  },
+  timePickerButtonText: {
+    color: MiraDesign.color.ink,
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  timePickerButtonTextActive: {
+    color: '#FFFFFF',
   },
   input: {
     backgroundColor: '#F7FBFA',

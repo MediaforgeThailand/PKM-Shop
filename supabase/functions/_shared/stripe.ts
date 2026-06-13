@@ -9,6 +9,7 @@ type RuntimeDeno = {
 type StripeCheckoutSession = {
   amount_total: number | null;
   client_reference_id: string | null;
+  client_secret?: string | null;
   currency: string | null;
   id: string;
   metadata?: Record<string, string>;
@@ -17,6 +18,38 @@ type StripeCheckoutSession = {
   payment_status: string;
   status: string | null;
   url: string | null;
+};
+
+type StripeProduct = {
+  active: boolean;
+  id: string;
+};
+
+type StripePrice = {
+  active: boolean;
+  currency: string;
+  id: string;
+  product: string | { id?: string } | null;
+  unit_amount: number | null;
+};
+
+type StripePromptPayQrCode = {
+  data: string;
+  hosted_instructions_url: string;
+  image_url_png: string;
+  image_url_svg: string;
+};
+
+type StripePaymentIntent = {
+  amount: number;
+  currency: string | null;
+  id: string;
+  metadata?: Record<string, string>;
+  next_action?: {
+    promptpay_display_qr_code?: Partial<StripePromptPayQrCode> | null;
+    type?: string | null;
+  } | null;
+  status: string;
 };
 
 type StripeEvent = {
@@ -40,6 +73,43 @@ type CheckoutSessionInput = {
   successUrl: string;
 };
 
+type PromptPayPaymentIntentInput = {
+  amountBaht: number;
+  buyerEmail?: string | null;
+  buyerName?: string | null;
+  buyerPhone?: string | null;
+  metadata: Record<string, string>;
+  orderId: string;
+  productName: string;
+  returnUrl?: string | null;
+};
+
+type StripeCatalogProductInput = {
+  active: boolean;
+  amountBaht: number;
+  catalogKey: string;
+  category: string;
+  description: string;
+  imageUrl?: string | null;
+  productId: string;
+  productName: string;
+  stripePriceId?: string | null;
+  stripeProductId?: string | null;
+  tenantId: string;
+};
+
+type StripeCatalogSyncResult = {
+  priceAction: 'created' | 'reused';
+  productAction: 'created' | 'updated';
+  stripePriceId: string;
+  stripeProductId: string;
+};
+
+export type StripePromptPayPaymentIntentResult = {
+  paymentIntent: StripePaymentIntent;
+  qr: StripePromptPayQrCode | null;
+};
+
 const stripeApiVersion = '2026-02-25.clover';
 const webhookToleranceSeconds = 5 * 60;
 
@@ -54,6 +124,16 @@ function requiredEnv(key: string) {
 
   if (!value) {
     throw new HttpError('CONFIGURATION', `Missing ${key}.`, 500);
+  }
+
+  return value;
+}
+
+function stripeSecretKey() {
+  const value = requiredEnv('STRIPE_SECRET_KEY');
+
+  if (!/^(sk|rk)_(test|live)_/.test(value)) {
+    throw new HttpError('CONFIGURATION', 'STRIPE_SECRET_KEY must be a Stripe secret or restricted secret key.', 500);
   }
 
   return value;
@@ -85,12 +165,19 @@ function amountBahtToStripeMinorUnits(amountBaht: number) {
   return amountBaht * 100;
 }
 
-async function stripePost<TResponse>(path: string, params: URLSearchParams) {
+async function stripePost<TResponse>(
+  path: string,
+  params: URLSearchParams,
+  options: {
+    idempotencyKey?: string;
+  } = {},
+) {
   const response = await fetch(`https://api.stripe.com/v1/${path.replace(/^\//, '')}`, {
     body: params,
     headers: {
-      Authorization: `Bearer ${requiredEnv('STRIPE_SECRET_KEY')}`,
+      Authorization: `Bearer ${stripeSecretKey()}`,
       'Content-Type': 'application/x-www-form-urlencoded',
+      ...(options.idempotencyKey ? { 'Idempotency-Key': options.idempotencyKey } : {}),
       'Stripe-Version': stripeApiVersion,
     },
     method: 'POST',
@@ -107,6 +194,161 @@ async function stripePost<TResponse>(path: string, params: URLSearchParams) {
   }
 
   return payload as TResponse;
+}
+
+async function stripeGet<TResponse>(path: string) {
+  const response = await fetch(`https://api.stripe.com/v1/${path.replace(/^\//, '')}`, {
+    headers: {
+      Authorization: `Bearer ${stripeSecretKey()}`,
+      'Stripe-Version': stripeApiVersion,
+    },
+    method: 'GET',
+  });
+  const payload = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    const message =
+      payload && typeof payload === 'object' && 'error' in payload
+        ? String((payload as { error?: { message?: unknown } }).error?.message ?? 'Stripe request failed.')
+        : `Stripe request failed with ${response.status}.`;
+
+    throw new HttpError('UPSTREAM', message, response.status);
+  }
+
+  return payload as TResponse;
+}
+
+function appendStripeCatalogMetadata(params: URLSearchParams, input: StripeCatalogProductInput) {
+  appendParam(params, 'metadata[tenant_id]', input.tenantId);
+  appendParam(params, 'metadata[product_id]', input.productId);
+  appendParam(params, 'metadata[catalog_key]', input.catalogKey);
+  appendParam(params, 'metadata[category]', input.category);
+}
+
+function appendStripeProductImage(params: URLSearchParams, imageUrl?: string | null) {
+  if (imageUrl?.startsWith('https://')) {
+    appendParam(params, 'images[0]', imageUrl);
+  }
+}
+
+function stripePriceProductId(price: StripePrice) {
+  if (typeof price.product === 'string') {
+    return price.product;
+  }
+
+  return price.product?.id ?? null;
+}
+
+async function createStripeProduct(input: StripeCatalogProductInput) {
+  const params = new URLSearchParams();
+
+  appendParam(params, 'name', input.productName);
+  appendParam(params, 'description', input.description.slice(0, 1000));
+  appendParam(params, 'active', input.active);
+  appendStripeProductImage(params, input.imageUrl);
+  appendStripeCatalogMetadata(params, input);
+
+  return stripePost<StripeProduct>('products', params);
+}
+
+async function updateStripeProduct(stripeProductId: string, input: StripeCatalogProductInput) {
+  const params = new URLSearchParams();
+
+  appendParam(params, 'name', input.productName);
+  appendParam(params, 'description', input.description.slice(0, 1000));
+  appendParam(params, 'active', input.active);
+  appendStripeProductImage(params, input.imageUrl);
+  appendStripeCatalogMetadata(params, input);
+
+  return stripePost<StripeProduct>(`products/${encodeURIComponent(stripeProductId)}`, params);
+}
+
+async function createStripePrice(stripeProductId: string, input: StripeCatalogProductInput) {
+  const params = new URLSearchParams();
+
+  appendParam(params, 'currency', 'thb');
+  appendParam(params, 'unit_amount', amountBahtToStripeMinorUnits(input.amountBaht));
+  appendParam(params, 'product', stripeProductId);
+  appendParam(params, 'active', input.active);
+  appendStripeCatalogMetadata(params, input);
+
+  return stripePost<StripePrice>('prices', params);
+}
+
+async function retrieveStripePrice(stripePriceId: string) {
+  return stripeGet<StripePrice>(`prices/${encodeURIComponent(stripePriceId)}`);
+}
+
+async function deactivateStripePrice(stripePriceId: string) {
+  const params = new URLSearchParams();
+
+  appendParam(params, 'active', false);
+
+  return stripePost<StripePrice>(`prices/${encodeURIComponent(stripePriceId)}`, params);
+}
+
+export async function createOrUpdateStripeCatalogProduct(input: StripeCatalogProductInput): Promise<StripeCatalogSyncResult> {
+  let productAction: StripeCatalogSyncResult['productAction'] = input.stripeProductId ? 'updated' : 'created';
+  let product: StripeProduct;
+
+  if (input.stripeProductId) {
+    try {
+      product = await updateStripeProduct(input.stripeProductId, input);
+    } catch (error) {
+      if (!(error instanceof HttpError) || error.status !== 404) {
+        throw error;
+      }
+
+      product = await createStripeProduct(input);
+      productAction = 'created';
+    }
+  } else {
+    product = await createStripeProduct(input);
+  }
+
+  let priceAction: StripeCatalogSyncResult['priceAction'] = 'created';
+  let stripePriceId = '';
+  const expectedUnitAmount = amountBahtToStripeMinorUnits(input.amountBaht);
+
+  if (input.stripePriceId) {
+    let existingPrice: StripePrice | null = null;
+
+    try {
+      existingPrice = await retrieveStripePrice(input.stripePriceId);
+    } catch (error) {
+      if (!(error instanceof HttpError) || error.status !== 404) {
+        throw error;
+      }
+    }
+
+    if (existingPrice) {
+      const matchesCurrentProduct = stripePriceProductId(existingPrice) === product.id;
+      const matchesCurrentPrice =
+        existingPrice.active &&
+        existingPrice.currency.toLowerCase() === 'thb' &&
+        existingPrice.unit_amount === expectedUnitAmount &&
+        matchesCurrentProduct;
+
+      if (matchesCurrentPrice) {
+        priceAction = 'reused';
+        stripePriceId = existingPrice.id;
+      } else {
+        await deactivateStripePrice(existingPrice.id);
+      }
+    }
+  }
+
+  if (!stripePriceId) {
+    const newPrice = await createStripePrice(product.id, input);
+    stripePriceId = newPrice.id;
+  }
+
+  return {
+    priceAction,
+    productAction,
+    stripePriceId,
+    stripeProductId: product.id,
+  };
 }
 
 export async function createStripeCheckoutSession(input: CheckoutSessionInput) {
@@ -145,6 +387,83 @@ export async function createStripeCheckoutSession(input: CheckoutSessionInput) {
   appendParam(params, 'line_items[0][quantity]', 1);
 
   return stripePost<StripeCheckoutSession>('checkout/sessions', params);
+}
+
+function toStripePromptPayQrCode(value: unknown): StripePromptPayQrCode | null {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const candidate = value as Partial<StripePromptPayQrCode>;
+
+  if (
+    typeof candidate.data !== 'string' ||
+    typeof candidate.hosted_instructions_url !== 'string' ||
+    typeof candidate.image_url_png !== 'string' ||
+    typeof candidate.image_url_svg !== 'string'
+  ) {
+    return null;
+  }
+
+  return {
+    data: candidate.data,
+    hosted_instructions_url: candidate.hosted_instructions_url,
+    image_url_png: candidate.image_url_png,
+    image_url_svg: candidate.image_url_svg,
+  };
+}
+
+function promptPayQrFromPaymentIntent(intent: StripePaymentIntent) {
+  return toStripePromptPayQrCode(intent.next_action?.promptpay_display_qr_code ?? null);
+}
+
+export async function createStripePromptPayPaymentIntent(input: PromptPayPaymentIntentInput): Promise<StripePromptPayPaymentIntentResult> {
+  const params = new URLSearchParams();
+
+  appendParam(params, 'amount', amountBahtToStripeMinorUnits(input.amountBaht));
+  appendParam(params, 'currency', 'thb');
+  appendParam(params, 'confirm', true);
+  appendParam(params, 'description', input.productName);
+  appendParam(params, 'payment_method_types[0]', 'promptpay');
+  appendParam(params, 'payment_method_data[type]', 'promptpay');
+
+  if (input.buyerName) {
+    appendParam(params, 'payment_method_data[billing_details][name]', input.buyerName);
+  }
+
+  if (input.buyerEmail) {
+    appendParam(params, 'payment_method_data[billing_details][email]', input.buyerEmail);
+  }
+
+  if (input.buyerPhone) {
+    appendParam(params, 'payment_method_data[billing_details][phone]', input.buyerPhone);
+  }
+
+  if (input.returnUrl) {
+    appendParam(params, 'return_url', input.returnUrl);
+  }
+
+  for (const [key, value] of Object.entries(input.metadata)) {
+    appendParam(params, `metadata[${key}]`, value);
+  }
+
+  const paymentIntent = await stripePost<StripePaymentIntent>('payment_intents', params, {
+    idempotencyKey: `miracare-promptpay-${input.orderId}`,
+  });
+
+  return {
+    paymentIntent,
+    qr: promptPayQrFromPaymentIntent(paymentIntent),
+  };
+}
+
+export async function retrieveStripePaymentIntent(paymentIntentId: string): Promise<StripePromptPayPaymentIntentResult> {
+  const paymentIntent = await stripeGet<StripePaymentIntent>(`payment_intents/${encodeURIComponent(paymentIntentId)}`);
+
+  return {
+    paymentIntent,
+    qr: promptPayQrFromPaymentIntent(paymentIntent),
+  };
 }
 
 function parseStripeSignatureHeader(signatureHeader: string) {
@@ -245,6 +564,7 @@ export function asStripeCheckoutSession(value: unknown): StripeCheckoutSession |
   return {
     amount_total: typeof candidate.amount_total === 'number' ? candidate.amount_total : null,
     client_reference_id: typeof candidate.client_reference_id === 'string' ? candidate.client_reference_id : null,
+    client_secret: typeof candidate.client_secret === 'string' ? candidate.client_secret : null,
     currency: typeof candidate.currency === 'string' ? candidate.currency : null,
     id: candidate.id,
     metadata: candidate.metadata && typeof candidate.metadata === 'object' ? candidate.metadata : {},
@@ -253,6 +573,27 @@ export function asStripeCheckoutSession(value: unknown): StripeCheckoutSession |
     payment_status: typeof candidate.payment_status === 'string' ? candidate.payment_status : 'unknown',
     status: typeof candidate.status === 'string' ? candidate.status : null,
     url: typeof candidate.url === 'string' ? candidate.url : null,
+  };
+}
+
+export function asStripePaymentIntent(value: unknown): StripePaymentIntent | null {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const candidate = value as Partial<StripePaymentIntent>;
+
+  if (typeof candidate.id !== 'string' || candidate.id.length === 0) {
+    return null;
+  }
+
+  return {
+    amount: typeof candidate.amount === 'number' ? candidate.amount : 0,
+    currency: typeof candidate.currency === 'string' ? candidate.currency : null,
+    id: candidate.id,
+    metadata: candidate.metadata && typeof candidate.metadata === 'object' ? candidate.metadata : {},
+    next_action: candidate.next_action && typeof candidate.next_action === 'object' ? candidate.next_action : null,
+    status: typeof candidate.status === 'string' ? candidate.status : 'unknown',
   };
 }
 

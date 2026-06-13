@@ -4,8 +4,9 @@ import {
   canTransition,
   commissionSchemeForConfirmedOrder,
   paymentSlipStoragePath,
+  toOrderPanel,
 } from '../orders.ts';
-import type { OrderRow, OrderStatus } from '../types.ts';
+import type { OrderRow, OrderStatus, OrderWithProductRow } from '../types.ts';
 
 declare const Deno: {
   test: (name: string, fn: () => void) => void;
@@ -34,8 +35,63 @@ function order(status: OrderStatus, overrides: Partial<OrderRow> = {}): Pick<Ord
   };
 }
 
+function panelOrder(overrides: Partial<OrderRow> = {}): OrderWithProductRow {
+  return {
+    admin_note: null,
+    amount_baht: 100,
+    booking_at: null,
+    branch_id: null,
+    buyer_age: 35,
+    buyer_name: 'Test Buyer',
+    buyer_phone: '0812345678',
+    channel: 'chat_app',
+    commission_scheme_snapshot: null,
+    created_at: '2026-06-13T00:00:00.000Z',
+    customer_id: 'customer-1',
+    id: 'order-1',
+    paid_at: null,
+    payment_provider: null,
+    preferred_branch: null,
+    preferred_date: null,
+    preferred_date_end: null,
+    preferred_time_window: null,
+    product_id: 'product-1',
+    products: {
+      catalog_key: 'basic',
+      category: 'checkup',
+      name: 'Basic Checkup',
+      price_baht: 100,
+    },
+    qty: 1,
+    referrer_id: null,
+    session_id: 'session-1',
+    slip_url: null,
+    status: 'awaiting_payment',
+    stripe_checkout_session_id: null,
+    stripe_payment_intent_id: null,
+    stripe_payment_status: null,
+    tenant_id: 'tenant-1',
+    updated_at: '2026-06-13T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
 Deno.test('canTransition allows collecting info to awaiting payment with buyer info', () => {
   assert(canTransition(order('collecting_info'), 'awaiting_payment', 'ai'), 'expected collecting -> awaiting');
+});
+
+Deno.test('toOrderPanel omits PromptPay QR when Stripe owns the payment', () => {
+  const panel = toOrderPanel(panelOrder({ payment_provider: 'stripe' }), { promptpay_id: '0812345678' });
+
+  assert(panel?.step === 'qr', 'expected payment step');
+  assert(!panel?.qr_payload, 'expected Stripe order to skip PromptPay payload');
+});
+
+Deno.test('toOrderPanel keeps PromptPay QR for default payment orders', () => {
+  const panel = toOrderPanel(panelOrder(), { promptpay_id: '0812345678' });
+
+  assert(panel?.step === 'qr', 'expected payment step');
+  assert(Boolean(panel?.qr_payload), 'expected PromptPay payload for default order');
 });
 
 Deno.test('canTransition blocks collecting info without buyer name', () => {

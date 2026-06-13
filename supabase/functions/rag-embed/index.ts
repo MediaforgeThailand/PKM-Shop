@@ -13,7 +13,9 @@ type RagChunkRow = {
   category: string;
   content: string;
   id: string;
+  is_active: boolean;
   keywords: string[] | null;
+  review_status: string | null;
   source: string | null;
   source_type: string | null;
   source_url: string | null;
@@ -103,8 +105,31 @@ function buildEmbeddingText(chunk: RagChunkRow) {
     .join('\n');
 }
 
+function formatEmbeddingInput(model: string, text: string, title: string) {
+  if (normalizeModelName(model) === 'gemini-embedding-2') {
+    return `title: ${title || 'none'} | text: ${text}`;
+  }
+
+  return text;
+}
+
 function vectorLiteral(values: number[]) {
   return `[${values.map((value) => Number(value).toFixed(8)).join(',')}]`;
+}
+
+function normalizeEmbeddingDimensions(values: number[]) {
+  if (values.length < EMBEDDING_DIMENSIONS) {
+    throw new Error(`Gemini embedding returned ${values.length} dimensions, expected at least ${EMBEDDING_DIMENSIONS}.`);
+  }
+
+  const adjustedValues = values.length === EMBEDDING_DIMENSIONS ? values : values.slice(0, EMBEDDING_DIMENSIONS);
+  const magnitude = Math.sqrt(adjustedValues.reduce((sum, value) => sum + value * value, 0));
+
+  if (!Number.isFinite(magnitude) || magnitude === 0) {
+    return adjustedValues;
+  }
+
+  return adjustedValues.map((value) => value / magnitude);
 }
 
 async function fetchRagChunk(chunkId: string, authorization: string): Promise<RagChunkRow | null> {
@@ -114,7 +139,20 @@ async function fetchRagChunk(chunkId: string, authorization: string): Promise<Ra
     return null;
   }
 
-  const select = ['id', 'title', 'category', 'topic', 'summary', 'content', 'keywords', 'source', 'source_url', 'source_type'].join(',');
+  const select = [
+    'id',
+    'title',
+    'category',
+    'topic',
+    'summary',
+    'content',
+    'keywords',
+    'source',
+    'source_url',
+    'source_type',
+    'is_active',
+    'review_status',
+  ].join(',');
   const response = await fetch(
     `${config.supabaseUrl}/rest/v1/rag_chunks?select=${encodeURIComponent(select)}&id=eq.${encodeURIComponent(chunkId)}&limit=1`,
     { headers: restHeaders(authorization) },
@@ -151,6 +189,21 @@ async function callRpc<T>(functionName: string, body: Record<string, unknown>, a
   return (await response.json()) as T;
 }
 
+async function markEmbeddingError(chunkId: string, message: string, authorization: string) {
+  try {
+    await callRpc(
+      'mark_hospital_product_rag_embedding_error',
+      {
+        p_chunk_id: chunkId,
+        p_error: message,
+      },
+      authorization,
+    );
+  } catch {
+    // Keep the original embedding failure as the response error.
+  }
+}
+
 async function generateEmbedding({
   apiBaseUrl,
   geminiApiKey,
@@ -174,14 +227,10 @@ async function generateEmbedding({
     body: JSON.stringify({
       model: modelResource(normalizedModel),
       content: {
-        parts: [{ text }],
+        parts: [{ text: formatEmbeddingInput(normalizedModel, text, title) }],
       },
-      embedContentConfig: {
-        autoTruncate: true,
-        outputDimensionality: EMBEDDING_DIMENSIONS,
-        taskType: 'RETRIEVAL_DOCUMENT',
-        title,
-      },
+      output_dimensionality: EMBEDDING_DIMENSIONS,
+      ...(normalizedModel === 'gemini-embedding-2' ? {} : { taskType: 'RETRIEVAL_DOCUMENT' }),
     }),
   });
   const data = (await response.json()) as GeminiEmbeddingResponse;
@@ -193,7 +242,7 @@ async function generateEmbedding({
   return {
     model: normalizedModel,
     usageMetadata: data.usageMetadata,
-    values: data.embedding.values,
+    values: normalizeEmbeddingDimensions(data.embedding.values),
   };
 }
 
@@ -220,9 +269,11 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: 'Missing GEMINI_API_KEY Edge Function secret.' }, 500);
   }
 
+  let chunkId = '';
+
   try {
     const body = (await req.json()) as RagEmbedRequest;
-    const chunkId = body.chunkId?.trim();
+    chunkId = body.chunkId?.trim() ?? '';
 
     if (!chunkId) {
       return jsonResponse({ error: 'Missing chunkId.' }, 400);
@@ -235,7 +286,11 @@ Deno.serve(async (req) => {
     }
 
     if (chunk.category !== 'marketplace.product') {
-      return jsonResponse({ error: 'Only marketplace.product chunks can be embedded from this prototype endpoint.' }, 403);
+      return jsonResponse({ error: 'Only marketplace.product chunks can be embedded from this product RAG endpoint.' }, 403);
+    }
+
+    if (!chunk.is_active || chunk.review_status !== 'approved') {
+      return jsonResponse({ error: 'Product RAG must be approved and active before embedding.', status: 'skipped' }, 409);
     }
 
     const embedding = await generateEmbedding({
@@ -265,9 +320,15 @@ Deno.serve(async (req) => {
       status: 'embedded',
     });
   } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unexpected embedding error.';
+
+    if (chunkId) {
+      await markEmbeddingError(chunkId, message, authorization);
+    }
+
     return jsonResponse(
       {
-        error: error instanceof Error ? error.message : 'Unexpected embedding error.',
+        error: message,
         status: 'error',
       },
       500,

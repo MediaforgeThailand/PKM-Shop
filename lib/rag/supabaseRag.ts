@@ -89,6 +89,7 @@ export async function loadRagChunks(): Promise<RagChunk[]> {
     )
     .eq('is_active', true)
     .eq('review_status', 'approved')
+    .or('expires_at.is.null,expires_at.gt.now()')
     .order('priority', { ascending: true })
     .order('created_at', { ascending: true });
 

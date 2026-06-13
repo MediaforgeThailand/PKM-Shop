@@ -13,7 +13,15 @@ const links = [
   <div class="container footer-inner">
     <div>
       <a class="wordmark" href="#top" aria-label="mira AI home">
-        <span>mira AI</span><span class="wordmark-dot" aria-hidden="true"></span>
+        <img
+          class="wordmark-image"
+          src="/mira-ai-wordmark.webp"
+          alt="Mira AI"
+          width="346"
+          height="82"
+          loading="lazy"
+          decoding="async"
+        />
       </a>
       <p class="tagline">AI Chat ที่ขายเป็น × Referral ที่ขยายยอดขาย</p>
     </div>
@@ -42,20 +50,16 @@ const links = [
   .wordmark {
     display: inline-flex;
     align-items: center;
-    gap: 0.28rem;
+    width: 120px;
+    aspect-ratio: 346 / 82;
     color: #EAF1FF;
-    font-family: "Space Grotesk", system-ui, sans-serif;
-    font-size: 1.18rem;
-    font-weight: 600;
     line-height: 1;
   }
 
-  .wordmark-dot {
-    width: 0.4rem;
-    height: 0.4rem;
-    border-radius: 50%;
-    background: var(--brand-bright);
-    box-shadow: 0 0 14px var(--glow-brand);
+  .wordmark-image {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
   }
 
   .tagline {

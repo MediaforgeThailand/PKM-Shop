@@ -106,7 +106,27 @@ const intentRules: { categories: RagCategory[]; terms: string[] }[] = [
   },
   {
     categories: ['marketplace.product'],
-    terms: ['แพ็กเกจ', 'package', 'สินค้า', 'ราคา', 'บริการ', 'โรงพยาบาล', 'รวมอะไร', 'มีอะไรบ้าง', 'product'],
+    terms: [
+      'แพ็กเกจ',
+      'package',
+      'สินค้า',
+      'ราคา',
+      'บริการ',
+      'โรงพยาบาล',
+      'รวมอะไร',
+      'มีอะไรบ้าง',
+      'ตรวจสุขภาพ',
+      'ตรวจเลือด',
+      'เจาะเลือด',
+      'checkup',
+      'blood',
+      'cbc',
+      'lipid',
+      'glucose',
+      'lab test',
+      'blood test',
+      'product',
+    ],
   },
   {
     categories: ['care.patient_education', 'safety.escalation'],
@@ -186,8 +206,18 @@ function scoreChunk(queryTokens: string[], preferredCategories: RagCategory[], c
   return relevanceScore + priorityScore;
 }
 
+function isFreshChunk(chunk: RagChunk) {
+  if (!chunk.expiresAt) {
+    return true;
+  }
+
+  const expiresAt = new Date(chunk.expiresAt).getTime();
+
+  return Number.isNaN(expiresAt) || expiresAt > Date.now();
+}
+
 function eligibleChunks(chunks: RagChunk[], preferredCategories: RagCategory[]) {
-  const approvedChunks = chunks.filter((chunk) => chunk.reviewStatus === 'approved');
+  const approvedChunks = chunks.filter((chunk) => chunk.reviewStatus === 'approved' && isFreshChunk(chunk));
 
   if (preferredCategories.length === 0) {
     return approvedChunks;
@@ -241,6 +271,39 @@ export function retrieveRagContext(
     .slice(0, options.limit);
 
   return trimToBudget(scoredMatches, options.maxContextChars);
+}
+
+export function ensureRagCategoryMatch(
+  query: string,
+  chunks: RagChunk[],
+  matches: RagMatch[],
+  category: RagCategory,
+  limitOrOptions: number | RagRetrievalOptions = DEFAULT_LIMIT,
+): RagMatch[] {
+  const options = toRetrievalOptions(limitOrOptions);
+
+  if (matches.some((match) => match.category === category)) {
+    return matches;
+  }
+
+  const categoryMatches = retrieveRagContext(
+    query,
+    chunks.filter((chunk) => chunk.category === category),
+    {
+      ...options,
+      limit: 1,
+      preferCategories: uniqueCategories([...options.preferCategories, category]),
+    },
+  );
+
+  if (categoryMatches.length === 0) {
+    return matches;
+  }
+
+  const requiredIds = new Set(categoryMatches.map((match) => match.id));
+  const merged = [...categoryMatches, ...matches.filter((match) => !requiredIds.has(match.id))].slice(0, options.limit);
+
+  return trimToBudget(merged, options.maxContextChars);
 }
 
 function clipText(text: string, maxChars: number) {

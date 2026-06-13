@@ -1,8 +1,8 @@
 # Mira Marketing Website
 
-Standalone Astro marketing site for `mira.com`. This project is intentionally isolated from the Expo app and root package.
+Standalone Astro marketing site for `mira.mediaforge.co`. This project is isolated from the Expo app and root package, but is now assembled together with the Expo showcase into a single deployment (see the root `scripts/build-site.mjs`): the landing page is served at `/` and the Expo showcase app is mounted under `/showcase`.
 
-The landing page route is `/landingpage`; `/` redirects there for local previews and deployed builds.
+The landing page lives at `/` (`src/pages/index.astro`); `/landingpage` is kept as a permanent redirect to `/` for backward compatibility.
 
 ## Development
 

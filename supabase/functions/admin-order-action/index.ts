@@ -198,7 +198,7 @@ Deno.serve(async (req) => {
     const order = await selectOne<OrderRow>('orders', {
       id: `eq.${body.order_id}`,
       select:
-        'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,channel,referrer_id,commission_scheme_snapshot,status,slip_url,booking_at,branch_id,buyer_age,admin_note,created_at,updated_at',
+        'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,preferred_date_end,preferred_time_window,channel,referrer_id,commission_scheme_snapshot,status,slip_url,booking_at,branch_id,buyer_age,admin_note,payment_provider,stripe_checkout_session_id,stripe_payment_intent_id,stripe_payment_status,paid_at,created_at,updated_at',
       tenant_id: `in.(${tenantFilter})`,
     });
 
@@ -232,7 +232,7 @@ Deno.serve(async (req) => {
         {
           id: `eq.${order.id}`,
           select:
-            'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,channel,referrer_id,commission_scheme_snapshot,status,slip_url,booking_at,branch_id,buyer_age,admin_note,created_at,updated_at',
+            'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,preferred_date_end,preferred_time_window,channel,referrer_id,commission_scheme_snapshot,status,slip_url,booking_at,branch_id,buyer_age,admin_note,payment_provider,stripe_checkout_session_id,stripe_payment_intent_id,stripe_payment_status,paid_at,created_at,updated_at',
           tenant_id: `eq.${order.tenant_id}`,
         },
       );
@@ -260,7 +260,7 @@ Deno.serve(async (req) => {
         {
           id: `eq.${order.id}`,
           select:
-            'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,channel,referrer_id,commission_scheme_snapshot,status,slip_url,booking_at,branch_id,buyer_age,admin_note,created_at,updated_at',
+            'id,tenant_id,customer_id,session_id,product_id,qty,amount_baht,buyer_name,buyer_phone,preferred_branch,preferred_date,preferred_date_end,preferred_time_window,channel,referrer_id,commission_scheme_snapshot,status,slip_url,booking_at,branch_id,buyer_age,admin_note,payment_provider,stripe_checkout_session_id,stripe_payment_intent_id,stripe_payment_status,paid_at,created_at,updated_at',
           tenant_id: `eq.${order.tenant_id}`,
         },
       );
