@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="th">
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      @font-face { font-family: 'Anuphan'; src: url('../fonts/anuphan-thai-400-normal.woff2') format('woff2'); font-weight: 400; font-display: block; }
+      @font-face { font-family: 'Anuphan'; src: url('../fonts/anuphan-thai-500-normal.woff2') format('woff2'); font-weight: 500; font-display: block; }
+      @font-face { font-family: 'Anuphan'; src: url('../fonts/anuphan-thai-600-normal.woff2') format('woff2'); font-weight: 600; font-display: block; }
+      @font-face { font-family: 'Space Grotesk'; src: url('../fonts/space-grotesk-latin-600-normal.woff2') format('woff2'); font-weight: 600; font-display: block; }
+
+      * { box-sizing: border-box; }
+      html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: #051226; }
+
+      #root {
+        --deep: #1d56db; --brand: #2e6bf6; --bright: #3f8efc; --sky: #7fa4fe; --ice: #c5d8ff; --mint: #5fe0aa; --mint-deep: #1faa78;
+        position: relative; width: 1080px; height: 1350px; overflow: hidden; color: #eaf2ff;
+        font-family: 'Anuphan', system-ui, sans-serif;
+        background:
+          radial-gradient(60% 40% at 84% 8%, rgba(23,86,219,0.4), transparent 60%),
+          radial-gradient(56% 40% at 12% 92%, rgba(46,107,246,0.20), transparent 60%),
+          linear-gradient(160deg, #071c38 0%, #050e22 100%);
+      }
+      .step { position: absolute; left: 56px; top: 70px; font-family: 'Space Grotesk', sans-serif; font-weight: 600; letter-spacing: 3px; font-size: 26px; color: var(--sky); }
+
+      .card { position: absolute; left: 56px; right: 56px; top: 150px; bottom: 90px; border-radius: 34px; padding: 50px 52px;
+        background: rgba(214,230,255,0.06); border: 1px solid rgba(214,230,255,0.16); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.07); display: flex; flex-direction: column; gap: 30px; justify-content: center; opacity: 0; }
+
+      .who { display: flex; align-items: center; gap: 22px; }
+      .av { width: 92px; height: 92px; border-radius: 50%; display: grid; place-items: center; background: linear-gradient(135deg, var(--deep), var(--bright)); color: #fff; font-size: 40px; font-weight: 600; }
+      .who b { display: block; font-size: 38px; }
+      .who span { display: block; font-size: 26px; color: var(--ice); opacity: 0.7; margin-top: 4px; }
+      .code { display: flex; align-items: center; gap: 22px; }
+      .code .pill { flex: 1; border: 1.5px dashed rgba(147,187,254,0.55); border-radius: 999px; background: rgba(46,107,246,0.14); color: var(--ice);
+        font-family: 'Space Grotesk', sans-serif; font-size: 30px; padding: 22px 28px; text-align: center; }
+      .qr { width: 110px; height: 110px; flex: none; border-radius: 16px; padding: 12px; background: #eaf2ff; }
+      .qr svg { width: 100%; height: 100%; }
+      .share { display: flex; align-items: center; gap: 16px; font-size: 26px; color: var(--ice); opacity: 0.85; }
+      .share em { border: 1px solid rgba(214,230,255,0.2); border-radius: 999px; background: rgba(214,230,255,0.08); font-style: normal; font-weight: 600; font-size: 24px; padding: 12px 24px; }
+
+      .chip { align-self: flex-start; border: 1px solid rgba(147,187,254,0.4); border-radius: 999px; background: rgba(46,107,246,0.16); color: var(--ice); font-size: 28px; font-weight: 600; padding: 16px 28px; }
+      .bub { max-width: 86%; padding: 26px 30px; font-size: 34px; line-height: 1.36; border-radius: 28px; }
+      .bub.user { align-self: flex-end; color: #fff; background: linear-gradient(120deg, var(--deep), var(--bright)); border-bottom-right-radius: 9px; }
+      .bub.mira { align-self: flex-start; background: rgba(234,242,255,0.1); border: 1px solid rgba(214,230,255,0.18); border-bottom-left-radius: 9px; }
+
+      .order { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 30px 34px; border-radius: 24px; background: rgba(234,242,255,0.08); border: 1px solid rgba(214,230,255,0.16); }
+      .order b { display: block; font-size: 34px; }
+      .order span { display: block; font-size: 26px; color: var(--ice); opacity: 0.7; margin-top: 6px; }
+      .order .price { font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 42px; color: var(--ice); }
+      .paid { align-self: flex-start; display: inline-flex; align-items: center; gap: 14px; padding: 20px 30px; border-radius: 999px; font-size: 30px; font-weight: 600;
+        color: var(--mint); background: rgba(31,170,120,0.16); border: 1px solid rgba(95,224,170,0.4); }
+
+      .comm-label { font-size: 32px; color: var(--ice); opacity: 0.8; }
+      .comm { font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 150px; line-height: 1; color: var(--mint); text-shadow: 0 0 60px rgba(95,224,170,0.4); }
+      .comm-foot { font-size: 30px; color: var(--mint); font-weight: 600; }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="referral" data-width="1080" data-height="1350" data-start="0" data-duration="17">
+      <div class="step" id="step">1 · แชร์ลิงก์</div>
+
+      <!-- card 1: share link -->
+      <div class="card" id="c1">
+        <div class="who"><span class="av">นก</span><div><b>คุณหมอนก</b><span>ผู้แนะนำของคุณ</span></div></div>
+        <div class="code">
+          <span class="pill">mira.com/r/DRNOK2</span>
+          <span class="qr"><svg viewBox="0 0 100 100"><rect width="100" height="100" fill="#fff"/><g fill="#101a33"><rect x="6" y="6" width="26" height="26"/><rect x="12" y="12" width="14" height="14" fill="#fff"/><rect x="16" y="16" width="6" height="6" fill="#101a33"/><rect x="68" y="6" width="26" height="26"/><rect x="74" y="12" width="14" height="14" fill="#fff"/><rect x="6" y="68" width="26" height="26"/><rect x="12" y="74" width="14" height="14" fill="#fff"/><rect x="40" y="40" width="6" height="6"/><rect x="62" y="42" width="6" height="6"/><rect x="84" y="58" width="6" height="6"/><rect x="44" y="74" width="6" height="6"/><rect x="70" y="74" width="6" height="6"/></g></svg></span>
+        </div>
+        <div class="share">แชร์ไป<em>LINE</em><em>Facebook</em><em>IG</em></div>
+      </div>
+
+      <!-- card 2: customer in chat -->
+      <div class="card" id="c2">
+        <span class="chip">ลูกค้าจากลิงก์ คุณหมอนก ✓</span>
+        <div class="bub user">สนใจโปรแกรมตรวจสุขภาพให้คุณแม่ค่ะ</div>
+        <div class="bub mira">แนะนำ Premium 50+ ที่เหมาะกับคุณแม่ค่ะ</div>
+      </div>
+
+      <!-- card 3: Mira closes the sale -->
+      <div class="card" id="c3">
+        <div class="order"><div><b>ตรวจสุขภาพ Premium 50+</b><span>สาขาลาดพร้าว · พรุ่งนี้ 09:30</span></div><span class="price">฿4,900</span></div>
+        <span class="paid">✓ ชำระแล้ว · ปิดการขายโดย Mira</span>
+      </div>
+
+      <!-- card 4: commission to referrer -->
+      <div class="card" id="c4">
+        <span class="comm-label">ส่วนแบ่งของคุณหมอนก</span>
+        <span class="comm" id="comm">+฿0</span>
+        <span class="comm-foot">7% ของยอดขาย · เข้ารอบโอนอัตโนมัติ ✓</span>
+      </div>
+
+      <script src="../vendor/gsap.min.js"></script>
+      <script>
+        const tl = gsap.timeline({ paused: true, defaults: { ease: 'power3.out' } });
+        const card = (sel, label, t) => {
+          tl.set('#step', { textContent: label }, t - 0.05);
+          tl.fromTo(sel, { y: 40, opacity: 0, scale: 0.97 }, { y: 0, opacity: 1, scale: 1, duration: 0.6, ease: 'back.out(1.2)' }, t);
+        };
+        // each card holds ~3.5s — readable
+        card('#c1', '1 · แชร์ลิงก์', 0.3);
+        tl.to('#c1', { opacity: 0, y: -30, duration: 0.45, ease: 'power2.in' }, 3.7);
+        card('#c2', '2 · ลูกค้าเข้าแชท', 4.0);
+        tl.to('#c2', { opacity: 0, y: -30, duration: 0.45, ease: 'power2.in' }, 7.4);
+        card('#c3', '3 · Mira ปิดการขาย', 7.7);
+        tl.to('#c3', { opacity: 0, y: -30, duration: 0.45, ease: 'power2.in' }, 11.1);
+        card('#c4', '4 · ส่วนแบ่งเข้าทันที', 11.4);
+        const comm = { v: 0 };
+        tl.to(comm, { v: 350, duration: 1.1, ease: 'power2.out', onUpdate: () => { document.getElementById('comm').textContent = '+฿' + Math.round(comm.v); } }, 12.2);
+        tl.to('#c4', { opacity: 0, y: -30, duration: 0.5, ease: 'power2.in' }, 16.2);
+
+        window.__timelines = window.__timelines || {};
+        window.__timelines['referral'] = tl;
+      </script>
+    </div>
+  </body>
+</html>

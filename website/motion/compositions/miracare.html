@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="th">
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      @font-face { font-family: 'Anuphan'; src: url('../fonts/anuphan-thai-400-normal.woff2') format('woff2'); font-weight: 400; font-display: block; }
+      @font-face { font-family: 'Anuphan'; src: url('../fonts/anuphan-thai-500-normal.woff2') format('woff2'); font-weight: 500; font-display: block; }
+      @font-face { font-family: 'Anuphan'; src: url('../fonts/anuphan-thai-600-normal.woff2') format('woff2'); font-weight: 600; font-display: block; }
+      @font-face { font-family: 'Space Grotesk'; src: url('../fonts/space-grotesk-latin-600-normal.woff2') format('woff2'); font-weight: 600; font-display: block; }
+
+      * { box-sizing: border-box; }
+      html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: #eaf6f6; }
+
+      #root {
+        --teal: #0ea5a4; --teal-deep: #087b7a; --teal-soft: #d6f0ef; --brand: #2e6bf6; --deep: #1d56db;
+        --ink: #102a2a; --ink-soft: #436; --muted: #6b8a8a; --surface: #ffffff; --line: #d4e8e7; --mint: #1faa78;
+        position: relative; width: 1920px; height: 1080px; overflow: hidden; color: #103030;
+        font-family: 'Anuphan', system-ui, sans-serif;
+        background:
+          radial-gradient(48% 44% at 16% 14%, rgba(14, 165, 164, 0.22), transparent 60%),
+          radial-gradient(44% 42% at 86% 88%, rgba(63, 142, 252, 0.14), transparent 60%),
+          linear-gradient(160deg, #f4fdfc 0%, #e3f4f3 100%);
+      }
+      .tag { position: absolute; left: 80px; top: 70px; display: inline-flex; align-items: center; gap: 14px; padding: 14px 26px; border-radius: 999px;
+        background: rgba(255,255,255,0.8); border: 1px solid rgba(255,255,255,0.9); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+        font-size: 30px; font-weight: 600; color: var(--teal-deep); box-shadow: 0 14px 30px -16px rgba(14,165,164,0.5); }
+      .tag .dot { width: 14px; height: 14px; border-radius: 50%; background: var(--teal); box-shadow: 0 0 0 6px rgba(14,165,164,0.16); }
+
+      /* health visual (left) */
+      .health { position: absolute; left: 80px; top: 200px; width: 760px; height: 540px; border-radius: 34px; padding: 40px;
+        background: rgba(255,255,255,0.62); -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px); border: 1px solid rgba(255,255,255,0.85);
+        box-shadow: 0 40px 100px -42px rgba(14,165,164,0.4), inset 0 1px 0 rgba(255,255,255,0.9); }
+      .health-title { font-size: 30px; font-weight: 600; }
+      .ecg { margin-top: 18px; }
+      .ecg path { fill: none; stroke: var(--teal); stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
+      .ring-wrap { position: absolute; right: 46px; top: 150px; width: 230px; height: 230px; }
+      .ring-wrap svg { transform: rotate(-90deg); }
+      .ring-track { fill: none; stroke: rgba(14,165,164,0.15); stroke-width: 22; }
+      .ring-fill { fill: none; stroke: var(--teal); stroke-width: 22; stroke-linecap: round; stroke-dasharray: 534; stroke-dashoffset: 534; }
+      .ring-num { position: absolute; left: 0; top: 0; width: 230px; height: 230px; display: grid; place-items: center; }
+      .ring-num b { font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 56px; color: var(--teal-deep); }
+      .health-foot { position: absolute; left: 40px; bottom: 36px; font-size: 24px; color: var(--muted); }
+
+      /* chat (right) — proactive re-booking */
+      .chat { position: absolute; right: 80px; top: 200px; width: 860px; display: flex; flex-direction: column; gap: 22px; }
+      .who { display: inline-flex; align-items: center; gap: 12px; font-size: 24px; font-weight: 600; color: var(--teal-deep); }
+      .who .av { width: 44px; height: 44px; border-radius: 12px; background: linear-gradient(135deg, var(--teal-deep), var(--teal)); }
+      .bub { max-width: 82%; padding: 22px 26px; font-size: 27px; line-height: 1.38; border-radius: 26px; opacity: 0; }
+      .bub.mira { align-self: flex-start; background: #fff; border: 1px solid var(--line); border-bottom-left-radius: 8px; box-shadow: 0 18px 40px -22px rgba(16,48,48,0.4); }
+      .bub.user { align-self: flex-end; color: #fff; background: linear-gradient(120deg, var(--teal-deep), var(--teal)); border-bottom-right-radius: 8px; }
+      .booked { align-self: flex-start; display: inline-flex; align-items: center; gap: 14px; padding: 20px 26px; border-radius: 20px; font-size: 25px; font-weight: 600;
+        color: var(--teal-deep); background: var(--teal-soft); border: 1px solid rgba(14,165,164,0.4); opacity: 0; }
+      .booked b { font-family: 'Space Grotesk', sans-serif; }
+
+      /* key line */
+      .keyline { position: absolute; left: 50%; bottom: 64px; transform: translateX(-50%); text-align: center; width: 1500px; opacity: 0; }
+      .keyline .k { font-size: 42px; font-weight: 600; letter-spacing: -0.5px; }
+      .keyline .k b { color: var(--teal-deep); }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="miracare" data-width="1920" data-height="1080" data-start="0" data-duration="16">
+      <div class="tag"><span class="dot"></span>MiraCare · สำหรับโรงพยาบาล</div>
+
+      <div class="health" id="health">
+        <div class="health-title">Health Dashboard ของคุณแม่</div>
+        <svg class="ecg" id="ecg" width="420" height="150" viewBox="0 0 420 150" aria-hidden="true">
+          <path id="ecg-path" d="M0 90 H120 l16 0 10 -44 14 88 16 -124 12 80 10 -20 16 20 H420" />
+        </svg>
+        <div class="ring-wrap">
+          <svg width="230" height="230" viewBox="0 0 230 230"><circle class="ring-track" cx="115" cy="115" r="85"/><circle class="ring-fill" id="ring" cx="115" cy="115" r="85"/></svg>
+          <div class="ring-num"><b id="ring-num">0%</b></div>
+        </div>
+        <div class="health-foot">เป้าสุขภาพปีนี้ · ถึงรอบตรวจประจำปีแล้ว</div>
+      </div>
+
+      <div class="chat">
+        <span class="who"><span class="av"></span>Mira · MiraCare</span>
+        <div class="bub mira" id="m1">ถึงรอบตรวจสุขภาพประจำปีของคุณแม่แล้วค่ะ 🩺<br/>จองคิวสาขาเดิมต่อเลยไหมคะ?</div>
+        <div class="bub user" id="m2">จองเลยค่ะ สาขาลาดพร้าวเหมือนเดิม</div>
+        <div class="bub mira" id="m3">จองให้แล้วค่ะ — พร้อมแพ็กเกจที่เหมาะกับช่วงวัย</div>
+        <div class="booked" id="m4">✓ จองคิว ลาดพร้าว · พรุ่งนี้ 09:30 · <b>฿4,900</b></div>
+      </div>
+
+      <div class="keyline" id="keyline">
+        <div class="k">ดึง<b>คนไข้เดิม</b>กลับมาตรวจรอบใหม่ — ระบบชวนกลับมาเอง อัตโนมัติ</div>
+      </div>
+
+      <script src="../vendor/gsap.min.js"></script>
+      <script>
+        const tl = gsap.timeline({ paused: true, defaults: { ease: 'power2.out' } });
+
+        tl.from('.tag', { y: -18, opacity: 0, duration: 0.6 }, 0.1)
+          .from('.health', { x: -40, opacity: 0, duration: 0.7, ease: 'power3.out' }, 0.4)
+          .from('.chat .who', { x: 40, opacity: 0, duration: 0.6 }, 0.6);
+
+        /* ECG draws */
+        const ecg = document.getElementById('ecg-path');
+        const len = ecg.getTotalLength();
+        gsap.set(ecg, { strokeDasharray: len, strokeDashoffset: len });
+        tl.to(ecg, { strokeDashoffset: 0, duration: 1.6, ease: 'power1.inOut' }, 1.0);
+        /* ring counts to 75% */
+        const ring = { v: 0 };
+        tl.to(ring, { v: 75, duration: 1.4, ease: 'power2.out',
+          onUpdate: () => { document.getElementById('ring').style.strokeDashoffset = 534 - 534 * (ring.v / 100) * 0.78; document.getElementById('ring-num').textContent = Math.round(ring.v) + '%'; } }, 1.2);
+
+        /* proactive re-booking chat — slow, readable */
+        tl.fromTo('#m1', { y: 22, opacity: 0 }, { y: 0, opacity: 1, duration: 0.6, ease: 'back.out(1.3)' }, 3.4)
+          .fromTo('#m2', { y: 22, opacity: 0 }, { y: 0, opacity: 1, duration: 0.6, ease: 'back.out(1.3)' }, 5.2)
+          .fromTo('#m3', { y: 22, opacity: 0 }, { y: 0, opacity: 1, duration: 0.6, ease: 'back.out(1.3)' }, 6.8)
+          .fromTo('#m4', { y: 18, scale: 0.94, opacity: 0 }, { y: 0, scale: 1, opacity: 1, duration: 0.6, ease: 'back.out(1.5)' }, 8.4);
+
+        /* key line */
+        tl.fromTo('#keyline', { y: 22, opacity: 0 }, { y: 0, opacity: 1, duration: 0.7 }, 10.4);
+
+        /* hold + loop seam */
+        tl.to(['.tag', '.health', '.chat', '#keyline'], { opacity: 0, duration: 0.6 }, 15.1);
+
+        window.__timelines = window.__timelines || {};
+        window.__timelines['miracare'] = tl;
+      </script>
+    </div>
+  </body>
+</html>

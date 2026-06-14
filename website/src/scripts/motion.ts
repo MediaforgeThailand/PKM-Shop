@@ -541,19 +541,64 @@ function initCtaSpotlight() {
 
 function initMailtoForm() {
   document.querySelectorAll<HTMLFormElement>('[data-contact-form]').forEach((form) => {
-    form.addEventListener('submit', (event) => {
-      event.preventDefault();
-      const data = new FormData(form);
-      const recipient = form.dataset.mailto ?? 'hello@mira.com';
+    const recipient = form.dataset.mailto ?? 'taksin.taeprasert@gmail.com';
+    const note = form.querySelector<HTMLElement>('[data-form-note]');
+    const button = form.querySelector<HTMLButtonElement>('button[type="submit"]');
+    const accessKey = form.querySelector<HTMLInputElement>('input[name="access_key"]')?.value.trim();
+    const canAutoSend = !!accessKey && !accessKey.startsWith('REPLACE_');
+
+    const showNote = (message: string) => {
+      if (!note) return;
+      note.textContent = message;
+      note.removeAttribute('hidden');
+    };
+
+    const sendViaMailto = (data: FormData) => {
       const body = [
         `ชื่อ: ${data.get('name') ?? ''}`,
         `องค์กร: ${data.get('organization') ?? ''}`,
-        `อีเมลหรือเบอร์ติดต่อ: ${data.get('contact') ?? ''}`,
+        `อีเมล: ${data.get('email') ?? ''}`,
+        `เบอร์ติดต่อ: ${data.get('phone') ?? ''}`,
         `ประเภทธุรกิจ: ${data.get('businessType') ?? ''}`,
       ].join('\n');
       const subject = encodeURIComponent('Mira demo request');
       window.location.href = `mailto:${recipient}?subject=${subject}&body=${encodeURIComponent(body)}`;
-      form.querySelector<HTMLElement>('[data-form-note]')?.removeAttribute('hidden');
+      showNote(`เปิดแอปอีเมลของคุณแล้ว — ถ้าไม่ขึ้น ส่งตรงได้ที่ ${recipient}`);
+    };
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const data = new FormData(form);
+
+      // No service key yet → fall back to opening the visitor's mail app.
+      if (!canAutoSend) {
+        sendViaMailto(data);
+        return;
+      }
+
+      const label = button?.textContent ?? 'ส่งคำขอนัดเดโมฟรี';
+      if (button) {
+        button.disabled = true;
+        button.textContent = 'กำลังส่ง…';
+      }
+      try {
+        const res = await fetch('https://api.web3forms.com/submit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify(Object.fromEntries(data.entries())),
+        });
+        const out = (await res.json()) as { success?: boolean; message?: string };
+        if (!res.ok || !out.success) throw new Error(out.message ?? 'submit failed');
+        form.reset();
+        showNote('ส่งคำขอเรียบร้อย — เราจะติดต่อกลับภายใน 1 วันทำการ');
+      } catch {
+        showNote(`ส่งไม่สำเร็จ ลองอีกครั้ง หรือส่งตรงได้ที่ ${recipient}`);
+      } finally {
+        if (button) {
+          button.disabled = false;
+          button.textContent = label;
+        }
+      }
     });
   });
 }

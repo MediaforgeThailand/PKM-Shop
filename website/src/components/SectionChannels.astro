@@ -1,10 +1,12 @@
 ---
 import Section from './Section.astro';
+import MotionLoop from './MotionLoop.astro';
 
-const devices = [
-  { title: 'PWA', body: 'เปิดจากเบราว์เซอร์ ไม่ต้องติดตั้ง', frame: 'browser' },
-  { title: 'App', body: 'iOS / Android ในแบรนด์ของคุณ', frame: 'app' },
-  { title: 'LINE OA', body: 'ใน LINE ที่ลูกค้าคุ้นที่สุด', frame: 'line' },
+// The video carries the demo; this text is the SEO + screen-reader equivalent.
+const channels = [
+  'PWA — เปิดจากเบราว์เซอร์ ไม่ต้องติดตั้ง',
+  'App — iOS / Android ในแบรนด์ของคุณ',
+  'LINE OA — ใน LINE ที่ลูกค้าคุ้นที่สุด',
 ];
 ---
 
@@ -20,38 +22,15 @@ const devices = [
     <p class="section-sub" data-reveal>เราปรับ Mira ให้เข้ากับแบรนด์และระบบของคุณ — ไม่ใช่ให้คุณปรับเข้าหาเรา</p>
   </header>
 
-  <div class="hub" data-reveal>
-    <div class="hub-core">
-      <span class="hub-mark" aria-hidden="true">M</span>
-      <span>Mira Core — สมองเดียว ทุกช่องทาง</span>
-    </div>
-    <svg class="hub-beams" viewBox="0 0 1200 150" preserveAspectRatio="none" aria-hidden="true">
-      <path d="M600 10 C 600 80, 200 60, 200 145" class="beam"></path>
-      <path d="M600 10 C 600 90, 600 90, 600 145" class="beam b2"></path>
-      <path d="M600 10 C 600 80, 1000 60, 1000 145" class="beam b3"></path>
-    </svg>
-  </div>
-
-  <div class="device-grid grid-3">
-    {devices.map((device) => (
-      <article class="device-card tilt-card sheen" data-reveal>
-        <div class="tilt-inner">
-          <div class:list={['device-frame', device.frame]}>
-            {device.frame === 'browser' && (
-              <span class="browser-chrome" aria-hidden="true"><i></i><i></i><i></i></span>
-            )}
-            {device.frame === 'app' && <span class="app-notch" aria-hidden="true"></span>}
-            {device.frame === 'line' && <span class="line-badge" aria-hidden="true">LINE</span>}
-            <span class="mini-bubble mira">สวัสดีค่ะ สนใจแพ็กเกจไหนดีคะ</span>
-            <span class="mini-bubble user">ขอดูโปรตรวจสุขภาพค่ะ</span>
-            <span class="mini-action">ดูแพ็กเกจแนะนำ →</span>
-          </div>
-          <h3>{device.title}</h3>
-          <p>{device.body}</p>
-        </div>
-      </article>
-    ))}
-  </div>
+  <figure class="ch-video" data-reveal>
+    <MotionLoop name="channels" />
+    <figcaption class="sr-only">
+      Mira สมองเดียว ตอบลูกค้าได้ทุกช่องทาง:
+      <ul>
+        {channels.map((channel) => <li>{channel}</li>)}
+      </ul>
+    </figcaption>
+  </figure>
 
   <a class="mini-cta" href="#contact" data-reveal>คุยเรื่องการเชื่อมระบบของคุณ <span class="arrow">→</span></a>
 </Section>
@@ -61,199 +40,18 @@ const devices = [
     max-width: 860px;
   }
 
-  .hub {
-    display: grid;
-    justify-items: center;
-    margin-top: 2.5rem;
-  }
-
-  .hub-core {
-    display: inline-flex;
-    gap: 0.65rem;
-    align-items: center;
-    border: 1px solid rgba(46, 107, 246, 0.35);
-    border-radius: var(--radius-pill);
-    background: var(--surface);
-    box-shadow: var(--shadow-glow);
-    color: var(--ink);
-    font-weight: 600;
-    padding: 0.55rem 1rem 0.55rem 0.55rem;
-  }
-
-  .hub-mark {
-    display: grid;
-    width: 38px;
-    height: 38px;
-    place-items: center;
-    border-radius: 50%;
-    background: var(--grad-brand);
-    color: #fff;
-    font-family: "Space Grotesk", sans-serif;
-    font-weight: 600;
-  }
-
-  .hub-beams {
-    width: min(100%, 1000px);
-    height: 110px;
-  }
-
-  .beam {
-    fill: none;
-    stroke: rgba(46, 107, 246, 0.45);
-    stroke-width: 2;
-    stroke-dasharray: 6 9;
-    animation: beamFlow 1.6s linear infinite;
-  }
-
-  .beam.b2 { animation-delay: 0.4s; }
-  .beam.b3 { animation-delay: 0.8s; }
-
-  @keyframes beamFlow {
-    to {
-      stroke-dashoffset: -15;
-    }
-  }
-
-  .device-grid {
-    margin-top: 0.5rem;
-  }
-
-  .device-card {
-    border: 1px solid var(--line);
-    border-radius: var(--radius-lg);
-    background: var(--surface);
-    box-shadow: var(--shadow-soft);
-    padding: 1rem;
-    transition: border-color 250ms ease, box-shadow 250ms ease;
-  }
-
-  .device-card:hover {
-    border-color: rgba(46, 107, 246, 0.35);
-    box-shadow: var(--shadow-card);
-  }
-
-  .device-frame {
+  .ch-video {
     position: relative;
-    display: grid;
-    min-height: 250px;
-    align-content: end;
-    justify-items: start;
-    gap: 0.6rem;
-    border: 1px solid var(--line);
-    border-radius: 18px;
-    background:
-      radial-gradient(circle at 20% 10%, rgba(46, 107, 246, 0.14), transparent 38%),
-      linear-gradient(180deg, var(--canvas), var(--surface));
-    padding: 1rem;
-    padding-top: 3rem;
+    margin: clamp(1.8rem, 4vw, 2.8rem) 0 0;
+    aspect-ratio: 16 / 9;
+    width: 100%;
     overflow: hidden;
+    border-radius: var(--radius-lg);
+    background: var(--canvas);
+    box-shadow: 0 40px 92px -46px rgba(46, 107, 246, 0.5);
   }
 
-  .device-frame.app {
-    border-radius: 26px;
-  }
-
-  .device-frame.line {
-    background:
-      radial-gradient(circle at 82% 12%, rgba(76, 175, 80, 0.16), transparent 34%),
-      linear-gradient(180deg, #F4FBF4, var(--surface));
-  }
-
-  .browser-chrome {
-    position: absolute;
-    inset: 0.8rem auto auto 0.9rem;
-    display: inline-flex;
-    gap: 5px;
-  }
-
-  .browser-chrome i {
-    width: 9px;
-    height: 9px;
-    border-radius: 50%;
-    background: var(--line);
-  }
-
-  .app-notch {
-    position: absolute;
-    top: 0.7rem;
-    left: 50%;
-    width: 38%;
-    height: 14px;
-    transform: translateX(-50%);
-    border-radius: var(--radius-pill);
-    background: var(--ink);
-    opacity: 0.85;
-  }
-
-  .line-badge {
-    position: absolute;
-    inset: 0.8rem auto auto 0.9rem;
-    border-radius: 8px;
-    background: #19C158;
-    color: #fff;
-    font-family: "Space Grotesk", sans-serif;
-    font-size: 0.68rem;
-    font-weight: 600;
-    padding: 0.2rem 0.5rem;
-  }
-
-  .mini-bubble {
-    max-width: 92%;
-    border-radius: 13px 13px 13px 5px;
-    border: 1px solid var(--line);
-    background: var(--surface);
-    color: var(--ink);
-    font-size: 0.8rem;
-    line-height: 1.45;
-    padding: 0.5rem 0.7rem;
-  }
-
-  .mini-bubble.user {
-    justify-self: end;
-    border: 0;
-    border-radius: 13px 13px 5px 13px;
-    background: var(--grad-brand);
-    color: #fff;
-  }
-
-  .device-frame.line .mini-bubble.user {
-    background: linear-gradient(108deg, #18A94D, #2ECC71);
-  }
-
-  .mini-action {
-    justify-self: stretch;
-    border-radius: var(--radius-pill);
-    background: var(--brand);
-    color: #fff;
-    font-size: 0.82rem;
-    font-weight: 600;
-    padding: 0.55rem 0.9rem;
-    text-align: center;
-  }
-
-  .device-frame.line .mini-action {
-    background: #18A94D;
-  }
-
-  h3 {
-    margin: 1rem 0 0;
-    font-family: "Space Grotesk", "Anuphan", sans-serif;
-    font-size: 1.4rem;
-    line-height: 1.2;
-  }
-
-  p {
-    margin: 0.45rem 0 0;
-    color: var(--ink-soft);
-  }
-
-  @media (max-width: 880px) {
-    .hub-beams {
-      display: none;
-    }
-
-    .hub {
-      margin-bottom: 1.5rem;
-    }
+  .mini-cta {
+    margin-top: 1.8rem;
   }
 </style>
