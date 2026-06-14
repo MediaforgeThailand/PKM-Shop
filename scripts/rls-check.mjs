@@ -124,6 +124,7 @@ async function run() {
   await expectZero('customer A cannot read customer B wearable import row', customerAClient.from('wearable_imports').select('id').eq('id', fixtures.wearableImportB.id));
 
   await expectCrossTenantProductWriteDenied(customerAClient, otherTenant.id);
+  await expectTransitionOrderRpcDenied(customerAClient, fixtures.orderA.id);
   await runV3CommerceChecks({
     customerAClient,
     otherTenant,
@@ -341,6 +342,25 @@ async function expectCrossTenantProductWriteDenied(customerClient, tenantId) {
 
   if (!error) {
     throw new Error(`customer A can insert cross-tenant products row (${data?.[0]?.id ?? 'unknown id'}).`);
+  }
+}
+
+// C1 (deep-risk-audit-2026-06-14): transition_order is SECURITY DEFINER and
+// bypasses RLS, so the only thing stopping a customer from self-confirming an
+// order is the function-level EXECUTE grant. A logged-in customer must NOT be
+// able to call it directly (they would pass p_actor:'admin:x' and confirm their
+// own submitted order). orderA is 'submitted', so without the revoke this call
+// would succeed and mutate it — the assertion fails loudly when the lock is gone.
+async function expectTransitionOrderRpcDenied(customerClient, orderId) {
+  const { error } = await customerClient.rpc('transition_order', {
+    p_actor: 'admin:rls-probe',
+    p_meta: {},
+    p_order_id: orderId,
+    p_to_status: 'confirmed',
+  });
+
+  if (!error) {
+    throw new Error('customer A can call transition_order directly (self-confirm / commission-mint vector is open — see C1).');
   }
 }
 
@@ -565,6 +585,12 @@ async function cleanup() {
   await deleteByIds('branches', created.branchIds);
   await deleteByIds('wearable_imports', created.wearableImportIds);
   await deleteByIds('lab_reports', created.labReportIds);
+  // order_events may exist if a transition fired (e.g. the C1 probe in a
+  // still-vulnerable DB); clear them first so the orders delete is FK-safe.
+  if (created.orderIds.length > 0) {
+    await service.from('order_events').delete().in('order_id', created.orderIds);
+    await service.from('commission_entries').delete().in('order_id', created.orderIds);
+  }
   await deleteByIds('orders', created.orderIds);
   await deleteByIds('chat_messages', created.chatMessageIds);
   await deleteByIds('chat_sessions', created.chatSessionIds);

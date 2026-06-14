@@ -281,10 +281,23 @@ export function toOrderPanel(
   };
 
   if (step === 'qr' && tenant.promptpay_id && order.payment_provider !== 'stripe') {
-    return {
-      ...base,
-      qr_payload: buildPromptPayPayload(tenant.promptpay_id, order.amount_baht),
-    };
+    // L2 (deep-risk-audit-2026-06-14): a malformed tenant.promptpay_id makes
+    // buildPromptPayPayload throw. Degrade to a panel without a QR payload (the
+    // same shape used for Stripe / missing-id) and log, rather than 500-ing the
+    // whole chat turn. Amount sourcing is unchanged (still products.price_baht).
+    try {
+      return {
+        ...base,
+        qr_payload: buildPromptPayPayload(tenant.promptpay_id, order.amount_baht),
+      };
+    } catch (error) {
+      console.warn('promptpay_payload_failed', {
+        error: error instanceof Error ? error.message : String(error),
+        orderId: order.id,
+      });
+
+      return base;
+    }
   }
 
   return base;
