@@ -100,6 +100,10 @@ export async function signUpWithEmailPassword(email: string, password: string, d
 }
 
 export async function ensureProfile(userId: string, displayName?: string | null) {
+  // `profiles` is a legacy v1 table that is not part of the v2 customer model
+  // (customers are resolved server-side per tenant). Keep writing it for v1
+  // compatibility, but best-effort: a missing table or a denied write must never
+  // break sign-in/sign-up (L1, deep-risk-audit-2026-06-14).
   const { error } = await supabase.from('profiles').upsert({
     id: userId,
     display_name: displayName?.trim() || null,
@@ -107,6 +111,6 @@ export async function ensureProfile(userId: string, displayName?: string | null)
   });
 
   if (error) {
-    throw new Error(error.message);
+    console.warn('ensureProfile (legacy profiles) skipped:', error.message);
   }
 }

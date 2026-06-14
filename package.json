@@ -49,6 +49,7 @@
     "chat:regression": "node scripts/chat-regression.mjs",
     "chat:regression:v3": "node scripts/chat-regression-v3.mjs",
     "orders:status-audit": "node scripts/order-status-write-audit.mjs",
+    "orders:rpc-grant-audit": "node scripts/rpc-grant-audit.mjs",
     "types:mirror-audit": "node scripts/type-mirror-audit.mjs",
     "templates:mirror-audit": "node scripts/templates-mirror-audit.mjs",
     "showcase:route-audit": "node scripts/showcase-route-audit.mjs",
@@ -67,7 +68,7 @@
     "v2:schema-audit": "node scripts/v2-schema-audit.mjs",
     "v2:health-safety-audit": "node scripts/v2-health-safety-audit.mjs",
     "v2:client-audit": "node scripts/v2-client-audit.mjs",
-    "v2:verify": "npm run typecheck && npm run showcase:route-audit && npm run v2:type-safety-audit && npm run chat:quality && npm run orders:status-audit && npm run v2:schema-audit && npm run v2:open-questions-audit && npm run v2:local-readiness-audit && npm run v2:docs-audit && npm run v2:client-audit && npm run v2:edge-security-audit && npm run v2:health-safety-audit && npm run v2:pdpa-coverage-audit && npm run types:mirror-audit && npm run templates:mirror-audit && npm run v2:deploy-audit && npm run v2:deno-check && npm run v2:deno-test",
+    "v2:verify": "npm run typecheck && npm run showcase:route-audit && npm run v2:type-safety-audit && npm run chat:quality && npm run orders:status-audit && npm run orders:rpc-grant-audit && npm run v2:schema-audit && npm run v2:open-questions-audit && npm run v2:local-readiness-audit && npm run v2:docs-audit && npm run v2:client-audit && npm run v2:edge-security-audit && npm run v2:health-safety-audit && npm run v2:pdpa-coverage-audit && npm run types:mirror-audit && npm run templates:mirror-audit && npm run v2:deploy-audit && npm run v2:deno-check && npm run v2:deno-test",
     "typecheck": "tsc --noEmit"
   },
   "private": true

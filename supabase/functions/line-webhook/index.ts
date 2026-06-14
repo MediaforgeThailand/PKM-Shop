@@ -1,5 +1,6 @@
 import QRCode from 'qrcode';
 
+import { assertTenant, insertRow, rest } from '../_shared/db.ts';
 import { HttpError, handleOptions, json, toErrorResponse } from '../_shared/http.ts';
 import {
   branchSelectionLineFlexMessage,
@@ -37,6 +38,7 @@ type LineEvent = {
     userId?: string;
   };
   type?: string;
+  webhookEventId?: string;
 };
 
 type LineWebhookBody = {
@@ -150,6 +152,44 @@ async function handleEvent(event: LineEvent, tenantSlug: string) {
   }
 }
 
+// H2: claim an event by its globally-unique webhookEventId before any side
+// effect. Returns false when the event was already processed (LINE redelivery),
+// so the caller skips it. Events without an id (older API / edge cases) are not
+// deduped — they fall back to the previous always-process behaviour.
+async function claimLineEvent(eventId: string | undefined, tenantId: string): Promise<boolean> {
+  if (!eventId) {
+    return true;
+  }
+
+  try {
+    await insertRow('line_webhook_events', { event_id: eventId, tenant_id: tenantId });
+    return true;
+  } catch (error) {
+    if (error instanceof HttpError && error.status === 409) {
+      return false;
+    }
+
+    throw error;
+  }
+}
+
+// Releases a claim so a failed event can be retried by a later redelivery.
+// Best-effort: a failed release just means that event won't retry (at-most-once).
+async function releaseLineEvent(eventId: string | undefined) {
+  if (!eventId) {
+    return;
+  }
+
+  try {
+    await rest(`line_webhook_events?event_id=eq.${encodeURIComponent(eventId)}`, {
+      method: 'DELETE',
+      prefer: 'return=minimal',
+    });
+  } catch (error) {
+    console.warn('line_event_release_failed', error instanceof Error ? error.message : error);
+  }
+}
+
 Deno.serve(async (req) => {
   const optionsResponse = handleOptions(req);
 
@@ -166,14 +206,37 @@ Deno.serve(async (req) => {
     const tenantSlug = new URL(req.url).searchParams.get('tenant') ?? envOrDefault('MIRA_DEFAULT_TENANT_SLUG', 'demo-hospital');
     await verifyLineSignature(bodyText, req.headers.get('x-line-signature'), tenantSlug);
     const payload = JSON.parse(bodyText) as LineWebhookBody;
+    const tenant = await assertTenant(tenantSlug);
+    let processed = 0;
+    let skipped = 0;
 
+    // M1: isolate each event so one failure (or a slow OpenAI call) cannot abort
+    // the whole batch and force LINE to redeliver every event.
     for (const event of payload.events ?? []) {
-      await handleEvent(event, tenantSlug);
+      const claimed = await claimLineEvent(event.webhookEventId, tenant.id);
+
+      if (!claimed) {
+        skipped += 1;
+        continue;
+      }
+
+      try {
+        await handleEvent(event, tenantSlug);
+        processed += 1;
+      } catch (error) {
+        console.error('line_event_failed', {
+          error: error instanceof Error ? error.message : String(error),
+          type: event.type,
+          webhookEventId: event.webhookEventId ?? null,
+        });
+        await releaseLineEvent(event.webhookEventId);
+      }
     }
 
     return json({
       ok: true,
-      processed: payload.events?.length ?? 0,
+      processed,
+      skipped,
     });
   } catch (error) {
     return toErrorResponse(error);

@@ -296,11 +296,16 @@ export async function callOrderFieldExtractor(message: string) {
     const buyerAge = typeof parsed.buyer_age === 'number' && Number.isInteger(parsed.buyer_age) && parsed.buyer_age >= 1 && parsed.buyer_age <= 120
       ? parsed.buyer_age
       : undefined;
+    // M2 (deep-risk-audit-2026-06-14): mirror the order_form_submit phone
+    // contract (^0[689]\d{8}$). Strip common separators then validate; a
+    // conversationally-extracted phone that does not match is dropped so the
+    // flow keeps asking instead of saving a malformed number that staff cannot call.
+    const normalizedPhone = typeof parsed.buyer_phone === 'string' ? parsed.buyer_phone.replace(/[\s-]/g, '') : '';
 
     return {
       buyer_age: buyerAge,
       buyer_name: typeof parsed.buyer_name === 'string' && parsed.buyer_name.trim() ? parsed.buyer_name.trim() : undefined,
-      buyer_phone: typeof parsed.buyer_phone === 'string' && parsed.buyer_phone.trim() ? parsed.buyer_phone.trim() : undefined,
+      buyer_phone: /^0[689]\d{8}$/.test(normalizedPhone) ? normalizedPhone : undefined,
       preferred_date:
         typeof parsed.preferred_date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(parsed.preferred_date)
           ? parsed.preferred_date

@@ -191,11 +191,16 @@ export async function resolveAuthUserId(authorization: string | null) {
 }
 
 export async function resolveOrCreateCustomer(tenantId: string, authUserId: string, nickname?: string | null) {
+  // Only write `nickname` when a caller explicitly supplies it. Every chat turn
+  // calls this with nickname omitted; including `nickname: null` in the upsert
+  // body made merge-duplicates overwrite the nickname that fact-extractor wrote
+  // to customers.nickname (facts.ts), silently defeating the user_nickname
+  // personalization on app/pwa every turn (H1, deep-risk-audit-2026-06-14).
   return upsertRow<CustomerRow>(
     'customers',
     {
       auth_user_id: authUserId,
-      nickname: nickname ?? null,
+      ...(nickname === undefined ? {} : { nickname }),
       tenant_id: tenantId,
     },
     'tenant_id,auth_user_id',
