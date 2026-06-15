@@ -603,7 +603,7 @@ export function OrdersQueue({ title = 'คิวคำสั่งซื้อ' 
     }
 
     const channel = supabase
-      .channel(`orders-queue-${tenant.id}`)
+      .channel(`orders-queue-${tenant.id}-${Date.now()}-${Math.random().toString(36).slice(2)}`)
       .on(
         'postgres_changes',
         {

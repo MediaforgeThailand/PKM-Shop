@@ -32,6 +32,24 @@ const adminActions = [
     meta: 'booking',
     title: 'คิวคำสั่งซื้อ',
   },
+  {
+    body: 'เพิ่ม/แก้ไขสาขา เปิดปิดสาขา และใช้ข้อมูลนี้กับการขายสินค้าหลายสาขา',
+    href: '/admin/branches',
+    meta: 'branches',
+    title: 'จัดการสาขา',
+  },
+  {
+    body: 'จัดการสมาชิก Ref Program และตรวจรายการ commission จาก order จริง',
+    href: '/admin/referrers',
+    meta: 'referral',
+    title: 'สมาชิกและค่าคอมมิชชัน',
+  },
+  {
+    body: 'ดู KPI live จาก orders, products, branches, referral และ commission ledger',
+    href: '/admin/dashboard',
+    meta: 'dashboard',
+    title: 'ภาพรวมหลังบ้าน',
+  },
 ] as const;
 
 function getProductStatusTone(product: HospitalProduct): 'amber' | 'blue' | 'danger' | 'mint' {

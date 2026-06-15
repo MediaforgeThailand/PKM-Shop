@@ -153,7 +153,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderColor: MiraDesign.color.showcaseLine,
     borderRightWidth: 1,
-    gap: 24,
+    gap: 18,
     justifyContent: 'space-between',
     padding: 24,
     width: 250,
@@ -170,13 +170,13 @@ const styles = StyleSheet.create({
     borderRadius: MiraDesign.radius.sm,
   },
   logo: {
-    height: 58,
-    width: 166,
+    height: 52,
+    width: 158,
   },
   navList: {
     flexGrow: 1,
-    gap: 14,
-    paddingTop: 24,
+    gap: 10,
+    paddingTop: 20,
   },
   navListCompact: {
     flexGrow: 0,
@@ -187,9 +187,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: MiraDesign.radius.sm,
     flexDirection: 'row',
-    gap: 14,
-    minHeight: 66,
-    paddingHorizontal: 18,
+    gap: 12,
+    minHeight: 58,
+    paddingHorizontal: 14,
   },
   navItemActive: {
     backgroundColor: MiraDesign.color.showcaseBlueSoft,
@@ -198,7 +198,7 @@ const styles = StyleSheet.create({
   navLabel: {
     color: MiraDesign.color.showcaseNavySoft,
     flexShrink: 1,
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '900',
   },
   navLabelActive: {
@@ -213,9 +213,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: MiraDesign.color.showcaseBlueSoft,
     borderRadius: 22,
-    height: 46,
+    height: 42,
     justifyContent: 'center',
-    width: 46,
+    width: 42,
   },
   avatarText: {
     color: MiraDesign.color.showcaseNavy,

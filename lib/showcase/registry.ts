@@ -42,7 +42,7 @@ export const showcaseModuleMeta: Record<ShowcaseModuleId, ShowcaseModuleMeta> = 
       'เปิดแค็ตตาล็อกเพื่อดูว่าโรงพยาบาลแก้แพ็กเกจ ราคา รูปภาพ และสถานะขายได้เอง',
       'เปิดคิวออเดอร์เพื่อดูงานหลังบ้านหลังลูกค้าชำระเงินหรือส่งข้อมูลจอง',
       'เปิดจัดการสาขาเพื่อดูว่าสาขาและข้อมูลติดต่อถูกใช้ร่วมกับหน้าขายจริง',
-      'เปิด dashboard mockup เพื่อขายภาพรวม KPI ที่ทีมบริหารจะใช้ติดตาม',
+      'เปิด dashboard live เพื่อดู KPI จาก backend ของ tenant เดียวกัน',
     ],
     story_th: 'ระบบหลังบ้านสำหรับทีมโรงพยาบาลที่ต้องดูแลสินค้า ออเดอร์ สาขา และงาน referral ในที่เดียว',
     title_en: 'Admin Panel',
@@ -212,7 +212,7 @@ export const showcaseEntries: readonly ShowcaseEntry[] = [
   {
     auth: 'none',
     demoOrder: 5,
-    description_th: 'หน้า mockup สำหรับภาพรวม KPI ออเดอร์ ยอดขาย อัตราปิดการขายจากแชท และแพ็กเกจขายดี.',
+    description_th: 'หน้า live dashboard สำหรับภาพรวม KPI ออเดอร์ ยอดขาย สินค้า สาขา และ referral จาก backend ของ tenant.',
     href: '/admin/dashboard',
     id: 'admin-dashboard',
     label_en: 'Admin KPI Dashboard',
@@ -220,7 +220,7 @@ export const showcaseEntries: readonly ShowcaseEntry[] = [
     module: 'admin',
     path: '/admin/dashboard',
     poster: null,
-    status: 'mockup',
+    status: 'live',
   },
   {
     auth: 'none',

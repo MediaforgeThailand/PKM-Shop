@@ -907,7 +907,7 @@ function StatCard({
   return (
     <View style={styles.statCard}>
       <View style={[styles.statIcon, toneStyle]}>
-        <SymbolView name={icon} size={34} tintColor={iconColor} />
+        <SymbolView name={icon} size={30} tintColor={iconColor} />
       </View>
       <View style={styles.statCopy}>
         <Text style={styles.statLabel}>{label}</Text>
@@ -1112,7 +1112,7 @@ function ProductVisual({ product }: { product: HospitalProduct }) {
 
   return (
     <View style={styles.productIconBox}>
-      <SymbolView name={categoryIcon(product.category)} size={58} tintColor={MiraDesign.color.showcaseBlue} />
+      <SymbolView name={categoryIcon(product.category)} size={46} tintColor={MiraDesign.color.showcaseBlue} />
     </View>
   );
 }
@@ -1239,9 +1239,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   container: {
-    gap: 16,
-    padding: 30,
-    paddingBottom: 56,
+    gap: 14,
+    padding: 22,
+    paddingBottom: 48,
   },
   topBar: {
     alignItems: 'center',
@@ -1258,9 +1258,9 @@ const styles = StyleSheet.create({
   },
   title: {
     color: MiraDesign.color.showcaseNavy,
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: '900',
-    lineHeight: 34,
+    lineHeight: 32,
   },
   subtitle: {
     color: MiraDesign.color.showcaseNavySoft,
@@ -1281,8 +1281,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     justifyContent: 'center',
-    minHeight: 52,
-    paddingHorizontal: 20,
+    minHeight: 46,
+    paddingHorizontal: 16,
   },
   primaryButtonText: {
     color: '#FFFFFF',
@@ -1298,8 +1298,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     justifyContent: 'center',
-    minHeight: 52,
-    paddingHorizontal: 16,
+    minHeight: 44,
+    paddingHorizontal: 14,
   },
   secondaryButtonText: {
     color: MiraDesign.color.showcaseBlueDeep,
@@ -1351,18 +1351,18 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     flex: 1,
     flexDirection: 'row',
-    gap: 18,
-    minHeight: 124,
-    minWidth: 230,
-    padding: 20,
+    gap: 14,
+    minHeight: 104,
+    minWidth: 210,
+    padding: 16,
     ...softShadow,
   },
   statIcon: {
     alignItems: 'center',
     borderRadius: 999,
-    height: 86,
+    height: 66,
     justifyContent: 'center',
-    width: 86,
+    width: 66,
   },
   statIconBlue: {
     backgroundColor: '#EAF2FF',
@@ -1388,9 +1388,9 @@ const styles = StyleSheet.create({
   },
   statValue: {
     color: MiraDesign.color.showcaseNavy,
-    fontSize: 30,
+    fontSize: 26,
     fontWeight: '900',
-    lineHeight: 34,
+    lineHeight: 30,
   },
   statDetail: {
     color: MiraDesign.color.showcaseNavySoft,
@@ -1427,15 +1427,15 @@ const styles = StyleSheet.create({
   sidePane: {
     gap: 12,
     maxWidth: '100%',
-    width: 376,
+    width: 350,
   },
   filterPanel: {
     backgroundColor: '#FFFFFF',
     borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 8,
     borderWidth: 1,
-    gap: 14,
-    padding: 16,
+    gap: 12,
+    padding: 14,
     ...softShadow,
   },
   sideTitle: {
@@ -1451,7 +1451,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     flexDirection: 'row',
     gap: 10,
-    minHeight: 48,
+    minHeight: 44,
     paddingHorizontal: 12,
   },
   editorPanel: {
@@ -1459,8 +1459,8 @@ const styles = StyleSheet.create({
     borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 8,
     borderWidth: 1,
-    gap: 14,
-    padding: 16,
+    gap: 12,
+    padding: 14,
     ...softShadow,
   },
   referralPanel: {
@@ -1468,8 +1468,8 @@ const styles = StyleSheet.create({
     borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 8,
     borderWidth: 1,
-    gap: 14,
-    padding: 18,
+    gap: 12,
+    padding: 14,
     ...softShadow,
   },
   referralHeader: {
@@ -1539,7 +1539,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     flex: 1,
     gap: 14,
-    padding: 14,
+    padding: 12,
     width: '100%',
     ...softShadow,
   },
@@ -1934,8 +1934,8 @@ const styles = StyleSheet.create({
     borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 8,
     borderWidth: 1,
-    gap: 16,
-    padding: 18,
+    gap: 12,
+    padding: 14,
     ...softShadow,
   },
   productRowSelected: {
@@ -1950,7 +1950,7 @@ const styles = StyleSheet.create({
   productHero: {
     alignItems: 'flex-start',
     flexDirection: 'row',
-    gap: 20,
+    gap: 14,
   },
   productMain: {
     flex: 1,
@@ -1960,16 +1960,16 @@ const styles = StyleSheet.create({
   productImage: {
     backgroundColor: MiraDesign.color.showcaseBlueSoft,
     borderRadius: 8,
-    height: 104,
-    width: 104,
+    height: 84,
+    width: 84,
   },
   productIconBox: {
     alignItems: 'center',
     backgroundColor: MiraDesign.color.showcaseBlueSoft,
     borderRadius: 8,
-    height: 104,
+    height: 84,
     justifyContent: 'center',
-    width: 104,
+    width: 84,
   },
   productTitleGroup: {
     flex: 1,
@@ -1978,9 +1978,9 @@ const styles = StyleSheet.create({
   },
   productTitle: {
     color: MiraDesign.color.showcaseNavy,
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '900',
-    lineHeight: 22,
+    lineHeight: 21,
   },
   productKey: {
     color: MiraDesign.color.showcaseBlueDeep,
@@ -2029,9 +2029,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexGrow: 1,
     gap: 10,
-    minHeight: 58,
-    minWidth: 184,
-    padding: 10,
+    minHeight: 52,
+    minWidth: 168,
+    padding: 9,
   },
   metaCopy: {
     flex: 1,
