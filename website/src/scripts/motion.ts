@@ -544,8 +544,6 @@ function initMailtoForm() {
     const recipient = form.dataset.mailto ?? 'taksin.taeprasert@gmail.com';
     const note = form.querySelector<HTMLElement>('[data-form-note]');
     const button = form.querySelector<HTMLButtonElement>('button[type="submit"]');
-    const accessKey = form.querySelector<HTMLInputElement>('input[name="access_key"]')?.value.trim();
-    const canAutoSend = !!accessKey && !accessKey.startsWith('REPLACE_');
 
     const showNote = (message: string) => {
       if (!note) return;
@@ -570,6 +568,10 @@ function initMailtoForm() {
       event.preventDefault();
       const data = new FormData(form);
 
+      // Read the key at submit time so it always reflects the current page.
+      const accessKey = (data.get('access_key') as string | null)?.trim();
+      const canAutoSend = !!accessKey && !accessKey.startsWith('REPLACE_');
+
       // No service key yet → fall back to opening the visitor's mail app.
       if (!canAutoSend) {
         sendViaMailto(data);
@@ -591,7 +593,8 @@ function initMailtoForm() {
         if (!res.ok || !out.success) throw new Error(out.message ?? 'submit failed');
         form.reset();
         showNote('ส่งคำขอเรียบร้อย — เราจะติดต่อกลับภายใน 1 วันทำการ');
-      } catch {
+      } catch (error) {
+        console.error('[contact-form] Web3Forms submit failed:', error);
         showNote(`ส่งไม่สำเร็จ ลองอีกครั้ง หรือส่งตรงได้ที่ ${recipient}`);
       } finally {
         if (button) {

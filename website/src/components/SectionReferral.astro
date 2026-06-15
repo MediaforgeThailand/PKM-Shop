@@ -1,7 +1,6 @@
 ---
 import Button from './Button.astro';
 import Chip from './Chip.astro';
-import MotionLoop from './MotionLoop.astro';
 import { referralSteps } from '../data/referral-steps';
 ---
 
@@ -72,9 +71,50 @@ import { referralSteps } from '../data/referral-steps';
           </div>
         </div>
 
-        <figure class="story-panel" aria-hidden="true">
-          <MotionLoop name="referral" />
-        </figure>
+        <div class="story-panel glass-panel" aria-hidden="true">
+          <div class="story-card" data-referral-panel>
+            <div class="story-profile">
+              <span class="story-avatar">นก</span>
+              <div>
+                <strong>คุณหมอนก</strong>
+                <span>ผู้แนะนำของคุณ</span>
+              </div>
+            </div>
+            <div class="story-code">
+              <span class="code-pill">mira.com/r/DRNOK2</span>
+              <span class="mini-qr"></span>
+            </div>
+            <div class="share-row">
+              <span>แชร์ไป</span><em>LINE</em><em>Facebook</em><em>IG</em>
+            </div>
+          </div>
+
+          <div class="story-card" data-referral-panel>
+            <span class="story-chip">ลูกค้าจากลิงก์ของ คุณหมอนก ✓</span>
+            <div class="story-bubble user">สนใจโปรแกรมตรวจสุขภาพให้คุณแม่ค่ะ</div>
+            <div class="story-bubble mira">แนะนำ 2 โปรแกรมที่เหมาะที่สุดค่ะ <span class="b-typing"><i></i><i></i><i></i></span></div>
+          </div>
+
+          <div class="story-card" data-referral-panel>
+            <div class="story-order">
+              <div>
+                <strong>ตรวจสุขภาพ Premium 50+</strong>
+                <span>สาขาลาดพร้าว · พรุ่งนี้ 09:30</span>
+              </div>
+              <span class="story-price">฿4,900</span>
+            </div>
+            <span class="story-chip mint">ชำระแล้ว ✓ ปิดการขายโดย Mira</span>
+          </div>
+
+          <div class="story-card" data-referral-panel>
+            <span class="story-label">ส่วนแบ่งของคุณหมอนก</span>
+            <strong class="story-commission">+฿350</strong>
+            <ul class="story-lines">
+              <li><span>กติกาของคุณ</span><em>7% ของยอดขาย (ตัวอย่าง)</em></li>
+              <li><span>สถานะ</span><em class="mint-text">เข้ารอบโอนอัตโนมัติ ✓</em></li>
+            </ul>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -130,7 +170,7 @@ import { referralSteps } from '../data/referral-steps';
     </div>
 
     <div class="flywheel-copy" data-reveal>
-      <h3>ยิ่งแนะนำ ยิ่งขาย — ยิ่งขายดี ยิ่งมีคนอยากแนะนำ</h3>
+      <h3>เครือข่ายแนะนำที่คนอยากบอกต่อ — ช่วยขายได้ส่วนแบ่งจริง ธุรกิจคุณก็โตตาม</h3>
       <div class="chip-row">
         <Chip tone="dark">ตั้ง % ส่วนแบ่งเองได้</Chip>
         <Chip tone="dark">ทุกออเดอร์รู้ว่าใครพามา</Chip>
@@ -286,15 +326,9 @@ import { referralSteps } from '../data/referral-steps';
   /* story panel */
   .story-panel {
     position: relative;
-    align-self: center;
-    justify-self: center;
-    width: 100%;
-    max-width: 460px;
-    margin: 0;
-    aspect-ratio: 4 / 5;
+    min-height: 420px;
     border-radius: 26px;
     overflow: hidden;
-    border: 1px solid var(--night-line);
   }
 
   .story-card {
