@@ -148,6 +148,10 @@ async function handleEvent(event: LineEvent, tenantSlug: string) {
       tenant_slug: tenantSlug,
     });
 
+    if (!response) {
+      return;
+    }
+
     await replyLineMessages(replyToken, await toLineMessages(response), tenantSlug);
     return;
   }
@@ -162,6 +166,10 @@ async function handleEvent(event: LineEvent, tenantSlug: string) {
       tenant_slug: tenantSlug,
     });
 
+    if (!response) {
+      return;
+    }
+
     await replyLineMessages(replyToken, await toLineMessages(response), tenantSlug);
     return;
   }
@@ -174,6 +182,10 @@ async function handleEvent(event: LineEvent, tenantSlug: string) {
       message: 'สวัสดี',
       tenant_slug: tenantSlug,
     });
+
+    if (!response) {
+      return;
+    }
 
     await replyLineMessages(replyToken, await toLineMessages(response), tenantSlug);
   }

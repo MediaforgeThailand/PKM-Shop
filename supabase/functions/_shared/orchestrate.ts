@@ -137,7 +137,7 @@ async function resolveOrCreateSession({
     const session = await selectOne<ChatSessionRow>('chat_sessions', {
       customer_id: `eq.${customer.id}`,
       id: `eq.${sessionId}`,
-      select: 'id,tenant_id,customer_id,channel,flagged,last_message_at,created_at',
+      select: 'id,tenant_id,customer_id,channel,flagged,agent_mode,last_message_at,created_at',
       tenant_id: `eq.${tenant.id}`,
     });
 
@@ -154,7 +154,7 @@ async function resolveOrCreateSession({
     last_message_at: nowIso(),
     tenant_id: tenant.id,
   }, {
-    select: 'id,tenant_id,customer_id,channel,flagged,last_message_at,created_at',
+    select: 'id,tenant_id,customer_id,channel,flagged,agent_mode,last_message_at,created_at',
   });
 }
 type ActionResult = {
@@ -965,7 +965,7 @@ async function updateSessionAfterAssistant(sessionId: string, tenantId: string, 
     },
     {
       id: `eq.${sessionId}`,
-      select: 'id,tenant_id,customer_id,channel,flagged,last_message_at,created_at',
+      select: 'id,tenant_id,customer_id,channel,flagged,agent_mode,last_message_at,created_at',
       tenant_id: `eq.${tenantId}`,
     },
   );
@@ -1096,7 +1096,7 @@ async function resolveOrCreateLatestSession({
     channel: `eq.${channel}`,
     customer_id: `eq.${customer.id}`,
     order: 'last_message_at.desc',
-    select: 'id,tenant_id,customer_id,channel,flagged,last_message_at,created_at',
+    select: 'id,tenant_id,customer_id,channel,flagged,agent_mode,last_message_at,created_at',
     tenant_id: `eq.${tenant.id}`,
   });
 
@@ -1110,7 +1110,7 @@ async function resolveOrCreateLatestSession({
     last_message_at: nowIso(),
     tenant_id: tenant.id,
   }, {
-    select: 'id,tenant_id,customer_id,channel,flagged,last_message_at,created_at',
+    select: 'id,tenant_id,customer_id,channel,flagged,agent_mode,last_message_at,created_at',
   });
 }
 
@@ -1299,7 +1299,7 @@ export async function orchestrateLine(request: {
   line_user_id: string;
   message: string;
   tenant_slug: string;
-}): Promise<ChatOrchestratorResponse> {
+}): Promise<ChatOrchestratorResponse | null> {
   const tenant = await assertTenant(request.tenant_slug);
   const customer = await resolveOrCreateLineCustomer(tenant.id, request.line_user_id);
   const session = await resolveOrCreateLatestSession({
@@ -1307,6 +1307,21 @@ export async function orchestrateLine(request: {
     customer,
     tenant,
   });
+
+  // V3-8: if a human agent has taken over this conversation, record the inbound
+  // message for the console and stay silent — the human replies via the console.
+  if (session.agent_mode === 'human') {
+    if (request.message.trim()) {
+      await persistUserMessage(session.id, request.client_msg_id, request.message);
+      await updateRows<ChatSessionRow>('chat_sessions', { last_message_at: nowIso() }, {
+        id: `eq.${session.id}`,
+        select: 'id',
+        tenant_id: `eq.${tenant.id}`,
+      });
+    }
+
+    return null;
+  }
 
   const actionResult = await handleAction({
     action: request.action,
