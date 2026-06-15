@@ -33,7 +33,7 @@ import {
   type ChatMessage,
 } from '@/lib/ai/miraChat';
 import type { ChatProductCard, ChatUiCard } from '@/lib/ai/healthChatTypes';
-import { useAuthSession } from '@/lib/auth/useAuthSession';
+import { useAuthSession, useSignOut } from '@/lib/auth/useAuthSession';
 import type { OrderPanelState, StripePromptPayQrResponse } from '@/lib/types/api';
 
 const logo = require('@/assets/images/mira-care-logo.png');
@@ -1325,6 +1325,7 @@ function BackgroundSheen() {
 export function PrototypeChatPanel() {
   const auth = useAuthSession();
   const router = useRouter();
+  const signOut = useSignOut();
   const searchParams = useLocalSearchParams<{ orderId?: string; payment?: string; stripeSessionId?: string }>();
   const { height, width } = useWindowDimensions();
   const browserWidth = Platform.OS === 'web' && typeof window !== 'undefined' ? window.innerWidth : 390;
@@ -1408,6 +1409,26 @@ export function PrototypeChatPanel() {
 
   function toggleVoiceRecording() {
     setVoiceStatus(VOICE_INPUT_DISABLED_MESSAGE);
+  }
+
+  async function handleChatAuthPress() {
+    if (auth.isLoading) {
+      return;
+    }
+
+    if (!auth.session) {
+      router.push({ pathname: '/login', params: { mode: 'chat', redirect: '/prototype' } });
+      return;
+    }
+
+    try {
+      await signOut();
+      didRestoreChat.current = false;
+      setMessages([]);
+      setVoiceStatus('Signed out');
+    } catch (error) {
+      setVoiceStatus(error instanceof Error ? error.message : 'Sign out failed');
+    }
   }
 
   function liveUnavailableMessage() {
@@ -1655,9 +1676,22 @@ export function PrototypeChatPanel() {
                 <>
                   <View style={styles.topActions}>
                     <Avatar />
-                    <GlassCircleButton size={36}>
-                      <BellIcon />
-                    </GlassCircleButton>
+                    <View style={styles.topActionRight}>
+                      <Pressable
+                        accessibilityLabel={auth.session ? 'Logout from Mira AI chat' : 'Login to Mira AI chat'}
+                        accessibilityRole="button"
+                        onPress={() => void handleChatAuthPress()}
+                        style={[styles.chatAuthButton, auth.session ? styles.chatAuthButtonLive : null]}
+                        testID="prototype-chat-auth"
+                      >
+                        <Text style={[styles.chatAuthButtonText, auth.session ? styles.chatAuthButtonTextLive : null]}>
+                          {auth.isLoading ? '...' : auth.session ? 'Logout' : 'Login'}
+                        </Text>
+                      </Pressable>
+                      <GlassCircleButton size={36}>
+                        <BellIcon />
+                      </GlassCircleButton>
+                    </View>
                   </View>
 
                   <View style={styles.heroCopy}>
@@ -1693,9 +1727,17 @@ export function PrototypeChatPanel() {
                       <BackIcon />
                     </GlassCircleButton>
                     <Text style={styles.chatTitle}>Smart Chat</Text>
-                    <GlassCircleButton size={44}>
-                      <DotsIcon />
-                    </GlassCircleButton>
+                    <Pressable
+                      accessibilityLabel={auth.session ? 'Logout from Mira AI chat' : 'Login to Mira AI chat'}
+                      accessibilityRole="button"
+                      onPress={() => void handleChatAuthPress()}
+                      style={[styles.chatAuthButton, auth.session ? styles.chatAuthButtonLive : null]}
+                      testID="prototype-chat-auth"
+                    >
+                      <Text style={[styles.chatAuthButtonText, auth.session ? styles.chatAuthButtonTextLive : null]}>
+                        {auth.isLoading ? '...' : auth.session ? 'Logout' : 'Login'}
+                      </Text>
+                    </Pressable>
                   </View>
 
                   <ScrollView ref={scrollRef} contentContainerStyle={styles.chatMessages} showsVerticalScrollIndicator={false}>
@@ -1863,6 +1905,34 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginTop: 11,
+  },
+  topActionRight: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 7,
+  },
+  chatAuthButton: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.28)',
+    borderColor: 'rgba(255,255,255,0.58)',
+    borderRadius: 999,
+    borderWidth: 1,
+    height: 34,
+    justifyContent: 'center',
+    minWidth: 58,
+    paddingHorizontal: 10,
+  },
+  chatAuthButtonLive: {
+    backgroundColor: 'rgba(231,248,242,0.92)',
+    borderColor: 'rgba(255,255,255,0.88)',
+  },
+  chatAuthButtonText: {
+    color: '#FFFFFF',
+    fontSize: 10.5,
+    fontWeight: '900',
+  },
+  chatAuthButtonTextLive: {
+    color: '#087B5D',
   },
   avatarOuter: {
     backgroundColor: 'rgba(255,255,255,0.92)',

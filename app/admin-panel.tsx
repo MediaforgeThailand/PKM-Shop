@@ -191,7 +191,7 @@ export default function AdminPanelScreen() {
               <Pill label="ดูอย่างเดียว" tone="amber" />
           </View>
           <Text style={styles.body}>หน้า admin panel เปิดให้ดู workflow ได้ แต่ action จริงอย่าง approve, archive, retry embedding และ booking save ต้องใช้ account ที่มีสิทธิ์</Text>
-          <Link href={{ pathname: '/', params: { redirect: '/admin-panel' } }} asChild>
+          <Link href={{ pathname: '/login', params: { mode: 'admin', redirect: '/admin-panel' } }} asChild>
             <ActionButton label="เข้าสู่ระบบแอดมิน" />
           </Link>
         </Card>

@@ -5,6 +5,7 @@ import { Image, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, Vi
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { MiraDesign, softShadow } from '@/constants/Design';
+import { useAuthSession, useSignOut } from '@/lib/auth/useAuthSession';
 
 const brandLogo = require('@/assets/images/mira-care-logo.png');
 
@@ -81,11 +82,16 @@ function isActiveItem(pathname: string, item: AdminNavItem) {
 }
 
 export function AdminShell({ children }: { children: ReactNode }) {
+  const auth = useAuthSession();
   const pathname = usePathname();
   const params = useGlobalSearchParams<{ tour?: string }>();
+  const signOut = useSignOut();
   const { width } = useWindowDimensions();
   const isCompact = width < 880;
   const tour = params.tour === 'admin' ? 'admin' : null;
+  const adminPath = normalizePath(pathname);
+  const loginRedirect = adminPath.startsWith('/admin') || adminPath === '/admin-panel' ? adminPath : '/admin-panel';
+  const profileInitial = (auth.user?.email ?? 'Admin').slice(0, 1).toUpperCase();
 
   function withTour(href: Href): Href {
     if (!tour || typeof href !== 'string') {
@@ -96,6 +102,14 @@ export function AdminShell({ children }: { children: ReactNode }) {
       params: { tour },
       pathname: href,
     } as Href;
+  }
+
+  async function handleSignOut() {
+    try {
+      await signOut();
+    } catch {
+      // Keep navigation usable even if Supabase returns a transient sign-out error.
+    }
   }
 
   return (
@@ -137,16 +151,31 @@ export function AdminShell({ children }: { children: ReactNode }) {
           </ScrollView>
 
           {!isCompact ? (
-            <View style={styles.profile}>
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>AD</Text>
-              </View>
-              <View style={styles.profileCopy}>
-                <Text style={styles.profileName}>Admin User</Text>
-                <Text style={styles.profileRole}>Owner</Text>
-              </View>
-              <Text style={styles.profileCaret}>^</Text>
-            </View>
+            auth.session ? (
+              <Pressable onPress={() => void handleSignOut()} style={styles.profile}>
+                <View style={styles.avatar}>
+                  <Text style={styles.avatarText}>{profileInitial}</Text>
+                </View>
+                <View style={styles.profileCopy}>
+                  <Text numberOfLines={1} style={styles.profileName}>{auth.user?.email ?? 'Admin User'}</Text>
+                  <Text style={styles.profileRole}>ออกจากระบบ</Text>
+                </View>
+                <Text style={styles.profileCaret}>^</Text>
+              </Pressable>
+            ) : (
+              <Link href={{ pathname: '/login', params: { mode: 'admin', redirect: loginRedirect } }} asChild>
+                <Pressable style={styles.profile}>
+                  <View style={styles.avatar}>
+                    <Text style={styles.avatarText}>AD</Text>
+                  </View>
+                  <View style={styles.profileCopy}>
+                    <Text style={styles.profileName}>{auth.isLoading ? 'กำลังโหลด' : 'Admin Login'}</Text>
+                    <Text style={styles.profileRole}>เข้าสู่ระบบ</Text>
+                  </View>
+                  <Text style={styles.profileCaret}>^</Text>
+                </Pressable>
+              </Link>
+            )
           ) : null}
         </View>
 
