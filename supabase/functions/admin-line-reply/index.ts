@@ -96,11 +96,16 @@ Deno.serve(async (req) => {
     const customer = embeddedOne(session.customers);
     const tenant = embeddedOne(session.tenants);
 
-    if (!customer?.line_user_id || !tenant?.slug) {
-      throw new HttpError('VALIDATION', 'This conversation has no LINE recipient.', 400);
-    }
+    // LINE has no in-product inbox, so a human reply must be pushed to the customer's
+    // LINE thread. Web/app conversations live in-product: the customer's client reads
+    // the persisted message on its next poll, so there is nothing to push out-of-band.
+    if (session.channel === 'line') {
+      if (!customer?.line_user_id || !tenant?.slug) {
+        throw new HttpError('VALIDATION', 'This conversation has no LINE recipient.', 400);
+      }
 
-    await pushLineMessages(tenant.slug, customer.line_user_id, [textLineMessage(text)]);
+      await pushLineMessages(tenant.slug, customer.line_user_id, [textLineMessage(text)]);
+    }
 
     const message = await insertRow<ChatMessageRow>('chat_messages', {
       content: text,

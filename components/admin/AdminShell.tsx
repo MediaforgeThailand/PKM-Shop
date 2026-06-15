@@ -45,7 +45,7 @@ const adminNavItems: AdminNavItem[] = [
     href: '/admin/conversations',
     icon: { android: 'chat', ios: 'message', web: 'chat' },
     key: 'conversations',
-    label: 'แชต LINE',
+    label: 'กล่องข้อความ',
     match: ['/admin/conversations'],
   },
   {

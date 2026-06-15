@@ -14,6 +14,7 @@ type CustomerJoin = { line_user_id: string | null; nickname: string | null };
 
 type SessionListRow = {
   agent_mode: 'ai' | 'human' | null;
+  channel: string | null;
   customers: CustomerJoin | CustomerJoin[] | null;
   id: string;
   last_message_at: string | null;
@@ -25,6 +26,25 @@ type MessageRow = {
   id: string;
   role: string;
 };
+
+const CHANNEL_FILTERS = [
+  { key: 'all', label: 'ทั้งหมด' },
+  { key: 'line', label: 'LINE' },
+  { key: 'pwa', label: 'เว็บ' },
+  { key: 'app', label: 'แอป' },
+] as const;
+
+type ChannelFilter = (typeof CHANNEL_FILTERS)[number]['key'];
+
+const CHANNEL_META: Record<string, { bg: string; fg: string; label: string }> = {
+  app: { bg: '#F3ECFF', fg: '#7C3AED', label: 'แอป' },
+  line: { bg: '#E7F8EE', fg: '#1B8F4D', label: 'LINE' },
+  pwa: { bg: '#EAF1FF', fg: '#2563EB', label: 'เว็บ' },
+};
+
+function channelMeta(channel: string | null) {
+  return CHANNEL_META[channel ?? ''] ?? { bg: '#EEF2F6', fg: '#475467', label: channel ?? 'อื่นๆ' };
+}
 
 function fromJoin<T>(value: T | T[] | null | undefined) {
   return Array.isArray(value) ? value[0] ?? null : value ?? null;
@@ -41,7 +61,17 @@ function formatTime(value: string | null) {
 function customerLabel(row: SessionListRow) {
   const customer = fromJoin(row.customers);
 
-  return customer?.nickname?.trim() || 'ลูกค้า LINE';
+  return customer?.nickname?.trim() || (row.channel === 'line' ? 'ลูกค้า LINE' : 'ลูกค้า');
+}
+
+function ChannelBadge({ channel }: { channel: string | null }) {
+  const meta = channelMeta(channel);
+
+  return (
+    <View style={[styles.channelBadge, { backgroundColor: meta.bg }]}>
+      <Text style={[styles.channelBadgeText, { color: meta.fg }]}>{meta.label}</Text>
+    </View>
+  );
 }
 
 export function ConversationsConsole() {
@@ -51,6 +81,7 @@ export function ConversationsConsole() {
   const { width } = useWindowDimensions();
   const isCompact = width < 880;
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [channelFilter, setChannelFilter] = useState<ChannelFilter>('all');
   const [draft, setDraft] = useState('');
   const [errorText, setErrorText] = useState<string | null>(null);
 
@@ -60,6 +91,7 @@ export function ConversationsConsole() {
     () => [
       {
         agent_mode: 'ai',
+        channel: 'line',
         customers: { line_user_id: 'demo-line-user', nickname: 'บอส' },
         id: 'demo-session',
         last_message_at: showcaseDemoTranscript[showcaseDemoTranscript.length - 1]?.created_at ?? null,
@@ -81,12 +113,17 @@ export function ConversationsConsole() {
   const sessionsQuery = useQuery({
     enabled: ready,
     queryFn: async (): Promise<SessionListRow[]> => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('chat_sessions')
-        .select('id,agent_mode,last_message_at,customers(nickname,line_user_id)')
-        .eq('channel', 'line')
+        .select('id,agent_mode,channel,last_message_at,customers(nickname,line_user_id)')
         .order('last_message_at', { ascending: false })
-        .limit(50);
+        .limit(100);
+
+      if (channelFilter !== 'all') {
+        query = query.eq('channel', channelFilter);
+      }
+
+      const { data, error } = await query;
 
       if (error) {
         throw new Error(error.message);
@@ -94,7 +131,7 @@ export function ConversationsConsole() {
 
       return (data ?? []) as SessionListRow[];
     },
-    queryKey: ['line-sessions'],
+    queryKey: ['console-sessions', channelFilter],
     refetchInterval: 6000,
   });
 
@@ -114,12 +151,15 @@ export function ConversationsConsole() {
 
       return (data ?? []) as MessageRow[];
     },
-    queryKey: ['line-transcript', selectedId],
+    queryKey: ['console-transcript', selectedId],
     refetchInterval: 4000,
   });
 
   const isDemoMode = !ready || sessionsQuery.isError || transcriptQuery.isError;
-  const visibleSessions = isDemoMode ? demoSessions : sessionsQuery.data ?? [];
+  const fetchedSessions = isDemoMode
+    ? demoSessions.filter((row) => channelFilter === 'all' || row.channel === channelFilter)
+    : sessionsQuery.data ?? [];
+  const visibleSessions = fetchedSessions;
   const activeSelectedId = isDemoMode ? selectedId ?? visibleSessions[0]?.id ?? null : selectedId;
   const visibleMessages = isDemoMode && activeSelectedId ? demoMessages : transcriptQuery.data ?? [];
   const selectedSession = useMemo(
@@ -134,8 +174,8 @@ export function ConversationsConsole() {
     onSuccess: () => {
       setDraft('');
       setErrorText(null);
-      queryClient.invalidateQueries({ queryKey: ['line-transcript', selectedId] });
-      queryClient.invalidateQueries({ queryKey: ['line-sessions'] });
+      queryClient.invalidateQueries({ queryKey: ['console-transcript', selectedId] });
+      queryClient.invalidateQueries({ queryKey: ['console-sessions'] });
     },
   });
 
@@ -145,7 +185,7 @@ export function ConversationsConsole() {
     onError: (error) => setErrorText(error instanceof Error ? error.message : 'สลับโหมดไม่สำเร็จ'),
     onSuccess: () => {
       setErrorText(null);
-      queryClient.invalidateQueries({ queryKey: ['line-sessions'] });
+      queryClient.invalidateQueries({ queryKey: ['console-sessions'] });
     },
   });
 
@@ -155,7 +195,22 @@ export function ConversationsConsole() {
     <View style={[styles.shell, isCompact ? styles.shellCompact : null]}>
       {/* Inbox */}
       <View style={[styles.inbox, isCompact ? styles.inboxCompact : null]}>
-        <Text style={styles.inboxTitle}>แชต LINE</Text>
+        <Text style={styles.inboxTitle}>กล่องข้อความรวม</Text>
+        <View style={styles.filterRow}>
+          {CHANNEL_FILTERS.map((filter) => {
+            const active = channelFilter === filter.key;
+
+            return (
+              <Pressable
+                key={filter.key}
+                onPress={() => setChannelFilter(filter.key)}
+                style={[styles.filterChip, active ? styles.filterChipActive : null]}
+              >
+                <Text style={[styles.filterChipText, active ? styles.filterChipTextActive : null]}>{filter.label}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
         {sessionsQuery.isLoading && !isDemoMode ? <ActivityIndicator color={MiraDesign.color.showcaseBlue} /> : null}
         {isDemoMode ? <Text style={styles.demoNote}>โหมดตัวอย่าง: แสดง transcript ตัวอย่างแบบอ่านอย่างเดียว</Text> : null}
         <ScrollView contentContainerStyle={styles.inboxList}>
@@ -172,7 +227,10 @@ export function ConversationsConsole() {
                   <Text numberOfLines={1} style={styles.inboxName}>{customerLabel(row)}</Text>
                   <Pill label={row.agent_mode === 'human' ? 'คนดูแล' : 'AI'} tone={row.agent_mode === 'human' ? 'amber' : 'blue'} />
                 </View>
-                <Text style={styles.inboxTime}>{formatTime(row.last_message_at)}</Text>
+                <View style={styles.inboxRowBottom}>
+                  <ChannelBadge channel={row.channel} />
+                  <Text style={styles.inboxTime}>{formatTime(row.last_message_at)}</Text>
+                </View>
               </Pressable>
             );
           })}
@@ -189,7 +247,10 @@ export function ConversationsConsole() {
         ) : (
           <>
             <View style={styles.threadHeader}>
-              <Text style={styles.threadTitle}>{customerLabel(selectedSession)}</Text>
+              <View style={styles.threadTitleWrap}>
+                <Text style={styles.threadTitle}>{customerLabel(selectedSession)}</Text>
+                <ChannelBadge channel={selectedSession.channel} />
+              </View>
               <Pressable
                 disabled={isDemoMode || modeMutation.isPending}
                 onPress={() => modeMutation.mutate(isHuman ? 'ai' : 'human')}
@@ -249,17 +310,26 @@ const styles = StyleSheet.create({
   shell: { flex: 1, flexDirection: 'row', gap: 16, padding: 16 },
   shellCompact: { flexDirection: 'column' },
   inbox: { backgroundColor: '#fff', borderColor: MiraDesign.color.showcaseLine, borderRadius: MiraDesign.radius.md, borderWidth: 1, gap: 10, padding: 14, width: 280, ...softShadow },
-  inboxCompact: { maxHeight: 220, width: '100%' },
+  inboxCompact: { maxHeight: 260, width: '100%' },
   inboxTitle: { color: MiraDesign.color.showcaseNavy, fontSize: 16, fontWeight: '900' },
+  filterRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  filterChip: { backgroundColor: '#F1F5F9', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
+  filterChipActive: { backgroundColor: MiraDesign.color.showcaseBlue },
+  filterChipText: { color: MiraDesign.color.showcaseNavySoft, fontSize: 12, fontWeight: '800' },
+  filterChipTextActive: { color: '#fff' },
   inboxList: { gap: 8 },
   demoNote: { backgroundColor: MiraDesign.color.showcaseBlueSoft, borderRadius: MiraDesign.radius.sm, color: MiraDesign.color.showcaseNavy, fontSize: 12, fontWeight: '800', padding: 10 },
-  inboxRow: { borderColor: MiraDesign.color.showcaseLine, borderRadius: MiraDesign.radius.sm, borderWidth: 1, gap: 4, padding: 12 },
+  inboxRow: { borderColor: MiraDesign.color.showcaseLine, borderRadius: MiraDesign.radius.sm, borderWidth: 1, gap: 6, padding: 12 },
   inboxRowActive: { backgroundColor: MiraDesign.color.showcaseBlueSoft, borderColor: MiraDesign.color.showcaseBlue },
   inboxRowTop: { alignItems: 'center', flexDirection: 'row', gap: 8, justifyContent: 'space-between' },
+  inboxRowBottom: { alignItems: 'center', flexDirection: 'row', gap: 8, justifyContent: 'space-between' },
   inboxName: { color: MiraDesign.color.showcaseNavy, flexShrink: 1, fontSize: 14, fontWeight: '800' },
   inboxTime: { color: MiraDesign.color.showcaseNavySoft, fontSize: 12 },
+  channelBadge: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 },
+  channelBadgeText: { fontSize: 11, fontWeight: '800' },
   thread: { backgroundColor: '#fff', borderColor: MiraDesign.color.showcaseLine, borderRadius: MiraDesign.radius.md, borderWidth: 1, flex: 1, minWidth: 0, ...softShadow },
   threadHeader: { alignItems: 'center', borderBottomColor: MiraDesign.color.showcaseLine, borderBottomWidth: 1, flexDirection: 'row', justifyContent: 'space-between', padding: 14 },
+  threadTitleWrap: { alignItems: 'center', flexDirection: 'row', gap: 8 },
   threadTitle: { color: MiraDesign.color.showcaseNavy, fontSize: 16, fontWeight: '900' },
   modeBtn: { borderRadius: MiraDesign.radius.sm, paddingHorizontal: 14, paddingVertical: 8 },
   modeBtnTakeover: { backgroundColor: MiraDesign.color.showcaseBlue },
