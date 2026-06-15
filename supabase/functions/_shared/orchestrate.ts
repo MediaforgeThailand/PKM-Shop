@@ -30,7 +30,7 @@ import {
 import { callMiraPrompt, callOrderFieldExtractor } from './openai.ts';
 import { resolveAttributedReferrerId } from './referrals.ts';
 import { createSignedUploadUrl } from './storage.ts';
-import { ORDER_INFO_COMPLETE_NOTICE_TH, ORDER_PAYMENT_SUBMITTED_NOTICE_TH } from './templates.ts';
+import { AGENT_HANDOVER_NOTICE_TH, ORDER_INFO_COMPLETE_NOTICE_TH, ORDER_PAYMENT_SUBMITTED_NOTICE_TH } from './templates.ts';
 import type {
   ChatMessageRow,
   ChatCard,
@@ -1232,6 +1232,41 @@ async function completeChatTurn({
   };
 }
 
+// V3-9 (web/app handover): when a human agent owns the conversation, record the
+// inbound message for the live console and answer with a fixed system notice instead
+// of calling the model. Mirrors orchestrateLine's silence, but web/app callers expect
+// a response object (they cannot interpret null), so we return a non-AI placeholder.
+async function handoverHoldResponse({
+  clientMsgId,
+  message,
+  session,
+  tenant,
+}: {
+  clientMsgId: string;
+  message: string;
+  session: ChatSessionRow;
+  tenant: TenantRow;
+}): Promise<ChatOrchestratorResponse> {
+  if (message.trim()) {
+    await persistUserMessage(session.id, clientMsgId, message);
+    await updateRows<ChatSessionRow>('chat_sessions', { last_message_at: nowIso() }, {
+      id: `eq.${session.id}`,
+      select: 'id',
+      tenant_id: `eq.${tenant.id}`,
+    });
+  }
+
+  const activeOrder = await loadActiveOrder(session.id, tenant.id);
+
+  return {
+    cards: [],
+    order: await orderPanelFor(activeOrder, tenant),
+    products: [],
+    session_id: session.id,
+    text: AGENT_HANDOVER_NOTICE_TH,
+  };
+}
+
 export async function orchestrateChat(
   request: ChatOrchestratorRequest,
   authorization: string | null,
@@ -1262,6 +1297,18 @@ export async function orchestrateChat(
 
   if (request.action?.type === 'refresh_order') {
     return refreshActiveOrder(session, tenant);
+  }
+
+  // V3-9: a human agent has taken over (live console). Stay silent — record the turn
+  // and reply with a fixed handover notice rather than running the AI. Utility reads
+  // above (slip upload, order refresh) are intentionally left working.
+  if (session.agent_mode === 'human') {
+    return handoverHoldResponse({
+      clientMsgId: request.client_msg_id,
+      message: request.message,
+      session,
+      tenant,
+    });
   }
 
   const actionResult = await handleAction({
