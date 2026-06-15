@@ -137,7 +137,7 @@ async function resolveOrCreateSession({
     const session = await selectOne<ChatSessionRow>('chat_sessions', {
       customer_id: `eq.${customer.id}`,
       id: `eq.${sessionId}`,
-      select: 'id,tenant_id,customer_id,channel,flagged,last_message_at,created_at',
+      select: 'id,tenant_id,customer_id,channel,flagged,agent_mode,last_message_at,created_at',
       tenant_id: `eq.${tenant.id}`,
     });
 
@@ -154,7 +154,7 @@ async function resolveOrCreateSession({
     last_message_at: nowIso(),
     tenant_id: tenant.id,
   }, {
-    select: 'id,tenant_id,customer_id,channel,flagged,last_message_at,created_at',
+    select: 'id,tenant_id,customer_id,channel,flagged,agent_mode,last_message_at,created_at',
   });
 }
 type ActionResult = {
@@ -226,10 +226,14 @@ async function createOrderFromProduct({
     : null;
   const branches = await activeBranchesForProduct(tenant.id, product.id);
   const singleBranch = branches.length === 1 ? branches[0] : null;
+  const isLine = channel === 'line';
+  // V3-7 (LINE): always force an explicit branch choice (even a single-branch
+  // product) and never auto-fill the buyer phone from the account — the buyer may
+  // be someone other than the LINE account holder. App/PWA behaviour is unchanged.
   const order = await insertRow<OrderRow>('orders', {
     amount_baht: product.price_baht,
-    branch_id: singleBranch?.id ?? null,
-    buyer_phone: customer.phone,
+    branch_id: isLine ? null : (singleBranch?.id ?? null),
+    buyer_phone: isLine ? null : customer.phone,
     channel: channel === 'app' ? 'chat_app' : channel === 'line' ? 'chat_line' : 'chat_pwa',
     commission_scheme_snapshot: referrer?.commission_scheme ?? null,
     customer_id: customer.id,
@@ -237,7 +241,7 @@ async function createOrderFromProduct({
     qty: 1,
     referrer_id: referrerId,
     session_id: sessionId,
-    status: branches.length > 1 ? 'selecting_branch' : 'collecting_info',
+    status: (isLine ? branches.length >= 1 : branches.length > 1) ? 'selecting_branch' : 'collecting_info',
     tenant_id: tenant.id,
   }, {
     select: ORDER_PANEL_SELECT,
@@ -355,6 +359,21 @@ async function handleAction({
       throw new HttpError('VALIDATION', 'Product not found.', 404);
     }
 
+    // Dedup guard (V3-5): a LINE postback can be re-delivered or double-tapped.
+    // If an active pre-payment order for the same product already exists in this
+    // session, reuse it instead of inserting a duplicate. Never changes status.
+    if (channel === 'line') {
+      const existing = await loadActiveOrder(sessionId, tenant.id);
+
+      if (
+        existing &&
+        existing.product_id === product.id &&
+        ['selecting_branch', 'collecting_info', 'awaiting_payment'].includes(existing.status)
+      ) {
+        return { order: await loadOrderForPanel(existing.id, tenant.id) };
+      }
+    }
+
     return {
       order: await createOrderFromProduct({
         channel,
@@ -397,6 +416,12 @@ async function handleAction({
 
     const order = await transition(action.order_id, 'collecting_info', 'customer', { branch_id: branch.id });
     const loaded = await loadOrderForPanel(order.id, tenant.id);
+
+    // V3-7 (LINE): don't short-circuit with a canned line — return the order so the
+    // turn runs through the model and Mira asks for the buyer info conversationally.
+    if (channel === 'line') {
+      return { order: loaded };
+    }
 
     return {
       response: {
@@ -940,7 +965,7 @@ async function updateSessionAfterAssistant(sessionId: string, tenantId: string, 
     },
     {
       id: `eq.${sessionId}`,
-      select: 'id,tenant_id,customer_id,channel,flagged,last_message_at,created_at',
+      select: 'id,tenant_id,customer_id,channel,flagged,agent_mode,last_message_at,created_at',
       tenant_id: `eq.${tenantId}`,
     },
   );
@@ -999,34 +1024,49 @@ async function updateCollectingOrderFromMessage(order: OrderWithProductRow | nul
     return order;
   }
 
+  const wasComplete = missingOrderFields(order).length === 0;
   const extracted = await callOrderFieldExtractor(message);
+  const hasNewFields =
+    extracted.buyer_age !== undefined ||
+    Boolean(extracted.buyer_name) ||
+    Boolean(extracted.buyer_phone) ||
+    Boolean(extracted.preferred_date);
 
-  if (!extracted.buyer_age && !extracted.buyer_name && !extracted.buyer_phone && !extracted.preferred_date) {
-    return order;
-  }
+  if (hasNewFields) {
+    const updated = await updateOrderFields(order.id, {
+      customerId: order.customer_id ?? undefined,
+      sessionId: order.session_id ?? undefined,
+      tenantId: order.tenant_id,
+    }, extracted);
 
-  const updated = await updateOrderFields(order.id, {
-    customerId: order.customer_id ?? undefined,
-    sessionId: order.session_id ?? undefined,
-    tenantId: order.tenant_id,
-  }, extracted);
-
-  // F1 (v3 plan §11.3): persist a conversationally-collected age as a consent-gated user_fact,
-  // mirroring the order_form_submit call site. A facts failure must never fail the chat turn.
-  if (typeof extracted.buyer_age === 'number' && order.customer_id) {
-    try {
-      await recordFormAgeFact({
-        age: extracted.buyer_age,
-        customerId: order.customer_id,
-        orderId: order.id,
-        tenantId: order.tenant_id,
-      });
-    } catch (error) {
-      console.warn('form_age_fact_failed', error);
+    // F1 (v3 plan §11.3): persist a conversationally-collected age as a consent-gated user_fact,
+    // mirroring the order_form_submit call site. A facts failure must never fail the chat turn.
+    if (typeof extracted.buyer_age === 'number' && order.customer_id) {
+      try {
+        await recordFormAgeFact({
+          age: extracted.buyer_age,
+          customerId: order.customer_id,
+          orderId: order.id,
+          tenantId: order.tenant_id,
+        });
+      } catch (error) {
+        console.warn('form_age_fact_failed', error);
+      }
     }
+
+    // V3-7: do NOT auto-advance even once every field is present. The order stays
+    // in collecting_info so the prompt can read the details back and ask the
+    // customer to confirm before the PromptPay QR is released.
+    return loadOrderForPanel(updated.id, order.tenant_id);
   }
 
-  return maybeAdvanceCollectingOrder(await loadOrderForPanel(updated.id, order.tenant_id));
+  // No new field values in this message. Once everything is collected, an explicit
+  // affirmation ("ใช่"/"ถูกต้อง") is what releases the QR — sales-style confirm step.
+  if (wasComplete && extracted.confirmed) {
+    return maybeAdvanceCollectingOrder(order);
+  }
+
+  return order;
 }
 
 async function resolveOrCreateLineCustomer(tenantId: string, lineUserId: string) {
@@ -1056,7 +1096,7 @@ async function resolveOrCreateLatestSession({
     channel: `eq.${channel}`,
     customer_id: `eq.${customer.id}`,
     order: 'last_message_at.desc',
-    select: 'id,tenant_id,customer_id,channel,flagged,last_message_at,created_at',
+    select: 'id,tenant_id,customer_id,channel,flagged,agent_mode,last_message_at,created_at',
     tenant_id: `eq.${tenant.id}`,
   });
 
@@ -1070,7 +1110,7 @@ async function resolveOrCreateLatestSession({
     last_message_at: nowIso(),
     tenant_id: tenant.id,
   }, {
-    select: 'id,tenant_id,customer_id,channel,flagged,last_message_at,created_at',
+    select: 'id,tenant_id,customer_id,channel,flagged,agent_mode,last_message_at,created_at',
   });
 }
 
@@ -1111,10 +1151,20 @@ async function completeChatTurn({
   }
 
   let activeOrder = actionResult.order ?? await loadActiveOrder(session.id, tenant.id);
+
+  // V3-7 (LINE): record any typed buyer info / confirmation BEFORE building the
+  // prompt context, so the order state the model sees is current — it can read the
+  // details back and ask to confirm, or (on confirmation) see awaiting_payment.
+  // Skip on postback-driven turns (actionResult.order is set): those carry a canned
+  // label, not buyer info, so the extractor LLM call would be wasted latency.
+  if (channel === 'line' && !actionResult.order) {
+    activeOrder = await updateCollectingOrderFromMessage(activeOrder, message);
+  }
+
   const intentCategory = inferIntentCategory(message);
   const orderContext = await formatOrderContextLines(customer.id, session.id, tenant.id, channel);
   const [personalContext, recentChat, productCatalog] = await Promise.all([
-    buildPersonalContext(customer.id, orderContext),
+    buildPersonalContext(customer.id, orderContext, channel === 'line'),
     buildRecentChat(session.id),
     buildCatalogJson(tenant.id, intentCategory),
   ]);
@@ -1168,8 +1218,6 @@ async function completeChatTurn({
   });
 
   await updateSessionAfterAssistant(session.id, tenant.id, parsed.text);
-
-  activeOrder = channel === 'line' ? await updateCollectingOrderFromMessage(activeOrder, message) : activeOrder;
 
   void invokeInternalFunction('fact-extractor', { message_id: userPersist.row.id }).catch((error) => {
     console.warn('fact_extractor_invoke_failed', error instanceof Error ? error.message : error);
@@ -1251,7 +1299,7 @@ export async function orchestrateLine(request: {
   line_user_id: string;
   message: string;
   tenant_slug: string;
-}): Promise<ChatOrchestratorResponse> {
+}): Promise<ChatOrchestratorResponse | null> {
   const tenant = await assertTenant(request.tenant_slug);
   const customer = await resolveOrCreateLineCustomer(tenant.id, request.line_user_id);
   const session = await resolveOrCreateLatestSession({
@@ -1259,6 +1307,21 @@ export async function orchestrateLine(request: {
     customer,
     tenant,
   });
+
+  // V3-8: if a human agent has taken over this conversation, record the inbound
+  // message for the console and stay silent — the human replies via the console.
+  if (session.agent_mode === 'human') {
+    if (request.message.trim()) {
+      await persistUserMessage(session.id, request.client_msg_id, request.message);
+      await updateRows<ChatSessionRow>('chat_sessions', { last_message_at: nowIso() }, {
+        id: `eq.${session.id}`,
+        select: 'id',
+        tenant_id: `eq.${tenant.id}`,
+      });
+    }
+
+    return null;
+  }
 
   const actionResult = await handleAction({
     action: request.action,

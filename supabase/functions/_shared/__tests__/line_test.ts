@@ -1,5 +1,6 @@
 import {
   branchSelectionLineFlexMessage,
+  categoryLineFlexMessage,
   linePostbackToAction,
   orderPaymentLineFlexMessage,
   orderQrLineImageMessage,
@@ -9,7 +10,7 @@ import {
   textLineMessage,
   verifyLineSignature,
 } from '../line.ts';
-import type { ChatProduct, OrderPanelState } from '../types.ts';
+import type { ChatCategory, ChatProduct, OrderPanelState } from '../types.ts';
 
 declare const Deno: {
   env: {
@@ -287,6 +288,47 @@ Deno.test('branchSelectionLineFlexMessage returns null when there are no branche
   };
 
   assertEquals(branchSelectionLineFlexMessage(order), null);
+});
+
+Deno.test('linePostbackToAction maps browse category postback', () => {
+  const parsed = linePostbackToAction('browse_category:checkup');
+  const action = parsed.action;
+
+  if (!action || action.type !== 'browse_category') {
+    throw new Error('expected browse_category action');
+  }
+
+  assertEquals(action.category, 'checkup');
+});
+
+Deno.test('categoryLineFlexMessage builds carousel with browse_category postbacks', () => {
+  const categories: ChatCategory[] = [
+    { icon: 'ICON', image_url: null, key: 'checkup', label_th: 'Checkup', product_count: 5 },
+    { icon: null, image_url: null, key: 'vaccine', label_th: 'Vaccine', product_count: 2 },
+  ];
+
+  const message = categoryLineFlexMessage(categories);
+  if (!message) {
+    throw new Error('expected category flex message');
+  }
+
+  assertEquals(message.type, 'flex');
+
+  const carousel = message.contents as { contents: Array<Record<string, unknown>>; type: string };
+  assertEquals(carousel.type, 'carousel');
+  assertEquals(carousel.contents.length, 2);
+
+  const firstBubble = carousel.contents[0] as {
+    body: { contents: Array<{ text?: string }> };
+    footer: { contents: Array<{ action: { data: string; type: string } }> };
+  };
+  assertEquals(firstBubble.body.contents[0].text, 'ICON Checkup');
+  assertEquals(firstBubble.footer.contents[0].action.type, 'postback');
+  assertEquals(firstBubble.footer.contents[0].action.data, 'browse_category:checkup');
+});
+
+Deno.test('categoryLineFlexMessage returns null when there are no categories', () => {
+  assertEquals(categoryLineFlexMessage([]), null);
 });
 
 Deno.test('verifyLineSignature accepts valid HMAC signature', async () => {
