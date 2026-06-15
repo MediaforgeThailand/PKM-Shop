@@ -19,6 +19,7 @@ const EXCLUDED_ROUTES = new Map([
   ['/order-status', 'legacy Stripe return redirect to /user-profile'],
   ['/ai-body-overview', 'legacy redirect to /body-overview'],
   ['/staff-referral', 'legacy staff entry redirect to /sales-portal'],
+  ['/admin/conversations', 'live agent console (staff-only, no public demo fixture)'],
 ]);
 
 function normalizePath(value) {
