@@ -1,6 +1,6 @@
 const REFERRAL_STORAGE_KEY = 'mira_ref';
 const REFERRAL_DAYS = 30;
-const REF_CODE_PATTERN = /^[0-9A-HJKMNP-TV-Z]{6}$/;
+const REF_CODE_PATTERN = /^[0-9A-Z]{6}$/;
 
 type StoredReferral = {
   expires_at: string;
@@ -16,7 +16,7 @@ function documentCookie() {
 }
 
 export function normalizeRefCode(value: string) {
-  return value.trim().toUpperCase().replace(/[^0-9A-HJKMNP-TV-Z]/g, '').slice(0, 6);
+  return value.trim().toUpperCase().replace(/[^0-9A-Z]/g, '').slice(0, 6);
 }
 
 export function storeReferralCode(rawCode: string) {

@@ -258,7 +258,7 @@ const requiredSnippets = [
   },
   {
     relativePath: 'components/admin/CatalogCrud.tsx',
-    snippet: 'Only tenant_admin or superadmin roles can create, upload, archive, or restore products.',
+    snippet: 'เฉพาะ tenant_admin หรือ superadmin เท่านั้นที่สร้าง อัปโหลด archive หรือ restore สินค้าได้',
     message: 'catalog admin screen must expose read-only state for tenant_staff users',
   },
   {
@@ -343,12 +343,12 @@ const requiredSnippets = [
   },
   {
     relativePath: 'components/admin/ReferrersAdmin.tsx',
-    snippet: 'Approve Selected',
+    snippet: 'อนุมัติที่เลือก',
     message: 'referrer admin must include a bulk approve action',
   },
   {
     relativePath: 'components/admin/ReferrersAdmin.tsx',
-    snippet: 'Mark Paid',
+    snippet: 'ทำเครื่องหมายจ่ายแล้ว',
     message: 'referrer admin must include a bulk paid action',
   },
   {
@@ -363,7 +363,7 @@ const requiredSnippets = [
   },
   {
     relativePath: 'components/admin/ReferrersAdmin.tsx',
-    snippet: "value={editingId ? draft.refCode : 'Generated on save'}",
+    snippet: "value={editingId ? draft.refCode : 'สร้างเมื่อบันทึก'}",
     message: 'referrer admin must show generated server-side ref codes as read-only',
   },
   {

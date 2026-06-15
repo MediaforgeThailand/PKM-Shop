@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 
 import { BranchOptionRow } from '@/components/chat/BranchOptionRow';
 import { OrderPanel } from '@/components/chat/OrderPanel';
@@ -56,6 +56,22 @@ function formatMoney(amount: number) {
   return `${amount.toLocaleString('th-TH')} THB`;
 }
 
+function commissionStatusLabel(status: CommissionEntryRow['status']) {
+  if (status === 'approved') {
+    return 'อนุมัติแล้ว';
+  }
+
+  if (status === 'paid') {
+    return 'จ่ายแล้ว';
+  }
+
+  if (status === 'void') {
+    return 'ยกเลิก';
+  }
+
+  return 'รออนุมัติ';
+}
+
 function toOrderPanelBranch(branch: BranchSummary): OrderPanelBranch {
   return {
     address: branch.address,
@@ -77,6 +93,7 @@ function buyerAgeError(value: string) {
 
 export default function PartnerScreen() {
   const auth = useAuthSession();
+  const { width } = useWindowDimensions();
   const [tenant, setTenant] = useState<TenantInfo | null>(null);
   const [referrer, setReferrer] = useState<ReferrerRow | null>(null);
   const [products, setProducts] = useState<HospitalProduct[]>([]);
@@ -96,6 +113,7 @@ export default function PartnerScreen() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const isDemoMode = !auth.session || !supabaseConfigStatus.isConfigured;
+  const isCompact = width < 720;
   const buyerAgeNumber = Number(buyerAge.trim());
   const hasValidBuyerAge = Number.isInteger(buyerAgeNumber) && buyerAgeNumber >= 1 && buyerAgeNumber <= 120;
   const selectedBranch = branchChoices.find((branch) => branch.id === selectedBranchId) ?? null;
@@ -334,17 +352,18 @@ export default function PartnerScreen() {
 
   return (
     <View style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-        <View style={styles.topBar}>
-          <View style={styles.titleBlock}>
-            <Text style={styles.eyebrow}>Referral Program</Text>
-            <Text style={styles.title}>Assisted Purchase</Text>
+      <ScrollView contentContainerStyle={[styles.container, isCompact ? styles.containerCompact : null]} keyboardShouldPersistTaps="handled">
+        <View style={[styles.topBar, isCompact ? styles.topBarCompact : null]}>
+          <View style={[styles.titleBlock, isCompact ? styles.titleBlockCompact : null]}>
+            <Image resizeMode="contain" source={require('@/assets/images/mira-care-logo.png')} style={styles.brandMark} />
+            <Text style={styles.eyebrow}>ระบบแนะนำลูกค้า</Text>
+            <Text style={styles.title}>หน้าช่วยปิดการขาย</Text>
             <Text style={styles.subtitle}>
-              {referrer ? `${referrer.name} · ${referrer.ref_code}` : isLoading ? 'Loading referrer access' : 'No active referrer profile linked'}
+              {referrer ? `${referrer.name} · ${referrer.ref_code}` : isLoading ? 'กำลังโหลดสิทธิ์ผู้แนะนำ' : 'ยังไม่มีโปรไฟล์ผู้แนะนำที่เปิดใช้งาน'}
             </Text>
           </View>
-          <View style={styles.shareBox}>
-            <Text style={styles.shareLabel}>Share URL</Text>
+          <View style={[styles.shareBox, isCompact ? styles.shareBoxCompact : null]}>
+            <Text style={styles.shareLabel}>ลิงก์แชร์</Text>
             <Text selectable style={styles.shareValue}>
               /r/{referrer?.ref_code ?? 'CODE'}
             </Text>
@@ -357,20 +376,20 @@ export default function PartnerScreen() {
 
         {!referrer && !isLoading ? (
           <View style={styles.noticeInline}>
-            <Text style={styles.noticeTitle}>No linked referrer</Text>
-            <Text style={styles.noticeBody}>Ask a tenant admin to create a referrer profile and set its auth user id to this account.</Text>
+            <Text style={styles.noticeTitle}>ยังไม่มีผู้แนะนำที่ผูกบัญชีนี้</Text>
+            <Text style={styles.noticeBody}>ให้ tenant admin สร้างโปรไฟล์ผู้แนะนำและผูก auth user id กับบัญชีนี้ก่อน</Text>
           </View>
         ) : null}
 
-        <View style={styles.metrics}>
-          <Metric label="Pending" value={formatMoney(totals.pending)} />
-          <Metric label="Approved" value={formatMoney(totals.approved)} />
-          <Metric label="Paid" value={formatMoney(totals.paid)} />
+        <View style={[styles.metrics, isCompact ? styles.metricsCompact : null]}>
+          <Metric compact={isCompact} label="รออนุมัติ" value={formatMoney(totals.pending)} />
+          <Metric compact={isCompact} label="อนุมัติแล้ว" value={formatMoney(totals.approved)} />
+          <Metric compact={isCompact} label="จ่ายแล้ว" value={formatMoney(totals.paid)} />
         </View>
 
         <View style={styles.workspace}>
-          <View style={styles.productPane}>
-            <SectionTitle title="Catalog" subtitle={tenant?.display_name ?? defaultTenantSlug} />
+          <View style={[styles.productPane, isCompact ? styles.productPaneCompact : null]}>
+            <SectionTitle title="สินค้า" subtitle={tenant?.display_name ?? defaultTenantSlug} />
             <View style={styles.productGrid}>
               {products.map((product) => (
                 <Pressable
@@ -380,7 +399,7 @@ export default function PartnerScreen() {
                     setActiveOrder(null);
                     setError(null);
                   }}
-                  style={[styles.productCard, selectedProduct?.id === product.id ? styles.productCardSelected : null]}
+                  style={[styles.productCard, isCompact ? styles.productCardCompact : null, selectedProduct?.id === product.id ? styles.productCardSelected : null]}
                 >
                   {product.imageUrl ? <Image source={{ uri: product.imageUrl }} style={styles.productImage} /> : <View style={styles.productImageFallback} />}
                   <View style={styles.productCopy}>
@@ -395,12 +414,12 @@ export default function PartnerScreen() {
             </View>
           </View>
 
-          <View style={styles.checkoutPane}>
+          <View style={[styles.checkoutPane, isCompact ? styles.checkoutPaneCompact : null]}>
             <SectionTitle title="ข้อมูลผู้ซื้อ" subtitle={selectedProduct?.title ?? 'เลือกแพ็กเกจก่อน'} />
             <TextInput
               onChangeText={setBuyerName}
               placeholder="ชื่อ-นามสกุลผู้ซื้อ"
-              placeholderTextColor={MiraDesign.color.muted}
+              placeholderTextColor={MiraDesign.color.showcaseNavySoft}
               style={styles.input}
               value={buyerName}
             />
@@ -408,7 +427,7 @@ export default function PartnerScreen() {
               keyboardType="phone-pad"
               onChangeText={setBuyerPhone}
               placeholder="08xxxxxxxx"
-              placeholderTextColor={MiraDesign.color.muted}
+              placeholderTextColor={MiraDesign.color.showcaseNavySoft}
               style={styles.input}
               value={buyerPhone}
             />
@@ -421,7 +440,7 @@ export default function PartnerScreen() {
                   setAgeError(null);
                 }}
                 placeholder="อายุ"
-                placeholderTextColor={MiraDesign.color.muted}
+                placeholderTextColor={MiraDesign.color.showcaseNavySoft}
                 style={[styles.input, ageError ? styles.inputError : null]}
                 value={buyerAge}
               />
@@ -430,7 +449,7 @@ export default function PartnerScreen() {
             <TextInput
               onChangeText={setPreferredDate}
               placeholder="วันที่สะดวก YYYY-MM-DD"
-              placeholderTextColor={MiraDesign.color.muted}
+              placeholderTextColor={MiraDesign.color.showcaseNavySoft}
               style={styles.input}
               value={preferredDate}
             />
@@ -462,7 +481,7 @@ export default function PartnerScreen() {
                 ) : null}
               </View>
             ) : null}
-            <Pressable disabled={!canCreateOrder || !referrer} onPress={createOrder} style={[styles.primaryButton, !canCreateOrder || !referrer ? styles.disabled : null]}>
+            <Pressable disabled={!canCreateOrder || !referrer} onPress={createOrder} style={[styles.primaryButton, isCompact ? styles.primaryButtonCompact : null, !canCreateOrder || !referrer ? styles.disabled : null]}>
               <Text style={styles.primaryButtonText}>{isSubmitting ? 'กำลังสร้าง' : 'สร้าง QR ชำระเงิน'}</Text>
             </Pressable>
 
@@ -470,7 +489,7 @@ export default function PartnerScreen() {
               <View style={styles.partnerOrderStack}>
                 <OrderPanel disabled={isSubmitting} onOpenDetails={() => undefined} order={activeOrder} />
                 {activeOrder.status === 'awaiting_payment' ? (
-                  <Pressable disabled={isSubmitting} onPress={() => void markPaymentDone(activeOrder.id)} style={[styles.primaryButton, isSubmitting ? styles.disabled : null]}>
+                  <Pressable disabled={isSubmitting} onPress={() => void markPaymentDone(activeOrder.id)} style={[styles.primaryButton, isCompact ? styles.primaryButtonCompact : null, isSubmitting ? styles.disabled : null]}>
                     <Text style={styles.primaryButtonText}>{isSubmitting ? 'กำลังส่ง' : 'แจ้งชำระเงินแล้ว'}</Text>
                   </Pressable>
                 ) : null}
@@ -480,11 +499,11 @@ export default function PartnerScreen() {
         </View>
 
         <View style={styles.earningsPane}>
-          <SectionTitle title="Earnings" subtitle={`${commissions.length} commission entries`} />
+          <SectionTitle title="ค่าคอมมิชชัน" subtitle={`${commissions.length} รายการ`} />
           {commissions.length === 0 ? (
             <View style={styles.emptyState}>
-              <Text style={styles.emptyTitle}>No commissions yet</Text>
-              <Text style={styles.emptyBody}>Commissions appear after an attributed order is confirmed by admin.</Text>
+              <Text style={styles.emptyTitle}>ยังไม่มีค่าคอมมิชชัน</Text>
+              <Text style={styles.emptyBody}>รายการจะแสดงหลัง admin ยืนยันออเดอร์ที่มีรหัสแนะนำ</Text>
             </View>
           ) : (
             commissions.map((entry) => {
@@ -494,11 +513,11 @@ export default function PartnerScreen() {
               return (
                 <View key={entry.id} style={styles.commissionRow}>
                   <View style={styles.commissionCopy}>
-                    <Text style={styles.commissionTitle}>{product?.name ?? `Order ${entry.order_id.slice(0, 8)}`}</Text>
+                    <Text style={styles.commissionTitle}>{product?.name ?? `ออเดอร์ ${entry.order_id.slice(0, 8)}`}</Text>
                     <Text style={styles.commissionMeta}>{new Date(entry.created_at).toLocaleDateString('th-TH')}</Text>
                   </View>
                   <Text style={styles.commissionAmount}>{formatMoney(entry.amount_baht)}</Text>
-                  <Pill label={entry.status} tone={entry.status === 'paid' ? 'mint' : entry.status === 'void' ? 'danger' : 'amber'} />
+                  <Pill label={commissionStatusLabel(entry.status)} tone={entry.status === 'paid' ? 'mint' : entry.status === 'void' ? 'danger' : 'amber'} />
                 </View>
               );
             })
@@ -517,9 +536,9 @@ function Banner({ text, tone }: { text: string; tone: 'error' | 'success' }) {
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
+function Metric({ compact, label, value }: { compact?: boolean; label: string; value: string }) {
   return (
-    <View style={styles.metric}>
+    <View style={[styles.metric, compact ? styles.metricCompact : null]}>
       <Text style={styles.metricLabel}>{label}</Text>
       <Text style={styles.metricValue}>{value}</Text>
     </View>
@@ -537,13 +556,18 @@ function SectionTitle({ subtitle, title }: { subtitle?: string; title: string })
 
 const styles = StyleSheet.create({
   screen: {
-    backgroundColor: '#F5F8F7',
+    backgroundColor: MiraDesign.color.showcaseCanvas,
     flex: 1,
   },
   container: {
     gap: 16,
     padding: 22,
     paddingBottom: 54,
+  },
+  containerCompact: {
+    gap: 14,
+    padding: 14,
+    paddingBottom: 72,
   },
   topBar: {
     alignItems: 'flex-start',
@@ -552,52 +576,68 @@ const styles = StyleSheet.create({
     gap: 16,
     justifyContent: 'space-between',
   },
+  topBarCompact: {
+    flexDirection: 'column',
+  },
   titleBlock: {
     flexBasis: 320,
     flex: 1,
     gap: 6,
     minWidth: 0,
   },
+  titleBlockCompact: {
+    flexBasis: 'auto',
+    width: '100%',
+  },
+  brandMark: {
+    height: 34,
+    marginBottom: 4,
+    width: 164,
+  },
   eyebrow: {
-    color: MiraDesign.color.primaryDeep,
+    color: MiraDesign.color.showcaseBlueDeep,
     fontSize: 13,
     fontWeight: '900',
     textTransform: 'uppercase',
   },
   title: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 31,
     fontWeight: '900',
     lineHeight: 36,
   },
   subtitle: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 14,
     lineHeight: 20,
   },
   shareBox: {
     backgroundColor: '#FFFFFF',
-    borderColor: MiraDesign.color.line,
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 8,
     borderWidth: 1,
     minWidth: 220,
     padding: 12,
   },
+  shareBoxCompact: {
+    minWidth: 0,
+    width: '100%',
+  },
   shareLabel: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 10,
     fontWeight: '900',
     textTransform: 'uppercase',
   },
   shareValue: {
-    color: MiraDesign.color.primaryDeep,
+    color: MiraDesign.color.showcaseBlueDeep,
     fontSize: 15,
     fontWeight: '900',
     marginTop: 4,
   },
   notice: {
     backgroundColor: '#FFFFFF',
-    borderColor: MiraDesign.color.line,
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 8,
     borderWidth: 1,
     gap: 10,
@@ -614,12 +654,12 @@ const styles = StyleSheet.create({
     padding: 14,
   },
   noticeTitle: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 17,
     fontWeight: '900',
   },
   noticeBody: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 14,
     lineHeight: 20,
   },
@@ -651,23 +691,30 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 10,
   },
+  metricsCompact: {
+    gap: 8,
+  },
   metric: {
     backgroundColor: '#FFFFFF',
-    borderColor: MiraDesign.color.line,
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 8,
     borderWidth: 1,
     flexGrow: 1,
     minWidth: 150,
     padding: 13,
   },
+  metricCompact: {
+    minWidth: 0,
+    width: '100%',
+  },
   metricLabel: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 11,
     fontWeight: '900',
     textTransform: 'uppercase',
   },
   metricValue: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 21,
     fontWeight: '900',
     marginTop: 5,
@@ -685,9 +732,13 @@ const styles = StyleSheet.create({
     gap: 12,
     minWidth: 0,
   },
+  productPaneCompact: {
+    flexBasis: 'auto',
+    width: '100%',
+  },
   checkoutPane: {
     backgroundColor: '#FFFFFF',
-    borderColor: MiraDesign.color.line,
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 8,
     borderWidth: 1,
     flexBasis: 380,
@@ -698,6 +749,12 @@ const styles = StyleSheet.create({
     padding: 16,
     ...softShadow,
   },
+  checkoutPaneCompact: {
+    flexBasis: 'auto',
+    minWidth: 0,
+    padding: 14,
+    width: '100%',
+  },
   partnerOrderStack: {
     gap: 10,
   },
@@ -705,12 +762,12 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   sectionTitle: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 18,
     fontWeight: '900',
   },
   sectionSubtitle: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 12,
     fontWeight: '800',
   },
@@ -721,7 +778,7 @@ const styles = StyleSheet.create({
   },
   productCard: {
     backgroundColor: '#FFFFFF',
-    borderColor: MiraDesign.color.line,
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 8,
     borderWidth: 1,
     flexDirection: 'row',
@@ -730,18 +787,22 @@ const styles = StyleSheet.create({
     padding: 10,
     width: '48%',
   },
+  productCardCompact: {
+    minWidth: 0,
+    width: '100%',
+  },
   productCardSelected: {
-    borderColor: MiraDesign.color.primary,
+    borderColor: MiraDesign.color.showcaseBlue,
     borderWidth: 2,
   },
   productImage: {
-    backgroundColor: '#EAF3F2',
+    backgroundColor: MiraDesign.color.showcaseBlueSoft,
     borderRadius: 8,
     height: 74,
     width: 74,
   },
   productImageFallback: {
-    backgroundColor: '#EAF3F2',
+    backgroundColor: MiraDesign.color.showcaseBlueSoft,
     borderRadius: 8,
     height: 74,
     width: 74,
@@ -752,27 +813,27 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   productTitle: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 14,
     fontWeight: '900',
     lineHeight: 19,
   },
   productMeta: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 11,
     fontWeight: '800',
   },
   productPrice: {
-    color: MiraDesign.color.primaryDeep,
+    color: MiraDesign.color.showcaseBlueDeep,
     fontSize: 14,
     fontWeight: '900',
   },
   input: {
-    backgroundColor: '#F7FBFA',
-    borderColor: MiraDesign.color.line,
+    backgroundColor: '#F7FBFF',
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 8,
     borderWidth: 1,
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 14,
     minHeight: 44,
     paddingHorizontal: 12,
@@ -789,7 +850,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   fieldLabel: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 13,
     fontWeight: '900',
   },
@@ -797,14 +858,14 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   branchList: {
-    borderColor: MiraDesign.color.line,
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 8,
     borderWidth: 1,
     overflow: 'hidden',
   },
   branchStatic: {
-    backgroundColor: MiraDesign.color.surfaceSoft,
-    borderColor: MiraDesign.color.line,
+    backgroundColor: MiraDesign.color.showcaseBlueSoft,
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 8,
     borderWidth: 1,
     gap: 3,
@@ -813,12 +874,12 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   branchStaticName: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 14,
     fontWeight: '800',
   },
   branchHint: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 12,
     fontWeight: '700',
     lineHeight: 17,
@@ -826,11 +887,15 @@ const styles = StyleSheet.create({
   primaryButton: {
     alignItems: 'center',
     alignSelf: 'flex-start',
-    backgroundColor: MiraDesign.color.primary,
+    backgroundColor: MiraDesign.color.showcaseBlue,
     borderRadius: 8,
     justifyContent: 'center',
     minHeight: 42,
     paddingHorizontal: 16,
+  },
+  primaryButtonCompact: {
+    alignSelf: 'stretch',
+    width: '100%',
   },
   primaryButtonText: {
     color: '#FFFFFF',
@@ -839,7 +904,7 @@ const styles = StyleSheet.create({
   },
   earningsPane: {
     backgroundColor: '#FFFFFF',
-    borderColor: MiraDesign.color.line,
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 8,
     borderWidth: 1,
     gap: 10,
@@ -847,8 +912,8 @@ const styles = StyleSheet.create({
   },
   commissionRow: {
     alignItems: 'center',
-    backgroundColor: '#F7FBFA',
-    borderColor: '#E5EFEE',
+    backgroundColor: '#F7FBFF',
+    borderColor: MiraDesign.color.showcaseLineSoft,
     borderRadius: 8,
     borderWidth: 1,
     flexDirection: 'row',
@@ -861,23 +926,23 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   commissionTitle: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 14,
     fontWeight: '900',
   },
   commissionMeta: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 12,
     fontWeight: '700',
   },
   commissionAmount: {
-    color: MiraDesign.color.primaryDeep,
+    color: MiraDesign.color.showcaseBlueDeep,
     fontSize: 14,
     fontWeight: '900',
   },
   emptyState: {
-    backgroundColor: '#F7FBFA',
-    borderColor: MiraDesign.color.line,
+    backgroundColor: '#F7FBFF',
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 8,
     borderStyle: 'dashed',
     borderWidth: 1,
@@ -885,12 +950,12 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   emptyTitle: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 15,
     fontWeight: '900',
   },
   emptyBody: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 13,
     lineHeight: 19,
   },

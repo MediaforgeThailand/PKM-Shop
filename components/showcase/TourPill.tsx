@@ -1,5 +1,5 @@
 import { Link, useGlobalSearchParams } from 'expo-router';
-import { Pressable, StyleSheet, Text } from 'react-native';
+import { Pressable, StyleSheet, Text, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MiraDesign } from '@/constants/Design';
@@ -18,6 +18,8 @@ function resolveTourModule(value: string | string[] | undefined): ShowcaseModule
 export function TourPill() {
   const params = useGlobalSearchParams<{ tour?: string | string[] }>();
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const isCompact = width < 640;
   const moduleId = resolveTourModule(params.tour);
 
   if (!moduleId) {
@@ -26,9 +28,9 @@ export function TourPill() {
 
   return (
     <Link href={{ pathname: '/tour/[module]', params: { module: moduleId } }} asChild>
-      <Pressable style={StyleSheet.flatten([styles.pill, { top: Math.max(insets.top + 10, 18) }])}>
+      <Pressable style={StyleSheet.flatten([styles.pill, { bottom: Math.max(insets.bottom + 16, 18) }])}>
         <Text style={styles.arrow}>←</Text>
-        <Text style={styles.label}>กลับสู่ทัวร์</Text>
+        {isCompact ? null : <Text style={styles.label}>กลับสู่ทัวร์</Text>}
       </Pressable>
     </Link>
   );
@@ -37,8 +39,8 @@ export function TourPill() {
 const styles = StyleSheet.create({
   pill: {
     alignItems: 'center',
-    backgroundColor: MiraDesign.color.surface,
-    borderColor: MiraDesign.color.blueSoft,
+    backgroundColor: MiraDesign.color.showcaseSurface,
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: MiraDesign.radius.pill,
     borderWidth: 1,
     flexDirection: 'row',
@@ -50,13 +52,13 @@ const styles = StyleSheet.create({
     zIndex: 999,
   },
   arrow: {
-    color: MiraDesign.color.blue,
+    color: MiraDesign.color.showcaseBlue,
     fontSize: 17,
     fontWeight: '900',
     lineHeight: 20,
   },
   label: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 13,
     fontWeight: '900',
   },

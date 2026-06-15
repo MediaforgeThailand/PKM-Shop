@@ -72,8 +72,8 @@ const styles = StyleSheet.create({
   panel: {
     ...cardShadow,
     alignItems: 'flex-start',
-    backgroundColor: MiraDesign.color.surface,
-    borderColor: MiraDesign.color.line,
+    backgroundColor: MiraDesign.color.showcaseSurface,
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 16,
     borderWidth: 1,
     flexDirection: 'row',
@@ -87,18 +87,18 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   eyebrow: {
-    color: MiraDesign.color.primaryDeep,
+    color: MiraDesign.color.showcaseBlueDeep,
     fontSize: 11,
     fontWeight: '900',
   },
   title: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 14,
     fontWeight: '800',
     lineHeight: 19,
   },
   meta: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 12,
     fontWeight: '800',
   },
@@ -121,13 +121,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF4D9',
   },
   chipText: {
-    color: MiraDesign.color.primaryDeep,
+    color: MiraDesign.color.showcaseBlueDeep,
     fontSize: 10,
     fontWeight: '900',
   },
   detailButton: {
     alignItems: 'center',
-    borderColor: MiraDesign.color.line,
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 10,
     borderWidth: 1,
     justifyContent: 'center',
@@ -135,7 +135,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
   },
   detailText: {
-    color: MiraDesign.color.primaryDeep,
+    color: MiraDesign.color.showcaseBlueDeep,
     fontSize: 12,
     fontWeight: '900',
   },

@@ -47,7 +47,7 @@ export function BranchOptionRow({
 const styles = StyleSheet.create({
   row: {
     alignItems: 'center',
-    backgroundColor: MiraDesign.color.surface,
+    backgroundColor: MiraDesign.color.showcaseSurface,
     flexDirection: 'row',
     gap: 10,
     minHeight: 56,
@@ -55,12 +55,12 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   rowDivider: {
-    borderBottomColor: MiraDesign.color.line,
+    borderBottomColor: MiraDesign.color.showcaseLine,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   radio: {
     alignItems: 'center',
-    borderColor: MiraDesign.color.line,
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 999,
     borderWidth: 2,
     height: 20,
@@ -68,10 +68,10 @@ const styles = StyleSheet.create({
     width: 20,
   },
   radioSelected: {
-    borderColor: MiraDesign.color.primary,
+    borderColor: MiraDesign.color.showcaseBlue,
   },
   radioDot: {
-    backgroundColor: MiraDesign.color.primary,
+    backgroundColor: MiraDesign.color.showcaseBlue,
     borderRadius: 999,
     height: 10,
     width: 10,
@@ -82,13 +82,13 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   branchName: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 14,
     fontWeight: '800',
     lineHeight: 19,
   },
   branchDetail: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 12,
     fontWeight: '700',
     lineHeight: 17,

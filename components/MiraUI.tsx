@@ -109,7 +109,7 @@ export function StatTile({ label, value, detail }: { label: string; value: strin
 export const uiStyles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: MiraDesign.color.canvas,
+    backgroundColor: MiraDesign.color.showcaseCanvas,
   },
   screenContent: {
     gap: MiraDesign.space.lg,
@@ -136,13 +136,13 @@ export const uiStyles = StyleSheet.create({
     width: 154,
   },
   eyebrow: {
-    color: MiraDesign.color.primaryDeep,
+    color: MiraDesign.color.showcaseBlue,
     fontSize: 12,
     fontWeight: '900',
     textTransform: 'uppercase',
   },
   title: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 31,
     fontWeight: '900',
     lineHeight: 36,
@@ -152,14 +152,14 @@ export const uiStyles = StyleSheet.create({
     lineHeight: 31,
   },
   subtitle: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 14,
     lineHeight: 21,
   },
   card: {
-    backgroundColor: MiraDesign.color.surface,
-    borderColor: '#E6F1FA',
-    borderRadius: MiraDesign.radius.md,
+    backgroundColor: MiraDesign.color.showcaseSurface,
+    borderColor: '#C6E0FA',
+    borderRadius: MiraDesign.radius.sm,
     borderWidth: 1,
     gap: MiraDesign.space.md,
     padding: MiraDesign.space.lg,
@@ -171,12 +171,12 @@ export const uiStyles = StyleSheet.create({
     marginTop: MiraDesign.space.xs,
   },
   sectionTitle: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 18,
     fontWeight: '900',
   },
   sectionMeta: {
-    color: MiraDesign.color.primary,
+    color: MiraDesign.color.showcaseBlue,
     fontSize: 13,
     fontWeight: '900',
   },
@@ -190,12 +190,12 @@ export const uiStyles = StyleSheet.create({
     paddingVertical: MiraDesign.space.xs,
   },
   bluePill: {
-    backgroundColor: MiraDesign.color.primarySoft,
-    color: MiraDesign.color.primaryDeep,
+    backgroundColor: MiraDesign.color.showcaseBlueSoft,
+    color: MiraDesign.color.showcaseBlueDeep,
   },
   mintPill: {
-    backgroundColor: '#E1F8EF',
-    color: '#16805C',
+    backgroundColor: '#E7F8F2',
+    color: '#087B5D',
   },
   amberPill: {
     backgroundColor: '#FFF2C8',
@@ -207,18 +207,18 @@ export const uiStyles = StyleSheet.create({
   },
   button: {
     alignItems: 'center',
-    borderRadius: MiraDesign.radius.md,
+    borderRadius: MiraDesign.radius.sm,
     minHeight: 54,
     justifyContent: 'center',
     paddingHorizontal: MiraDesign.space.lg,
   },
   primaryButton: {
-    backgroundColor: MiraDesign.color.primary,
+    backgroundColor: MiraDesign.color.showcaseBlue,
     ...shadow,
   },
   secondaryButton: {
-    backgroundColor: MiraDesign.color.surfaceStrong,
-    borderColor: MiraDesign.color.line,
+    backgroundColor: MiraDesign.color.showcaseSurface,
+    borderColor: '#BBD8F8',
     borderWidth: 1,
   },
   buttonText: {
@@ -227,12 +227,12 @@ export const uiStyles = StyleSheet.create({
     fontWeight: '900',
   },
   secondaryButtonText: {
-    color: MiraDesign.color.primaryDeep,
+    color: MiraDesign.color.showcaseBlueDeep,
   },
   statTile: {
-    backgroundColor: MiraDesign.color.surfaceStrong,
-    borderColor: MiraDesign.color.line,
-    borderRadius: MiraDesign.radius.md,
+    backgroundColor: MiraDesign.color.showcaseBlueSoft,
+    borderColor: '#BBD8F8',
+    borderRadius: MiraDesign.radius.sm,
     borderWidth: 1,
     flex: 1,
     gap: MiraDesign.space.xs,
@@ -240,17 +240,17 @@ export const uiStyles = StyleSheet.create({
     padding: MiraDesign.space.md,
   },
   statValue: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseBlueDeep,
     fontSize: 22,
     fontWeight: '900',
   },
   statLabel: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 13,
     fontWeight: '900',
   },
   statDetail: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 11,
     lineHeight: 16,
   },

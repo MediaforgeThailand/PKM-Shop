@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 
 import { Pill } from '@/components/MiraUI';
 import { MiraDesign, softShadow } from '@/constants/Design';
@@ -8,6 +8,8 @@ import { defaultTenantSlug } from '@/lib/marketplace/hospitalProducts';
 import { showcaseDemoCommissions, showcaseDemoReferrers, showcaseDemoTenant } from '@/lib/showcase/demoFixtures';
 import { supabase, supabaseConfigStatus } from '@/lib/supabase';
 import type { CommissionEntryRow, ReferrerRow, ReferrerType, TenantSummary } from '@/lib/types/api';
+
+const brandLogo = require('@/assets/images/mira-care-logo.png');
 
 type TenantContext = TenantSummary & {
   role: string;
@@ -62,6 +64,12 @@ const emptyDraft: ReferrerDraft = {
   type: 'doctor',
 };
 const allowedReferrerTypes: ReferrerType[] = ['doctor', 'nurse', 'creator', 'staff'];
+const referrerTypeLabels: Record<ReferrerType, string> = {
+  creator: 'ครีเอเตอร์',
+  doctor: 'แพทย์',
+  nurse: 'พยาบาล',
+  staff: 'ทีมโรงพยาบาล',
+};
 
 function fromJoin<T>(value: T | T[] | null | undefined) {
   return Array.isArray(value) ? value[0] ?? null : value ?? null;
@@ -69,6 +77,29 @@ function fromJoin<T>(value: T | T[] | null | undefined) {
 
 function formatMoney(amount: number) {
   return `${amount.toLocaleString('th-TH')} THB`;
+}
+
+function formatShortDate(value: string) {
+  return new Intl.DateTimeFormat('th-TH', {
+    day: '2-digit',
+    month: 'short',
+  }).format(new Date(value));
+}
+
+function commissionStatusLabel(status: CommissionEntryRow['status']) {
+  if (status === 'approved') {
+    return 'อนุมัติแล้ว';
+  }
+
+  if (status === 'paid') {
+    return 'จ่ายแล้ว';
+  }
+
+  if (status === 'void') {
+    return 'ยกเลิก';
+  }
+
+  return 'รออนุมัติ';
 }
 
 function parseByCategory(value: string) {
@@ -85,7 +116,7 @@ function parseByCategory(value: string) {
   );
 }
 
-export function ReferrersAdmin({ title = 'Referrers And Commissions' }: { title?: string }) {
+export function ReferrersAdmin({ title = 'ผู้แนะนำและค่าคอมมิชชัน' }: { title?: string }) {
   const auth = useAuthSession();
   const { width } = useWindowDimensions();
   const [tenant, setTenant] = useState<TenantContext | null>(null);
@@ -100,6 +131,7 @@ export function ReferrersAdmin({ title = 'Referrers And Commissions' }: { title?
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const isWide = width >= 1080;
+  const isCompact = width < 760;
   const isDemoMode = !auth.session || !supabaseConfigStatus.isConfigured;
   const canEdit = Boolean(auth.session) && (tenant?.role === 'tenant_admin' || tenant?.role === 'superadmin');
   const canSave =
@@ -120,6 +152,8 @@ export function ReferrersAdmin({ title = 'Referrers And Commissions' }: { title?
     }),
     [commissions],
   );
+  const activeReferrerCount = referrers.filter((referrer) => referrer.active).length;
+  const totalCommission = totals.approved + totals.paid + totals.pending;
 
   const loadData = useCallback(async () => {
     if (!auth.user) {
@@ -278,7 +312,7 @@ export function ReferrersAdmin({ title = 'Referrers And Commissions' }: { title?
         throw new Error(saveError.message);
       }
 
-      setMessage(editingId ? 'Referrer updated.' : 'Referrer created.');
+      setMessage(editingId ? 'อัปเดตผู้แนะนำแล้ว' : 'สร้างผู้แนะนำแล้ว');
       resetForm();
       await loadData();
     } catch (saveError) {
@@ -311,7 +345,7 @@ export function ReferrersAdmin({ title = 'Referrers And Commissions' }: { title?
         throw new Error(updateError.message);
       }
 
-      setMessage(`Commission marked ${status}.`);
+      setMessage(`อัปเดตค่าคอมมิชชันเป็น ${commissionStatusLabel(status)} แล้ว`);
       await loadData();
     } catch (commissionError) {
       setError(commissionError instanceof Error ? commissionError.message : 'Unable to update commission.');
@@ -369,7 +403,7 @@ export function ReferrersAdmin({ title = 'Referrers And Commissions' }: { title?
         throw new Error(updateError.message);
       }
 
-      setMessage(`${selectedIds.length} commissions marked ${status}.`);
+      setMessage(`อัปเดตค่าคอมมิชชัน ${selectedIds.length} รายการเป็น ${commissionStatusLabel(status)} แล้ว`);
       setSelectedCommissionIds(new Set());
       await loadData();
     } catch (commissionError) {
@@ -381,24 +415,38 @@ export function ReferrersAdmin({ title = 'Referrers And Commissions' }: { title?
 
   return (
     <View style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-        <View style={[styles.topBar, !isWide ? styles.topBarStack : null]}>
-          <View style={styles.titleBlock}>
-            <Text style={styles.eyebrow}>MiraCare v2 Phase 4</Text>
+      <ScrollView contentContainerStyle={[styles.container, isCompact ? styles.containerCompact : null]} keyboardShouldPersistTaps="handled">
+        <View style={[styles.hero, !isWide ? styles.heroStack : null]}>
+          <View style={styles.heroCopy}>
+            <View style={styles.brandRow}>
+              <Image source={brandLogo} resizeMode="contain" style={styles.brandLogo} />
+              <View style={styles.brandDivider} />
+              <Text style={styles.brandText}>Referral Ops</Text>
+            </View>
+            <Text style={styles.eyebrow}>Referral Command Center</Text>
             <Text style={styles.title}>{title}</Text>
             <Text style={styles.subtitle}>
-              {tenant ? `${tenant.display_name} · ${tenant.role}` : isLoading ? 'Loading tenant access' : defaultTenantSlug}
+              {tenant ? `${tenant.display_name} · ${tenant.role}` : isLoading ? 'กำลังโหลดสิทธิ์ tenant' : defaultTenantSlug}
             </Text>
           </View>
-          <Pressable disabled={isLoading} onPress={() => void loadData()} style={[styles.secondaryButton, isLoading ? styles.disabled : null]}>
-            <Text style={styles.secondaryButtonText}>{isLoading ? 'Refreshing' : 'Refresh'}</Text>
-          </Pressable>
+
+          <View style={[styles.heroPanel, !isWide ? styles.heroPanelStacked : null]}>
+            <View style={styles.heroPanelTop}>
+              <Text style={styles.panelMeta}>สถานะพื้นที่ทำงาน</Text>
+              <Pill label={isDemoMode ? 'โหมดตัวอย่าง' : canEdit ? 'แก้ไขได้' : 'อ่านอย่างเดียว'} tone={isDemoMode ? 'amber' : canEdit ? 'mint' : 'blue'} />
+            </View>
+            <Text style={styles.heroPanelTitle}>{activeReferrerCount} ผู้แนะนำที่เปิดใช้งาน</Text>
+            <Text style={styles.heroPanelBody}>ยอด commission ทั้งหมด {formatMoney(totalCommission)} จาก {commissions.length} รายการล่าสุด</Text>
+            <Pressable disabled={isLoading} onPress={() => void loadData()} style={[styles.secondaryButton, styles.refreshButton, isLoading ? styles.disabled : null]}>
+              <Text style={styles.secondaryButtonText}>{isLoading ? 'กำลังรีเฟรช' : 'รีเฟรช'}</Text>
+            </Pressable>
+          </View>
         </View>
 
         {!canEdit && tenant ? (
           <View style={styles.noticeInline}>
-            <Text style={styles.noticeTitle}>Read-only access</Text>
-            <Text style={styles.noticeBody}>Only tenant admins can edit referrers or commission statuses.</Text>
+            <Text style={styles.noticeTitle}>สิทธิ์อ่านอย่างเดียว</Text>
+            <Text style={styles.noticeBody}>เฉพาะ tenant admin เท่านั้นที่แก้ไขผู้แนะนำหรือสถานะค่าคอมมิชชันได้</Text>
           </View>
         ) : null}
 
@@ -406,31 +454,32 @@ export function ReferrersAdmin({ title = 'Referrers And Commissions' }: { title?
         {message ? <Banner tone="success" text={message} /> : null}
         {isDemoMode ? <Banner tone="success" text="โหมดตัวอย่าง: เปิดดู referrer และ commission ได้โดยไม่ต้องล็อกอิน ปุ่มแก้ไขข้อมูลจริงจะถูกปิดไว้" /> : null}
 
-        <View style={styles.metrics}>
-          <Metric label="Pending" value={formatMoney(totals.pending)} />
-          <Metric label="Approved" value={formatMoney(totals.approved)} />
-          <Metric label="Paid" value={formatMoney(totals.paid)} />
+        <View style={[styles.metrics, isCompact ? styles.metricsCompact : null]}>
+          <Metric compact={isCompact} detail="รอตรวจรายการก่อนจ่าย" label="รออนุมัติ" value={formatMoney(totals.pending)} />
+          <Metric compact={isCompact} detail="พร้อมส่งต่อฝ่ายการเงิน" label="อนุมัติแล้ว" value={formatMoney(totals.approved)} />
+          <Metric compact={isCompact} detail="ปิดรอบ payout แล้ว" label="จ่ายแล้ว" value={formatMoney(totals.paid)} />
+          <Metric compact={isCompact} detail={`${activeReferrerCount} เปิดใช้งาน`} label="ผู้แนะนำ" value={`${referrers.length} คน`} />
         </View>
 
         <View style={[styles.workspace, !isWide ? styles.workspaceStack : null]}>
-          <View style={styles.formPane}>
+          <View style={[styles.formPane, !isWide ? styles.fullWidthPane : null]}>
             <View style={styles.panelHeader}>
-              <View>
-                <Text style={styles.panelTitle}>{editingId ? 'Edit Referrer' : 'New Referrer'}</Text>
-                <Text style={styles.panelMeta}>{editingId ?? 'Admin-created profiles only'}</Text>
+              <View style={styles.panelHeaderCopy}>
+                <Text style={styles.panelTitle}>{editingId ? 'แก้ไขผู้แนะนำ' : 'เพิ่มผู้แนะนำ'}</Text>
+                <Text style={styles.panelMeta}>{editingId ?? 'สร้างโดยทีมแอดมิน'}</Text>
               </View>
               {editingId ? (
                 <Pressable onPress={resetForm} style={styles.textButton}>
-                  <Text style={styles.textButtonLabel}>New</Text>
+                  <Text style={styles.textButtonLabel}>รายการใหม่</Text>
                 </Pressable>
               ) : null}
             </View>
 
-            <Field label="Name" onChangeText={(value) => setDraft((current) => ({ ...current, name: value }))} value={draft.name} />
-            <View style={styles.twoColumn}>
-              <Field disabled label="Ref Code" onChangeText={() => null} value={editingId ? draft.refCode : 'Generated on save'} />
+            <Field label="ชื่อ" onChangeText={(value) => setDraft((current) => ({ ...current, name: value }))} value={draft.name} />
+            <View style={[styles.twoColumn, isCompact ? styles.twoColumnStack : null]}>
+              <Field disabled label="รหัสแนะนำ" onChangeText={() => null} value={editingId ? draft.refCode : 'สร้างเมื่อบันทึก'} />
               <View style={styles.field}>
-                <Text style={styles.fieldLabel}>Type</Text>
+                <Text style={styles.fieldLabel}>ประเภท</Text>
                 <View style={styles.typeGrid}>
                   {allowedReferrerTypes.map((type) => (
                     <Pressable
@@ -438,114 +487,131 @@ export function ReferrersAdmin({ title = 'Referrers And Commissions' }: { title?
                       onPress={() => setDraft((current) => ({ ...current, type }))}
                       style={[styles.typeOption, draft.type === type ? styles.typeOptionActive : null]}
                     >
-                      <Text style={[styles.typeOptionText, draft.type === type ? styles.typeOptionTextActive : null]}>{type}</Text>
+                      <Text style={[styles.typeOptionText, draft.type === type ? styles.typeOptionTextActive : null]}>{referrerTypeLabels[type]}</Text>
                     </Pressable>
                   ))}
                 </View>
               </View>
             </View>
-            <Field label="Phone" onChangeText={(value) => setDraft((current) => ({ ...current, phone: value }))} value={draft.phone} />
+            <Field label="เบอร์โทร" onChangeText={(value) => setDraft((current) => ({ ...current, phone: value }))} value={draft.phone} />
             <Field label="Auth User ID" onChangeText={(value) => setDraft((current) => ({ ...current, authUserId: value }))} value={draft.authUserId} />
 
             <View style={styles.segmentRow}>
               <Pressable onPress={() => setDraft((current) => ({ ...current, mode: 'percent' }))} style={[styles.segment, draft.mode === 'percent' ? styles.segmentActive : null]}>
-                <Text style={[styles.segmentText, draft.mode === 'percent' ? styles.segmentTextActive : null]}>Percent</Text>
+                <Text style={[styles.segmentText, draft.mode === 'percent' ? styles.segmentTextActive : null]}>เปอร์เซ็นต์</Text>
               </Pressable>
               <Pressable onPress={() => setDraft((current) => ({ ...current, mode: 'flat_baht' }))} style={[styles.segment, draft.mode === 'flat_baht' ? styles.segmentActive : null]}>
-                <Text style={[styles.segmentText, draft.mode === 'flat_baht' ? styles.segmentTextActive : null]}>Flat THB</Text>
+                <Text style={[styles.segmentText, draft.mode === 'flat_baht' ? styles.segmentTextActive : null]}>บาทคงที่</Text>
               </Pressable>
             </View>
 
-            <View style={styles.twoColumn}>
-              <Field label="Default" onChangeText={(value) => setDraft((current) => ({ ...current, defaultValue: value }))} value={draft.defaultValue} />
-              <Field label="By Category JSON" onChangeText={(value) => setDraft((current) => ({ ...current, byCategory: value }))} value={draft.byCategory} />
+            <View style={[styles.twoColumn, isCompact ? styles.twoColumnStack : null]}>
+              <Field label="ค่าตั้งต้น" onChangeText={(value) => setDraft((current) => ({ ...current, defaultValue: value }))} value={draft.defaultValue} />
+              <Field label="ตามหมวด JSON" onChangeText={(value) => setDraft((current) => ({ ...current, byCategory: value }))} value={draft.byCategory} />
             </View>
 
             <View style={styles.segmentRow}>
               <Pressable onPress={() => setDraft((current) => ({ ...current, active: true }))} style={[styles.segment, draft.active ? styles.segmentActive : null]}>
-                <Text style={[styles.segmentText, draft.active ? styles.segmentTextActive : null]}>Active</Text>
+                <Text style={[styles.segmentText, draft.active ? styles.segmentTextActive : null]}>เปิดใช้งาน</Text>
               </Pressable>
               <Pressable onPress={() => setDraft((current) => ({ ...current, active: false }))} style={[styles.segment, !draft.active ? styles.segmentActive : null]}>
-                <Text style={[styles.segmentText, !draft.active ? styles.segmentTextActive : null]}>Inactive</Text>
+                <Text style={[styles.segmentText, !draft.active ? styles.segmentTextActive : null]}>ปิดใช้งาน</Text>
               </Pressable>
             </View>
 
             <Pressable disabled={!canSave || isSaving} onPress={saveReferrer} style={[styles.primaryButton, !canSave || isSaving ? styles.disabled : null]}>
-              <Text style={styles.primaryButtonText}>{isSaving ? 'Saving' : editingId ? 'Save Referrer' : 'Create Referrer'}</Text>
+              <Text style={styles.primaryButtonText}>{isSaving ? 'กำลังบันทึก' : editingId ? 'บันทึกผู้แนะนำ' : 'สร้างผู้แนะนำ'}</Text>
             </Pressable>
           </View>
 
-          <View style={styles.listPane}>
-            <Text style={styles.panelTitle}>Referrers</Text>
-            {referrers.length === 0 ? (
-              <Empty title="No referrers" body="Create the first referrer to enable assisted purchase." />
-            ) : (
-              referrers.map((referrer) => (
-                <View key={referrer.id} style={styles.referrerRow}>
-                  <View style={styles.rowTop}>
-                    <View style={styles.rowCopy}>
-                      <Text style={styles.rowTitle}>{referrer.name}</Text>
-                      <Text style={styles.rowMeta}>{referrer.ref_code} · {referrer.type}</Text>
+          <View style={[styles.operationsPane, !isWide ? styles.fullWidthPane : null]}>
+            <View style={styles.listPane}>
+              <View style={styles.sectionHeader}>
+                <View style={styles.panelHeaderCopy}>
+                  <Text style={styles.panelTitle}>รายชื่อผู้แนะนำ</Text>
+                  <Text style={styles.panelMeta}>{referrers.length} โปรไฟล์ในระบบ</Text>
+                </View>
+              </View>
+              {referrers.length === 0 ? (
+                <Empty title="ยังไม่มีผู้แนะนำ" body="สร้างผู้แนะนำคนแรกเพื่อเปิด flow ช่วยปิดการขาย" />
+              ) : (
+                referrers.map((referrer) => (
+                  <View key={referrer.id} style={styles.referrerRow}>
+                    <View style={styles.rowTop}>
+                      <View style={styles.avatar}>
+                        <Text style={styles.avatarText}>{referrer.name.trim().slice(0, 1) || 'M'}</Text>
+                      </View>
+                      <View style={styles.rowCopy}>
+                        <Text style={styles.rowTitle}>{referrer.name}</Text>
+                        <Text style={styles.rowMeta}>{referrer.ref_code} · {referrerTypeLabels[referrer.type] ?? referrer.type}</Text>
+                      </View>
+                      <Pill label={referrer.active ? 'เปิดใช้งาน' : 'ปิดใช้งาน'} tone={referrer.active ? 'mint' : 'amber'} />
                     </View>
-                    <Pill label={referrer.active ? 'active' : 'inactive'} tone={referrer.active ? 'mint' : 'amber'} />
+                    <View style={styles.rowStats}>
+                      <View style={styles.rowStat}>
+                        <Text style={styles.rowStatLabel}>ค่าตั้งต้น</Text>
+                        <Text style={styles.rowStatValue}>{referrer.commission_scheme.mode === 'percent' ? `${referrer.commission_scheme.default}%` : `${referrer.commission_scheme.default} THB`}</Text>
+                      </View>
+                      <View style={styles.rowStat}>
+                        <Text style={styles.rowStatLabel}>สร้างเมื่อ</Text>
+                        <Text style={styles.rowStatValue}>{formatShortDate(referrer.created_at)}</Text>
+                      </View>
+                    </View>
+                    <Pressable disabled={!canEdit} onPress={() => editReferrer(referrer)} style={[styles.secondaryButton, styles.rowActionButton, !canEdit ? styles.disabled : null]}>
+                      <Text style={styles.secondaryButtonText}>แก้ไข</Text>
+                    </Pressable>
                   </View>
-                  <Text style={styles.rowBody}>
-                    {referrer.commission_scheme.mode === 'percent' ? `${referrer.commission_scheme.default}%` : `${referrer.commission_scheme.default} THB`} default
-                  </Text>
-                  <Pressable disabled={!canEdit} onPress={() => editReferrer(referrer)} style={[styles.secondaryButton, !canEdit ? styles.disabled : null]}>
-                    <Text style={styles.secondaryButtonText}>Edit</Text>
+                ))
+              )}
+            </View>
+
+            <View style={styles.commissionsPane}>
+              <View style={styles.bulkBar}>
+                <View style={styles.panelHeaderCopy}>
+                  <Text style={styles.panelTitle}>ค่าคอมมิชชัน</Text>
+                  <Text style={styles.panelMeta}>เลือกแล้ว {selectedCommissions.length} รายการ</Text>
+                </View>
+                <View style={styles.actionRow}>
+                  <Pressable
+                    disabled={!canEdit || commissions.length === 0 || Boolean(busyCommissionId)}
+                    onPress={toggleAllCommissions}
+                    style={[styles.secondaryButton, !canEdit || commissions.length === 0 || Boolean(busyCommissionId) ? styles.disabled : null]}
+                  >
+                    <Text style={styles.secondaryButtonText}>{allCommissionsSelected ? 'ล้าง' : 'เลือกทั้งหมด'}</Text>
+                  </Pressable>
+                  <Pressable
+                    disabled={!canEdit || selectedCommissions.length === 0 || Boolean(busyCommissionId)}
+                    onPress={() => void updateSelectedCommissionStatus('approved')}
+                    style={[styles.smallButton, !canEdit || selectedCommissions.length === 0 || Boolean(busyCommissionId) ? styles.disabled : null]}
+                  >
+                    <Text style={styles.smallButtonText}>{busyCommissionId === 'bulk' ? 'กำลังบันทึก' : 'อนุมัติที่เลือก'}</Text>
+                  </Pressable>
+                  <Pressable
+                    disabled={!canEdit || selectedCommissions.length === 0 || Boolean(busyCommissionId)}
+                    onPress={() => void updateSelectedCommissionStatus('paid')}
+                    style={[styles.smallButton, !canEdit || selectedCommissions.length === 0 || Boolean(busyCommissionId) ? styles.disabled : null]}
+                  >
+                    <Text style={styles.smallButtonText}>{busyCommissionId === 'bulk' ? 'กำลังบันทึก' : 'ทำเครื่องหมายจ่ายแล้ว'}</Text>
                   </Pressable>
                 </View>
-              ))
-            )}
-          </View>
-        </View>
-
-        <View style={styles.commissionsPane}>
-          <View style={styles.bulkBar}>
-            <View style={styles.rowCopy}>
-              <Text style={styles.panelTitle}>Commissions</Text>
-              <Text style={styles.panelMeta}>{selectedCommissions.length} selected</Text>
-            </View>
-            <View style={styles.actionRow}>
-              <Pressable
-                disabled={!canEdit || commissions.length === 0 || Boolean(busyCommissionId)}
-                onPress={toggleAllCommissions}
-                style={[styles.secondaryButton, !canEdit || commissions.length === 0 || Boolean(busyCommissionId) ? styles.disabled : null]}
-              >
-                <Text style={styles.secondaryButtonText}>{allCommissionsSelected ? 'Clear' : 'Select All'}</Text>
-              </Pressable>
-              <Pressable
-                disabled={!canEdit || selectedCommissions.length === 0 || Boolean(busyCommissionId)}
-                onPress={() => void updateSelectedCommissionStatus('approved')}
-                style={[styles.smallButton, !canEdit || selectedCommissions.length === 0 || Boolean(busyCommissionId) ? styles.disabled : null]}
-              >
-                <Text style={styles.smallButtonText}>{busyCommissionId === 'bulk' ? 'Saving' : 'Approve Selected'}</Text>
-              </Pressable>
-              <Pressable
-                disabled={!canEdit || selectedCommissions.length === 0 || Boolean(busyCommissionId)}
-                onPress={() => void updateSelectedCommissionStatus('paid')}
-                style={[styles.smallButton, !canEdit || selectedCommissions.length === 0 || Boolean(busyCommissionId) ? styles.disabled : null]}
-              >
-                <Text style={styles.smallButtonText}>{busyCommissionId === 'bulk' ? 'Saving' : 'Mark Paid'}</Text>
-              </Pressable>
+              </View>
+              {commissions.length === 0 ? (
+                <Empty title="ยังไม่มีค่าคอมมิชชัน" body="รายการจะถูกสร้างเมื่อ admin ยืนยันออเดอร์ที่มี attribution" />
+              ) : (
+                commissions.map((entry) => (
+                  <CommissionRow
+                    key={entry.id}
+                    busy={busyCommissionId === entry.id}
+                    canEdit={canEdit}
+                    entry={entry}
+                    onStatus={(status) => void updateCommissionStatus(entry, status)}
+                    onToggleSelected={() => toggleCommissionSelection(entry.id)}
+                    selected={selectedCommissionIds.has(entry.id)}
+                  />
+                ))
+              )}
             </View>
           </View>
-          {commissions.length === 0 ? (
-            <Empty title="No commissions" body="Commission entries are created when admin confirms an attributed order." />
-          ) : (
-            commissions.map((entry) => (
-              <CommissionRow
-                key={entry.id}
-                busy={busyCommissionId === entry.id}
-                canEdit={canEdit}
-                entry={entry}
-                onStatus={(status) => void updateCommissionStatus(entry, status)}
-                onToggleSelected={() => toggleCommissionSelection(entry.id)}
-                selected={selectedCommissionIds.has(entry.id)}
-              />
-            ))
-          )}
         </View>
       </ScrollView>
     </View>
@@ -560,11 +626,12 @@ function Banner({ text, tone }: { text: string; tone: 'error' | 'success' }) {
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
+function Metric({ compact, detail, label, value }: { compact?: boolean; detail?: string; label: string; value: string }) {
   return (
-    <View style={styles.metric}>
+    <View style={[styles.metric, compact ? styles.metricCompact : null]}>
       <Text style={styles.metricLabel}>{label}</Text>
       <Text style={styles.metricValue}>{value}</Text>
+      {detail ? <Text style={styles.metricDetail}>{detail}</Text> : null}
     </View>
   );
 }
@@ -586,7 +653,7 @@ function Field({
       <TextInput
         editable={!disabled}
         onChangeText={onChangeText}
-        placeholderTextColor={MiraDesign.color.muted}
+        placeholderTextColor={MiraDesign.color.showcaseNavySoft}
         style={[styles.input, disabled ? styles.inputDisabled : null]}
         value={value}
       />
@@ -626,7 +693,7 @@ function CommissionRow({
     <View style={styles.commissionRow}>
       <View style={styles.rowTop}>
         <Pressable
-          accessibilityLabel={selected ? 'Deselect commission' : 'Select commission'}
+          accessibilityLabel={selected ? 'ยกเลิกเลือกค่าคอมมิชชัน' : 'เลือกค่าคอมมิชชัน'}
           disabled={!canEdit || busy}
           onPress={onToggleSelected}
           style={[styles.checkBox, selected ? styles.checkBoxSelected : null, !canEdit || busy ? styles.disabled : null]}
@@ -634,12 +701,15 @@ function CommissionRow({
           <Text style={[styles.checkBoxText, selected ? styles.checkBoxTextSelected : null]}>{selected ? 'x' : ''}</Text>
         </Pressable>
         <View style={styles.rowCopy}>
-          <Text style={styles.rowTitle}>{product?.name ?? `Order ${entry.order_id.slice(0, 8)}`}</Text>
-          <Text style={styles.rowMeta}>{referrer ? `${referrer.name} · ${referrer.ref_code}` : entry.referrer_id}</Text>
+          <Text style={styles.rowTitle}>{product?.name ?? `ออเดอร์ ${entry.order_id.slice(0, 8)}`}</Text>
+          <Text style={styles.rowMeta}>{formatShortDate(entry.created_at)} · {referrer ? `${referrer.name} · ${referrer.ref_code}` : entry.referrer_id}</Text>
         </View>
-        <Pill label={entry.status} tone={entry.status === 'paid' ? 'mint' : entry.status === 'void' ? 'danger' : 'amber'} />
+        <Pill label={commissionStatusLabel(entry.status)} tone={entry.status === 'paid' ? 'mint' : entry.status === 'void' ? 'danger' : 'amber'} />
       </View>
-      <Text style={styles.rowBody}>{formatMoney(entry.amount_baht)}</Text>
+      <View style={styles.ledgerAmount}>
+        <Text style={styles.rowStatLabel}>ยอดจ่าย</Text>
+        <Text style={styles.rowBody}>{formatMoney(entry.amount_baht)}</Text>
+      </View>
       <View style={styles.actionRow}>
         {(['approved', 'paid', 'void'] as const).map((status) => (
           <Pressable
@@ -648,7 +718,7 @@ function CommissionRow({
             onPress={() => onStatus(status)}
             style={[styles.smallButton, !canEdit || busy || entry.status === status ? styles.disabled : null]}
           >
-            <Text style={styles.smallButtonText}>{busy ? 'Saving' : status}</Text>
+            <Text style={styles.smallButtonText}>{busy ? 'กำลังบันทึก' : commissionStatusLabel(status)}</Text>
           </Pressable>
         ))}
       </View>
@@ -658,53 +728,111 @@ function CommissionRow({
 
 const styles = StyleSheet.create({
   screen: {
-    backgroundColor: '#F5F8F7',
+    backgroundColor: MiraDesign.color.showcaseCanvas,
     flex: 1,
   },
   container: {
-    gap: 16,
-    padding: 22,
-    paddingBottom: 54,
+    alignSelf: 'center',
+    gap: 18,
+    maxWidth: 1280,
+    padding: 24,
+    paddingBottom: 64,
+    width: '100%',
   },
-  topBar: {
-    alignItems: 'flex-start',
+  containerCompact: {
+    padding: 14,
+    paddingBottom: 44,
+  },
+  hero: {
+    alignItems: 'stretch',
+    backgroundColor: MiraDesign.color.showcaseSurface,
+    borderColor: MiraDesign.color.showcaseLine,
+    borderRadius: 8,
+    borderWidth: 1,
     flexDirection: 'row',
-    gap: 16,
+    gap: 20,
     justifyContent: 'space-between',
+    padding: 20,
+    ...softShadow,
   },
-  topBarStack: {
+  heroStack: {
     flexDirection: 'column',
   },
-  titleBlock: {
+  heroCopy: {
     flex: 1,
-    gap: 6,
+    gap: 7,
+    minWidth: 0,
+  },
+  brandRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 4,
+  },
+  brandLogo: {
+    height: 34,
+    width: 128,
+  },
+  brandDivider: {
+    backgroundColor: MiraDesign.color.showcaseLine,
+    height: 24,
+    width: 1,
+  },
+  brandText: {
+    color: MiraDesign.color.showcaseBlueDeep,
+    fontSize: 13,
+    fontWeight: '900',
   },
   eyebrow: {
-    color: MiraDesign.color.primaryDeep,
-    fontSize: 13,
+    color: MiraDesign.color.showcaseBlueDeep,
+    fontSize: 12,
     fontWeight: '900',
     textTransform: 'uppercase',
   },
   title: {
-    color: MiraDesign.color.ink,
-    fontSize: 30,
+    color: MiraDesign.color.showcaseNavy,
+    fontSize: 32,
     fontWeight: '900',
-    lineHeight: 36,
+    lineHeight: 38,
   },
   subtitle: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 14,
     lineHeight: 20,
   },
-  notice: {
-    backgroundColor: '#FFFFFF',
-    borderColor: MiraDesign.color.line,
+  heroPanel: {
+    backgroundColor: '#F6FBFF',
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 8,
     borderWidth: 1,
     gap: 10,
-    margin: 22,
-    padding: 18,
+    justifyContent: 'space-between',
+    maxWidth: 360,
+    minWidth: 300,
+    padding: 16,
     ...softShadow,
+  },
+  heroPanelStacked: {
+    maxWidth: '100%',
+    minWidth: '100%',
+  },
+  heroPanelTop: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 10,
+    justifyContent: 'space-between',
+  },
+  heroPanelTitle: {
+    color: MiraDesign.color.showcaseNavy,
+    fontSize: 22,
+    fontWeight: '900',
+    lineHeight: 28,
+  },
+  heroPanelBody: {
+    color: MiraDesign.color.showcaseNavySoft,
+    fontSize: 13,
+    lineHeight: 19,
   },
   noticeInline: {
     backgroundColor: '#FFF7DD',
@@ -715,12 +843,12 @@ const styles = StyleSheet.create({
     padding: 14,
   },
   noticeTitle: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 17,
     fontWeight: '900',
   },
   noticeBody: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 14,
     lineHeight: 20,
   },
@@ -750,123 +878,165 @@ const styles = StyleSheet.create({
   metrics: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
+    gap: 12,
+  },
+  metricsCompact: {
+    alignItems: 'stretch',
+    flexDirection: 'column',
   },
   metric: {
-    backgroundColor: '#FFFFFF',
-    borderColor: MiraDesign.color.line,
+    backgroundColor: MiraDesign.color.showcaseSurface,
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 8,
     borderWidth: 1,
     flexGrow: 1,
-    minWidth: 150,
-    padding: 13,
+    gap: 5,
+    minWidth: 190,
+    padding: 15,
+  },
+  metricCompact: {
+    flexGrow: 0,
+    maxWidth: '100%',
+    minWidth: 0,
+    width: '100%',
   },
   metricLabel: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 11,
     fontWeight: '900',
     textTransform: 'uppercase',
   },
   metricValue: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 21,
     fontWeight: '900',
     marginTop: 5,
   },
+  metricDetail: {
+    color: MiraDesign.color.showcaseNavySoft,
+    fontSize: 12,
+    fontWeight: '700',
+    lineHeight: 17,
+  },
   workspace: {
     alignItems: 'flex-start',
     flexDirection: 'row',
-    gap: 16,
+    gap: 18,
   },
   workspaceStack: {
     flexDirection: 'column',
   },
+  fullWidthPane: {
+    maxWidth: '100%',
+    width: '100%',
+  },
   formPane: {
-    backgroundColor: '#FFFFFF',
-    borderColor: MiraDesign.color.line,
+    backgroundColor: MiraDesign.color.showcaseSurface,
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 8,
     borderWidth: 1,
-    flex: 0.9,
-    gap: 12,
-    padding: 16,
-    width: '100%',
+    flex: 0.84,
+    gap: 13,
+    maxWidth: 430,
+    minWidth: 330,
+    padding: 18,
     ...softShadow,
   },
+  operationsPane: {
+    flex: 1.36,
+    gap: 18,
+    minWidth: 0,
+  },
   listPane: {
-    flex: 1.1,
-    gap: 10,
+    gap: 12,
     width: '100%',
   },
   commissionsPane: {
-    backgroundColor: '#FFFFFF',
-    borderColor: MiraDesign.color.line,
+    backgroundColor: MiraDesign.color.showcaseSurface,
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 8,
     borderWidth: 1,
-    gap: 10,
+    gap: 12,
     padding: 16,
+    ...softShadow,
   },
   bulkBar: {
-    alignItems: 'flex-start',
+    alignItems: 'center',
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
+    gap: 12,
     justifyContent: 'space-between',
   },
   panelHeader: {
-    alignItems: 'center',
+    alignItems: 'flex-start',
     flexDirection: 'row',
     gap: 10,
     justifyContent: 'space-between',
   },
+  panelHeaderCopy: {
+    flex: 1,
+    gap: 3,
+    minWidth: 0,
+  },
+  sectionHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
   panelTitle: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 18,
     fontWeight: '900',
   },
   panelMeta: {
-    color: MiraDesign.color.primary,
+    color: MiraDesign.color.showcaseBlue,
     fontSize: 12,
     fontWeight: '900',
     marginTop: 3,
   },
   textButton: {
-    backgroundColor: '#F0F6F4',
+    backgroundColor: MiraDesign.color.showcaseBlueSoft,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 9,
   },
   textButtonLabel: {
-    color: MiraDesign.color.primaryDeep,
+    color: MiraDesign.color.showcaseBlueDeep,
     fontSize: 12,
     fontWeight: '900',
   },
   field: {
     flex: 1,
     gap: 6,
+    minWidth: 0,
   },
   fieldLabel: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 11,
     fontWeight: '900',
     textTransform: 'uppercase',
   },
   input: {
-    backgroundColor: '#F7FBFA',
-    borderColor: MiraDesign.color.line,
+    backgroundColor: '#F7FBFF',
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 8,
     borderWidth: 1,
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 14,
     minHeight: 44,
+    minWidth: 0,
     paddingHorizontal: 12,
   },
   inputDisabled: {
-    backgroundColor: '#EDF4F3',
-    color: MiraDesign.color.inkSoft,
+    backgroundColor: MiraDesign.color.showcaseBlueSoft,
+    color: MiraDesign.color.showcaseNavySoft,
   },
   twoColumn: {
     flexDirection: 'row',
     gap: 10,
+  },
+  twoColumnStack: {
+    flexDirection: 'column',
   },
   typeGrid: {
     flexDirection: 'row',
@@ -875,33 +1045,34 @@ const styles = StyleSheet.create({
   },
   typeOption: {
     alignItems: 'center',
-    backgroundColor: '#F7FBFA',
-    borderColor: MiraDesign.color.line,
+    backgroundColor: '#F7FBFF',
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 8,
     borderWidth: 1,
     justifyContent: 'center',
     minHeight: 34,
-    minWidth: 78,
+    minWidth: 92,
     paddingHorizontal: 10,
   },
   typeOptionActive: {
-    backgroundColor: MiraDesign.color.primary,
-    borderColor: MiraDesign.color.primary,
+    backgroundColor: MiraDesign.color.showcaseBlue,
+    borderColor: MiraDesign.color.showcaseBlue,
   },
   typeOptionText: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 12,
     fontWeight: '900',
-    textTransform: 'capitalize',
+    textAlign: 'center',
   },
   typeOptionTextActive: {
     color: '#FFFFFF',
   },
   segmentRow: {
-    backgroundColor: '#EAF3F2',
+    backgroundColor: MiraDesign.color.showcaseBlueSoft,
     borderRadius: 8,
     flexDirection: 'row',
     gap: 4,
+    minWidth: 0,
     padding: 4,
   },
   segment: {
@@ -913,35 +1084,36 @@ const styles = StyleSheet.create({
   },
   segmentActive: {
     backgroundColor: '#FFFFFF',
-    borderColor: MiraDesign.color.line,
+    borderColor: MiraDesign.color.showcaseLine,
     borderWidth: 1,
   },
   segmentText: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 12,
     fontWeight: '900',
   },
   segmentTextActive: {
-    color: MiraDesign.color.primaryDeep,
+    color: MiraDesign.color.showcaseBlueDeep,
   },
   primaryButton: {
     alignItems: 'center',
-    alignSelf: 'flex-start',
-    backgroundColor: MiraDesign.color.primary,
+    backgroundColor: MiraDesign.color.showcaseBlue,
     borderRadius: 8,
     justifyContent: 'center',
     minHeight: 42,
     paddingHorizontal: 16,
+    width: '100%',
   },
   primaryButtonText: {
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '900',
+    textAlign: 'center',
   },
   secondaryButton: {
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderColor: MiraDesign.color.line,
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 8,
     borderWidth: 1,
     justifyContent: 'center',
@@ -949,29 +1121,49 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
   },
   secondaryButtonText: {
-    color: MiraDesign.color.primaryDeep,
+    color: MiraDesign.color.showcaseBlueDeep,
     fontSize: 12,
     fontWeight: '900',
+    textAlign: 'center',
+  },
+  refreshButton: {
+    alignSelf: 'flex-start',
+    minWidth: 110,
   },
   referrerRow: {
-    backgroundColor: '#FFFFFF',
-    borderColor: MiraDesign.color.line,
+    backgroundColor: MiraDesign.color.showcaseSurface,
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 8,
     borderWidth: 1,
-    gap: 10,
-    padding: 13,
+    gap: 12,
+    padding: 14,
+    ...softShadow,
   },
   commissionRow: {
-    backgroundColor: '#F7FBFA',
-    borderColor: '#E5EFEE',
+    backgroundColor: '#F7FBFF',
+    borderColor: MiraDesign.color.showcaseLineSoft,
     borderRadius: 8,
     borderWidth: 1,
-    gap: 10,
-    padding: 12,
+    gap: 12,
+    padding: 13,
+  },
+  avatar: {
+    alignItems: 'center',
+    backgroundColor: MiraDesign.color.showcaseBlueSoft,
+    borderRadius: 8,
+    height: 38,
+    justifyContent: 'center',
+    width: 38,
+  },
+  avatarText: {
+    color: MiraDesign.color.showcaseBlueDeep,
+    fontSize: 16,
+    fontWeight: '900',
   },
   rowTop: {
     alignItems: 'flex-start',
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 10,
     justifyContent: 'space-between',
   },
@@ -981,17 +1173,55 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   rowTitle: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 15,
     fontWeight: '900',
+    lineHeight: 20,
   },
   rowMeta: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 12,
     fontWeight: '800',
+    lineHeight: 17,
+  },
+  rowStats: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  rowStat: {
+    backgroundColor: '#F6FBFF',
+    borderColor: MiraDesign.color.showcaseLineSoft,
+    borderRadius: 8,
+    borderWidth: 1,
+    flexGrow: 1,
+    minWidth: 120,
+    padding: 10,
+  },
+  rowStatLabel: {
+    color: MiraDesign.color.showcaseNavySoft,
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  rowStatValue: {
+    color: MiraDesign.color.showcaseNavy,
+    fontSize: 14,
+    fontWeight: '900',
+    marginTop: 3,
+  },
+  rowActionButton: {
+    alignSelf: 'flex-start',
+    minWidth: 120,
+  },
+  ledgerAmount: {
+    backgroundColor: '#FFFFFF',
+    borderColor: MiraDesign.color.showcaseLineSoft,
+    borderRadius: 8,
+    borderWidth: 1,
+    padding: 10,
   },
   rowBody: {
-    color: MiraDesign.color.primaryDeep,
+    color: MiraDesign.color.showcaseBlueDeep,
     fontSize: 13,
     fontWeight: '900',
   },
@@ -1003,7 +1233,7 @@ const styles = StyleSheet.create({
   checkBox: {
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderColor: MiraDesign.color.line,
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 6,
     borderWidth: 1,
     height: 26,
@@ -1011,11 +1241,11 @@ const styles = StyleSheet.create({
     width: 26,
   },
   checkBoxSelected: {
-    backgroundColor: MiraDesign.color.primary,
-    borderColor: MiraDesign.color.primary,
+    backgroundColor: MiraDesign.color.showcaseBlue,
+    borderColor: MiraDesign.color.showcaseBlue,
   },
   checkBoxText: {
-    color: MiraDesign.color.muted,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 13,
     fontWeight: '900',
     lineHeight: 16,
@@ -1025,22 +1255,22 @@ const styles = StyleSheet.create({
   },
   smallButton: {
     alignItems: 'center',
-    backgroundColor: MiraDesign.color.primary,
+    backgroundColor: MiraDesign.color.showcaseBlue,
     borderRadius: 8,
     justifyContent: 'center',
     minHeight: 34,
-    minWidth: 84,
+    minWidth: 104,
     paddingHorizontal: 10,
   },
   smallButtonText: {
     color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '900',
-    textTransform: 'capitalize',
+    textAlign: 'center',
   },
   emptyState: {
     backgroundColor: '#FFFFFF',
-    borderColor: MiraDesign.color.line,
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 8,
     borderStyle: 'dashed',
     borderWidth: 1,
@@ -1048,12 +1278,12 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   emptyTitle: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 15,
     fontWeight: '900',
   },
   emptyBody: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 13,
     lineHeight: 19,
   },

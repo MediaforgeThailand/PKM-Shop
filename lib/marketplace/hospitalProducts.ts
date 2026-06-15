@@ -217,7 +217,7 @@ type TenantRow = TenantSummary;
 export const defaultTenantSlug = process.env.EXPO_PUBLIC_MIRA_TENANT_SLUG?.trim() || 'demo-hospital';
 
 const categoryLabels: Record<string, string> = {
-  checkup: 'Checkup',
+  checkup: 'ตรวจสุขภาพ',
   general: 'General',
   health_checkup: 'ตรวจสุขภาพ',
   imaging: 'เอกซเรย์/ภาพวินิจฉัย',

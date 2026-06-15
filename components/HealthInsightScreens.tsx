@@ -1,9 +1,11 @@
 import { Link } from 'expo-router';
 import type { ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import type { ImageSourcePropType } from 'react-native';
+import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { healthVisualImages } from '@/components/showcase/healthVisualAssets';
 import { MiraDesign } from '@/constants/Design';
 import { confirmLabResults } from '@/lib/health/labConfirm';
 import { loadHealthDashboardData, type HealthDashboardData, type LabReportWithResults } from '@/lib/health/v2HealthDashboard';
@@ -19,6 +21,31 @@ const tabs: Array<{ label: string; route: InsightRoute; screen: HealthInsightKin
   { label: 'Wearables', route: '/wearable-health', screen: 'wearable' },
   { label: 'Profile', route: '/user-profile', screen: 'overview' },
 ];
+
+const healthScreenVisuals: Record<
+  HealthInsightKind,
+  {
+    body: string;
+    image: ImageSourcePropType;
+    title: string;
+  }
+> = {
+  overview: {
+    body: 'ภาพรวมสุขภาพแบบ body map สำหรับคุยกับลูกค้าในจุดเดียว แล้วเชื่อมต่อ facts, lab และ wearable ที่ยืนยันแล้วด้านล่าง',
+    image: healthVisualImages.overview,
+    title: 'AI Body Overview',
+  },
+  results: {
+    body: 'หน้าผลตรวจสุขภาพที่เน้น score, marker สำคัญ และรายการค่าที่ต้องติดตามหลังนำเข้าผลแล็บ',
+    image: healthVisualImages.results,
+    title: 'Health Check Results',
+  },
+  wearable: {
+    body: 'หน้าสัญญาณ wearable สำหรับ recovery, sleep, strain และ trend รายสัปดาห์ที่ลูกค้าอ่านได้ทันที',
+    image: healthVisualImages.wearable,
+    title: 'Wearable Health',
+  },
+};
 
 const metricLabels: Record<WearableMetricRow['metric'], string> = {
   active_energy_kcal: 'Active kcal',
@@ -231,11 +258,55 @@ export function HealthInsightScreen({ screen }: { screen: HealthInsightKind }) {
           </View>
         ) : null}
 
+        <HealthVisualShowcase data={data} image={healthScreenVisuals[screen].image} screen={screen} />
+
         {screen === 'overview' ? <Overview data={data} latestMetrics={latestMetrics} latestReport={latestReport} /> : null}
         {screen === 'results' ? <Results isConfirming={isConfirmingLab} onConfirm={handleConfirmLabReport} reports={data.labReports} /> : null}
         {screen === 'wearable' ? <Wearables metrics={data.wearableMetrics} /> : null}
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+function HealthVisualShowcase({
+  data,
+  image,
+  screen,
+}: {
+  data: HealthDashboardData;
+  image: ImageSourcePropType;
+  screen: HealthInsightKind;
+}) {
+  const visual = healthScreenVisuals[screen];
+  const wearableDays = new Set(data.wearableMetrics.map((metric) => metric.day)).size;
+
+  return (
+    <View style={styles.visualShowcase}>
+      <View style={styles.devicePreview}>
+        <Image resizeMode="contain" source={image} style={styles.deviceImage} />
+      </View>
+
+      <View style={styles.visualCopyPanel}>
+        <Text style={styles.visualKicker}>ตัวอย่าง UI สุขภาพ</Text>
+        <Text style={styles.visualTitle}>{visual.title}</Text>
+        <Text style={styles.visualBody}>{visual.body}</Text>
+
+        <View style={styles.visualStatGrid}>
+          <VisualStat label="ผลแล็บ" value={`${data.labReports.length}`} />
+          <VisualStat label="Wearable days" value={`${wearableDays}`} />
+          <VisualStat label="Health facts" value={`${data.facts.length}`} />
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function VisualStat({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.visualStat}>
+      <Text style={styles.visualStatValue}>{value}</Text>
+      <Text style={styles.visualStatLabel}>{label}</Text>
+    </View>
   );
 }
 
@@ -667,6 +738,90 @@ const styles = StyleSheet.create({
   },
   sectionStack: {
     gap: 14,
+  },
+  visualShowcase: {
+    alignItems: 'stretch',
+    backgroundColor: MiraDesign.color.showcaseSurface,
+    borderColor: '#C6E0FA',
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 18,
+    overflow: 'hidden',
+    padding: 16,
+    width: '100%',
+  },
+  devicePreview: {
+    alignItems: 'center',
+    backgroundColor: MiraDesign.color.showcaseCanvas,
+    borderColor: '#D1E7FF',
+    borderRadius: 8,
+    borderWidth: 1,
+    flexBasis: 360,
+    flexGrow: 0,
+    flexShrink: 1,
+    height: 680,
+    justifyContent: 'center',
+    maxWidth: 420,
+    minWidth: 260,
+    overflow: 'hidden',
+    padding: 10,
+  },
+  deviceImage: {
+    height: 640,
+    maxWidth: 390,
+    width: '100%',
+  },
+  visualCopyPanel: {
+    flexBasis: 420,
+    flexGrow: 1,
+    justifyContent: 'center',
+    gap: 12,
+    minWidth: 260,
+  },
+  visualKicker: {
+    color: MiraDesign.color.showcaseBlue,
+    fontSize: 11,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+  },
+  visualTitle: {
+    color: MiraDesign.color.showcaseNavy,
+    fontSize: 30,
+    fontWeight: '900',
+    lineHeight: 36,
+  },
+  visualBody: {
+    color: MiraDesign.color.showcaseNavySoft,
+    fontSize: 14,
+    lineHeight: 22,
+  },
+  visualStatGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  visualStat: {
+    backgroundColor: MiraDesign.color.showcaseBlueSoft,
+    borderColor: '#BBD8F8',
+    borderRadius: 8,
+    borderWidth: 1,
+    flexGrow: 1,
+    minWidth: 112,
+    padding: 12,
+  },
+  visualStatValue: {
+    color: MiraDesign.color.showcaseBlueDeep,
+    fontSize: 23,
+    fontWeight: '900',
+    lineHeight: 27,
+  },
+  visualStatLabel: {
+    color: MiraDesign.color.showcaseNavySoft,
+    fontSize: 11,
+    fontWeight: '900',
+    marginTop: 3,
   },
   metricGrid: {
     flexDirection: 'row',

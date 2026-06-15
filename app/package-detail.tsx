@@ -59,7 +59,7 @@ export default function PackageDetailScreen() {
   if (isLoading) {
     return (
       <Screen>
-        <BrandHeader eyebrow="Package detail" title="Loading product" compact />
+        <BrandHeader eyebrow="รายละเอียดแพ็กเกจ" title="กำลังโหลดแพ็กเกจ" compact />
       </Screen>
     );
   }
@@ -67,9 +67,9 @@ export default function PackageDetailScreen() {
   if (!product) {
     return (
       <Screen>
-        <BrandHeader eyebrow="Package detail" title="Product unavailable" subtitle="The product is not active in the tenant catalog." compact />
+        <BrandHeader eyebrow="รายละเอียดแพ็กเกจ" title="ยังไม่พบแพ็กเกจ" subtitle="แพ็กเกจนี้ยังไม่เปิดใช้งานในแค็ตตาล็อกของ tenant" compact />
         <Link href="/" asChild>
-          <ActionButton label="Back to overview" variant="secondary" />
+          <ActionButton label="กลับหน้าโมดูล" variant="secondary" />
         </Link>
       </Screen>
     );
@@ -80,9 +80,9 @@ export default function PackageDetailScreen() {
   return (
     <Screen>
       <BrandHeader
-        eyebrow="Package detail"
+        eyebrow="รายละเอียดแพ็กเกจ"
         title={product.title}
-        subtitle={`${product.hospitalName} - ${product.hospitalAddress ?? product.location ?? 'Confirm with hospital'}`}
+        subtitle={`${product.hospitalName} - ${product.hospitalAddress ?? product.location ?? 'ยืนยันกับโรงพยาบาล'}`}
         compact
       />
 
@@ -97,15 +97,15 @@ export default function PackageDetailScreen() {
       </Card>
 
       <Card>
-        <Text style={styles.cardTitle}>Catalog details</Text>
+        <Text style={styles.cardTitle}>รายละเอียดในแค็ตตาล็อก</Text>
         <View style={styles.detailGrid}>
-          <Detail label="Catalog key" value={product.catalogKey} />
-          <Detail label="Booking" value={product.requiresAppointment ? 'Appointment' : 'Walk-in'} />
-          <Detail label="Branch" value={product.hospitalAddress ?? product.location ?? 'Confirm with hospital'} />
+          <Detail label="รหัสแค็ตตาล็อก" value={product.catalogKey} />
+          <Detail label="การจอง" value={product.requiresAppointment ? 'ต้องนัดหมาย' : 'Walk-in ได้'} />
+          <Detail label="สาขา" value={product.hospitalAddress ?? product.location ?? 'ยืนยันกับโรงพยาบาล'} />
         </View>
       </Card>
 
-      <SectionHeader title="Includes" meta={`${includes.length} items`} />
+      <SectionHeader title="รายการที่รวมในแพ็กเกจ" meta={`${includes.length} รายการ`} />
       {includes.map((item, index) => (
         <View key={`${item}-${index}`} style={styles.includeRow}>
           <Text style={styles.includeNumber}>{index + 1}</Text>
@@ -114,10 +114,10 @@ export default function PackageDetailScreen() {
       ))}
 
       <Link href="/user-profile" asChild>
-        <ActionButton label="View my orders" />
+        <ActionButton label="ดูคำสั่งซื้อของฉัน" />
       </Link>
       <Link href="/" asChild>
-        <ActionButton label="Back to overview" variant="secondary" />
+        <ActionButton label="กลับหน้าโมดูล" variant="secondary" />
       </Link>
     </Screen>
   );
@@ -136,7 +136,7 @@ function Detail({ label, value }: { label: string; value: string }) {
 
 const styles = StyleSheet.create({
   productImage: {
-    backgroundColor: MiraDesign.color.surfaceSoft,
+    backgroundColor: MiraDesign.color.showcaseBlueSoft,
     borderRadius: MiraDesign.radius.md,
     height: 190,
     width: '100%',
@@ -147,17 +147,17 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   price: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 28,
     fontWeight: '900',
   },
   body: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 14,
     lineHeight: 21,
   },
   cardTitle: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 18,
     fontWeight: '900',
   },
@@ -167,8 +167,8 @@ const styles = StyleSheet.create({
     gap: MiraDesign.space.sm,
   },
   detailCell: {
-    backgroundColor: MiraDesign.color.surfaceStrong,
-    borderColor: MiraDesign.color.line,
+    backgroundColor: MiraDesign.color.showcaseSurface,
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: MiraDesign.radius.md,
     borderWidth: 1,
     flexBasis: '31%',
@@ -177,20 +177,20 @@ const styles = StyleSheet.create({
     padding: MiraDesign.space.md,
   },
   detailLabel: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 11,
     fontWeight: '900',
     textTransform: 'uppercase',
   },
   detailValue: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 14,
     fontWeight: '900',
     lineHeight: 19,
   },
   includeRow: {
     alignItems: 'center',
-    backgroundColor: MiraDesign.color.surface,
+    backgroundColor: MiraDesign.color.showcaseSurface,
     borderColor: '#E6F1FA',
     borderRadius: MiraDesign.radius.md,
     borderWidth: 1,
@@ -200,7 +200,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: MiraDesign.space.lg,
   },
   includeNumber: {
-    backgroundColor: MiraDesign.color.primary,
+    backgroundColor: MiraDesign.color.showcaseBlue,
     borderRadius: MiraDesign.radius.pill,
     color: '#FFFFFF',
     fontSize: 13,
@@ -211,7 +211,7 @@ const styles = StyleSheet.create({
     width: 30,
   },
   includeText: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     flex: 1,
     fontSize: 14,
     fontWeight: '800',

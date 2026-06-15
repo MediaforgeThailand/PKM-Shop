@@ -80,12 +80,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FBFF',
   },
   noticeTitle: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 16,
     fontWeight: '900',
   },
   noticeBody: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 13,
     lineHeight: 19,
   },

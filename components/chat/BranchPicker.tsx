@@ -75,8 +75,8 @@ const cardShadow = {
 const styles = StyleSheet.create({
   panel: {
     ...cardShadow,
-    backgroundColor: MiraDesign.color.surface,
-    borderColor: MiraDesign.color.line,
+    backgroundColor: MiraDesign.color.showcaseSurface,
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 16,
     borderWidth: 1,
     gap: 12,
@@ -86,30 +86,30 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   title: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 16,
     fontWeight: '900',
     lineHeight: 22,
   },
   productName: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 12,
     fontWeight: '800',
     lineHeight: 17,
   },
   list: {
-    borderColor: MiraDesign.color.line,
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 12,
     borderWidth: 1,
     overflow: 'hidden',
   },
   footer: {
-    backgroundColor: MiraDesign.color.surface,
+    backgroundColor: MiraDesign.color.showcaseSurface,
     paddingTop: 2,
   },
   confirmButton: {
     alignItems: 'center',
-    backgroundColor: MiraDesign.color.primary,
+    backgroundColor: MiraDesign.color.showcaseBlue,
     borderRadius: 12,
     minHeight: 44,
     justifyContent: 'center',

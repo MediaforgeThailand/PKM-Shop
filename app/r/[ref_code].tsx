@@ -1,9 +1,14 @@
 import { Link, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
+import { ActionButton, BrandHeader, Card, Pill, Screen } from '@/components/MiraUI';
 import { MiraDesign } from '@/constants/Design';
 import { normalizeRefCode, storeReferralCode } from '@/lib/referrals/attribution';
+
+export function generateStaticParams(): { ref_code: string }[] {
+  return [{ ref_code: 'DRNOK2' }];
+}
 
 export default function ReferralLandingScreen() {
   const params = useLocalSearchParams<{ ref_code?: string }>();
@@ -16,71 +21,54 @@ export default function ReferralLandingScreen() {
   }, [refCode]);
 
   return (
-    <View style={styles.screen}>
-      <View style={styles.panel}>
-        <Text style={styles.eyebrow}>Referral</Text>
-        <Text style={styles.title}>{storedCode ? 'Referral saved' : 'Referral code unavailable'}</Text>
+    <Screen>
+      <BrandHeader
+        compact
+        eyebrow="Referral entry"
+        title={storedCode ? 'บันทึกลิงก์แนะนำแล้ว' : 'ลิงก์แนะนำไม่ถูกต้อง'}
+        subtitle={storedCode ? 'ลูกค้าสามารถไปต่อเพื่อดูแพ็กเกจ โดยระบบจะผูก attribution ตามช่วงเวลาที่กำหนด' : 'เปิดลิงก์ referral ที่ถูกต้องก่อนพาลูกค้าเข้าสู่ flow ซื้อสินค้า'}
+      />
+
+      <Card style={styles.panel}>
+        <View style={styles.statusRow}>
+          <Pill label={storedCode ? 'พร้อมใช้งาน' : 'ต้องตรวจลิงก์'} tone={storedCode ? 'mint' : 'amber'} />
+          {storedCode ? <Text style={styles.refCode}>{storedCode}</Text> : null}
+        </View>
         <Text style={styles.body}>
           {storedCode
-            ? `Code ${storedCode} will be attached to eligible purchases during the attribution window.`
-            : 'Open a valid referral link to attach attribution before continuing.'}
+            ? `Referral code ${storedCode} จะถูกแนบกับคำสั่งซื้อที่เข้าเงื่อนไขใน attribution window`
+            : 'ระบบยังไม่พบ referral code ที่ใช้งานได้จาก URL นี้'}
         </Text>
         <Link href="/" asChild>
-          <Pressable style={styles.button}>
-            <Text style={styles.buttonText}>Open Overview</Text>
-          </Pressable>
+          <ActionButton label="ไปหน้าเลือกโมดูล" />
         </Link>
-      </View>
-    </View>
+      </Card>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: {
-    alignItems: 'center',
-    backgroundColor: '#F5F8F7',
-    flex: 1,
-    justifyContent: 'center',
-    padding: 20,
-  },
   panel: {
-    backgroundColor: '#FFFFFF',
-    borderColor: MiraDesign.color.line,
-    borderRadius: 8,
-    borderWidth: 1,
+    alignSelf: 'center',
     gap: 12,
     maxWidth: 520,
-    padding: 20,
     width: '100%',
   },
-  eyebrow: {
-    color: MiraDesign.color.primaryDeep,
-    fontSize: 12,
-    fontWeight: '900',
-    textTransform: 'uppercase',
+  statusRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: MiraDesign.space.md,
+    justifyContent: 'space-between',
   },
-  title: {
-    color: MiraDesign.color.ink,
-    fontSize: 28,
+  refCode: {
+    color: MiraDesign.color.showcaseBlueDeep,
+    fontSize: 22,
     fontWeight: '900',
   },
   body: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 14,
     lineHeight: 21,
-  },
-  button: {
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    backgroundColor: MiraDesign.color.primary,
-    borderRadius: 8,
-    justifyContent: 'center',
-    minHeight: 44,
-    paddingHorizontal: 16,
-  },
-  buttonText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '900',
   },
 });

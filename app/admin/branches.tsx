@@ -174,8 +174,8 @@ export default function AdminBranchesScreen() {
       <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
         <View style={[styles.topBar, !isWide ? styles.topBarStack : null]}>
           <View style={styles.titleGroup}>
-            <Text style={styles.eyebrow}>MiraCare v3 Phase 1</Text>
-            <Text style={styles.title}>Branches</Text>
+            <Text style={styles.eyebrow}>หลังบ้านโรงพยาบาล</Text>
+            <Text style={styles.title}>จัดการสาขา</Text>
             <Text style={styles.subtitle}>
               Tenant: {tenantContext?.display_name ?? defaultTenantSlug}
               {tenantContext ? ` (${tenantContext.role})` : ''}
@@ -183,11 +183,11 @@ export default function AdminBranchesScreen() {
           </View>
           <View style={styles.topActions}>
             <Pressable disabled={isLoading} onPress={refreshBranches} style={[styles.secondaryButton, isLoading ? styles.disabled : null]}>
-              <Text style={styles.secondaryButtonText}>{isLoading ? 'Refreshing' : 'Refresh'}</Text>
+              <Text style={styles.secondaryButtonText}>{isLoading ? 'กำลังรีเฟรช' : 'รีเฟรช'}</Text>
             </Pressable>
             <Link href="/admin/catalog" asChild>
               <Pressable style={styles.primaryButton}>
-                <Text style={styles.primaryButtonText}>Catalog</Text>
+                <Text style={styles.primaryButtonText}>แค็ตตาล็อก</Text>
               </Pressable>
             </Link>
           </View>
@@ -202,8 +202,8 @@ export default function AdminBranchesScreen() {
 
         {tenantContext && !canEditBranches ? (
           <View style={styles.notice}>
-            <Text style={styles.noticeTitle}>Read-only branch access</Text>
-            <Text style={styles.noticeBody}>Only tenant_admin or superadmin roles can create or update branches.</Text>
+              <Text style={styles.noticeTitle}>สิทธิ์อ่านอย่างเดียว</Text>
+              <Text style={styles.noticeBody}>เฉพาะ tenant_admin หรือ superadmin เท่านั้นที่สร้างหรือแก้ไขสาขาได้</Text>
           </View>
         ) : null}
 
@@ -214,60 +214,60 @@ export default function AdminBranchesScreen() {
           <View style={styles.formPane}>
             <View style={styles.panelHeader}>
               <View>
-                <Text style={styles.panelTitle}>{editingBranch ? 'Edit Branch' : 'New Branch'}</Text>
-                <Text style={styles.panelMeta}>{editingBranch ? editingBranch.id.slice(0, 8) : 'Created for this tenant'}</Text>
+                <Text style={styles.panelTitle}>{editingBranch ? 'แก้ไขสาขา' : 'เพิ่มสาขา'}</Text>
+                <Text style={styles.panelMeta}>{editingBranch ? editingBranch.id.slice(0, 8) : 'ผูกกับ tenant นี้'}</Text>
               </View>
               {editingBranch ? (
                 <Pressable onPress={resetForm} style={styles.textButton}>
-                  <Text style={styles.textButtonLabel}>New</Text>
+                  <Text style={styles.textButtonLabel}>รายการใหม่</Text>
                 </Pressable>
               ) : null}
             </View>
 
-            <Field label="Name" onChangeText={(value) => updateDraft('name', value)} value={draft.name} />
-            <Field label="Address" multiline onChangeText={(value) => updateDraft('address', value)} value={draft.address ?? ''} />
+            <Field label="ชื่อสาขา" onChangeText={(value) => updateDraft('name', value)} value={draft.name} />
+            <Field label="ที่อยู่" multiline onChangeText={(value) => updateDraft('address', value)} value={draft.address ?? ''} />
             <View style={styles.twoColumn}>
-              <Field label="District" onChangeText={(value) => updateDraft('district', value)} value={draft.district ?? ''} />
-              <Field label="Phone" onChangeText={(value) => updateDraft('phone', value)} value={draft.phone ?? ''} />
+              <Field label="เขต/อำเภอ" onChangeText={(value) => updateDraft('district', value)} value={draft.district ?? ''} />
+              <Field label="เบอร์โทร" onChangeText={(value) => updateDraft('phone', value)} value={draft.phone ?? ''} />
             </View>
-            <Field label="Map URL" onChangeText={(value) => updateDraft('mapUrl', value)} value={draft.mapUrl ?? ''} />
-            <Field label="Image URL" onChangeText={(value) => updateDraft('imageUrl', value)} value={draft.imageUrl ?? ''} />
+            <Field label="ลิงก์แผนที่" onChangeText={(value) => updateDraft('mapUrl', value)} value={draft.mapUrl ?? ''} />
+            <Field label="ลิงก์รูปภาพ" onChangeText={(value) => updateDraft('imageUrl', value)} value={draft.imageUrl ?? ''} />
             <View style={styles.twoColumn}>
-              <Field label="Sort" onChangeText={(value) => updateDraft('sort', value)} value={draft.sort ?? ''} />
+              <Field label="ลำดับ" onChangeText={(value) => updateDraft('sort', value)} value={draft.sort ?? ''} />
               <View style={styles.controlGroup}>
-                <Text style={styles.fieldLabel}>Status</Text>
+                <Text style={styles.fieldLabel}>สถานะ</Text>
                 <View style={styles.segmentRow}>
                   <Pressable onPress={() => updateDraft('active', true)} style={[styles.segment, draft.active !== false ? styles.segmentActive : null]}>
-                    <Text style={[styles.segmentText, draft.active !== false ? styles.segmentTextActive : null]}>Active</Text>
+                    <Text style={[styles.segmentText, draft.active !== false ? styles.segmentTextActive : null]}>เปิดใช้งาน</Text>
                   </Pressable>
                   <Pressable onPress={() => updateDraft('active', false)} style={[styles.segment, draft.active === false ? styles.segmentActive : null]}>
-                    <Text style={[styles.segmentText, draft.active === false ? styles.segmentTextActive : null]}>Inactive</Text>
+                    <Text style={[styles.segmentText, draft.active === false ? styles.segmentTextActive : null]}>ปิดใช้งาน</Text>
                   </Pressable>
                 </View>
               </View>
             </View>
 
             <Pressable disabled={!canSave || isSaving} onPress={saveDraft} style={[styles.saveButton, !canSave || isSaving ? styles.disabled : null]}>
-              <Text style={styles.saveButtonText}>{isSaving ? 'Saving' : editingBranch ? 'Save Changes' : 'Create Branch'}</Text>
+              <Text style={styles.saveButtonText}>{isSaving ? 'กำลังบันทึก' : editingBranch ? 'บันทึกสาขา' : 'สร้างสาขา'}</Text>
             </Pressable>
           </View>
 
           <View style={styles.listPane}>
             <View style={styles.panelHeader}>
               <View>
-                <Text style={styles.panelTitle}>Branch List</Text>
-                <Text style={styles.panelMeta}>{isLoading ? 'Loading' : `${summary.total} total`}</Text>
+                <Text style={styles.panelTitle}>รายชื่อสาขา</Text>
+                <Text style={styles.panelMeta}>{isLoading ? 'กำลังโหลด' : `ทั้งหมด ${summary.total} สาขา`}</Text>
               </View>
               <View style={styles.summaryRow}>
-                <Metric label="Active" value={`${summary.active}`} />
-                <Metric label="Inactive" value={`${summary.inactive}`} />
+                <Metric label="เปิดใช้งาน" value={`${summary.active}`} />
+                <Metric label="ปิดใช้งาน" value={`${summary.inactive}`} />
               </View>
             </View>
 
             {branches.length === 0 ? (
               <View style={styles.emptyState}>
-                <Text style={styles.emptyTitle}>No branches found</Text>
-                <Text style={styles.emptyBody}>Create the default branch before assigning products.</Text>
+                <Text style={styles.emptyTitle}>ยังไม่มีสาขา</Text>
+                <Text style={styles.emptyBody}>สร้างสาขาหลักก่อนผูกสินค้าเข้ากับสาขา</Text>
               </View>
             ) : (
               branches.map((branch) => (
@@ -275,20 +275,20 @@ export default function AdminBranchesScreen() {
                   <View style={styles.branchHead}>
                     <View style={styles.branchTitleGroup}>
                       <Text style={styles.branchTitle}>{branch.name}</Text>
-                      <Text style={styles.branchMeta}>{[branch.address, branch.district].filter(Boolean).join(' · ') || 'No address'}</Text>
+                      <Text style={styles.branchMeta}>{[branch.address, branch.district].filter(Boolean).join(' · ') || 'ยังไม่มีที่อยู่'}</Text>
                     </View>
                     <Text style={[styles.statusPill, branch.active ? styles.statusPillActive : styles.statusPillInactive]}>
-                      {branch.active ? 'active' : 'inactive'}
+                      {branch.active ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}
                     </Text>
                   </View>
                   <View style={styles.branchMetaGrid}>
-                    <Meta label="Phone" value={branch.phone ?? '-'} />
-                    <Meta label="Sort" value={`${branch.sort}`} />
-                    <Meta label="Map" value={branch.mapUrl ?? '-'} />
+                    <Meta label="เบอร์โทร" value={branch.phone ?? '-'} />
+                    <Meta label="ลำดับ" value={`${branch.sort}`} />
+                    <Meta label="แผนที่" value={branch.mapUrl ?? '-'} />
                   </View>
                   <View style={styles.rowActions}>
                     <Pressable onPress={() => editBranch(branch)} style={styles.textButton}>
-                      <Text style={styles.textButtonLabel}>Edit</Text>
+                      <Text style={styles.textButtonLabel}>แก้ไข</Text>
                     </Pressable>
                     <Pressable
                       disabled={!canEditBranches || Boolean(busyBranchId)}
@@ -296,7 +296,7 @@ export default function AdminBranchesScreen() {
                       style={[branch.active ? styles.dangerButton : styles.restoreButton, !canEditBranches || busyBranchId ? styles.disabled : null]}
                     >
                       <Text style={branch.active ? styles.dangerButtonText : styles.restoreButtonText}>
-                        {busyBranchId === branch.id ? 'Saving' : branch.active ? 'Deactivate' : 'Activate'}
+                        {busyBranchId === branch.id ? 'กำลังบันทึก' : branch.active ? 'ปิดใช้งาน' : 'เปิดใช้งาน'}
                       </Text>
                     </Pressable>
                   </View>
@@ -340,7 +340,7 @@ function Field({
       <TextInput
         multiline={multiline}
         onChangeText={onChangeText}
-        placeholderTextColor={MiraDesign.color.muted}
+        placeholderTextColor={MiraDesign.color.showcaseNavySoft}
         style={[styles.input, multiline ? styles.multilineInput : null]}
         textAlignVertical={multiline ? 'top' : 'center'}
         value={value}
@@ -393,19 +393,19 @@ const styles = StyleSheet.create({
     gap: 7,
   },
   eyebrow: {
-    color: MiraDesign.color.primaryDeep,
+    color: MiraDesign.color.showcaseBlueDeep,
     fontSize: 13,
     fontWeight: '900',
     textTransform: 'uppercase',
   },
   title: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 30,
     fontWeight: '900',
     lineHeight: 36,
   },
   subtitle: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 14,
     lineHeight: 21,
   },
@@ -416,7 +416,7 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     alignItems: 'center',
-    backgroundColor: MiraDesign.color.primary,
+    backgroundColor: MiraDesign.color.showcaseBlue,
     borderRadius: 8,
     justifyContent: 'center',
     minHeight: 44,
@@ -429,8 +429,8 @@ const styles = StyleSheet.create({
   },
   secondaryButton: {
     alignItems: 'center',
-    backgroundColor: MiraDesign.color.surface,
-    borderColor: MiraDesign.color.line,
+    backgroundColor: MiraDesign.color.showcaseSurface,
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 8,
     borderWidth: 1,
     justifyContent: 'center',
@@ -438,7 +438,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   secondaryButtonText: {
-    color: MiraDesign.color.primaryDeep,
+    color: MiraDesign.color.showcaseBlueDeep,
     fontSize: 13,
     fontWeight: '900',
   },
@@ -483,8 +483,8 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
   },
   formPane: {
-    backgroundColor: MiraDesign.color.surface,
-    borderColor: MiraDesign.color.line,
+    backgroundColor: MiraDesign.color.showcaseSurface,
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 8,
     borderWidth: 1,
     flex: 0.8,
@@ -494,8 +494,8 @@ const styles = StyleSheet.create({
     ...softShadow,
   },
   listPane: {
-    backgroundColor: MiraDesign.color.surface,
-    borderColor: MiraDesign.color.line,
+    backgroundColor: MiraDesign.color.showcaseSurface,
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 8,
     borderWidth: 1,
     flex: 1.2,
@@ -510,24 +510,24 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   panelTitle: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 18,
     fontWeight: '900',
   },
   panelMeta: {
-    color: MiraDesign.color.primary,
+    color: MiraDesign.color.showcaseBlue,
     fontSize: 12,
     fontWeight: '900',
     marginTop: 3,
   },
   textButton: {
-    backgroundColor: MiraDesign.color.surfaceSoft,
+    backgroundColor: MiraDesign.color.showcaseBlueSoft,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 9,
   },
   textButtonLabel: {
-    color: MiraDesign.color.primaryDeep,
+    color: MiraDesign.color.showcaseBlueDeep,
     fontSize: 12,
     fontWeight: '900',
   },
@@ -536,17 +536,17 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   fieldLabel: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 12,
     fontWeight: '900',
     textTransform: 'uppercase',
   },
   input: {
     backgroundColor: '#F7FBFA',
-    borderColor: MiraDesign.color.line,
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 8,
     borderWidth: 1,
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 14,
     minHeight: 46,
     paddingHorizontal: 12,
@@ -579,21 +579,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   segmentActive: {
-    backgroundColor: MiraDesign.color.surface,
-    borderColor: MiraDesign.color.line,
+    backgroundColor: MiraDesign.color.showcaseSurface,
+    borderColor: MiraDesign.color.showcaseLine,
     borderWidth: 1,
   },
   segmentText: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 12,
     fontWeight: '900',
   },
   segmentTextActive: {
-    color: MiraDesign.color.primaryDeep,
+    color: MiraDesign.color.showcaseBlueDeep,
   },
   saveButton: {
     alignItems: 'center',
-    backgroundColor: MiraDesign.color.primary,
+    backgroundColor: MiraDesign.color.showcaseBlue,
     borderRadius: 8,
     justifyContent: 'center',
     minHeight: 46,
@@ -612,7 +612,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   successText: {
-    color: MiraDesign.color.primaryDeep,
+    color: MiraDesign.color.showcaseBlueDeep,
     fontSize: 13,
     fontWeight: '800',
   },
@@ -624,52 +624,52 @@ const styles = StyleSheet.create({
   },
   metric: {
     backgroundColor: '#F7FBFA',
-    borderColor: MiraDesign.color.line,
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 8,
     borderWidth: 1,
     minWidth: 82,
     padding: 10,
   },
   metricLabel: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 10,
     fontWeight: '900',
     textTransform: 'uppercase',
   },
   metricValue: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 17,
     fontWeight: '900',
     marginTop: 4,
   },
   emptyState: {
     backgroundColor: '#F7FBFA',
-    borderColor: MiraDesign.color.line,
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 8,
     borderWidth: 1,
     gap: 4,
     padding: 16,
   },
   emptyTitle: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 15,
     fontWeight: '900',
   },
   emptyBody: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 13,
     lineHeight: 19,
   },
   branchRow: {
     backgroundColor: '#FFFFFF',
-    borderColor: MiraDesign.color.line,
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 8,
     borderWidth: 1,
     gap: 12,
     padding: 14,
   },
   branchRowSelected: {
-    borderColor: MiraDesign.color.primary,
+    borderColor: MiraDesign.color.showcaseBlue,
   },
   branchHead: {
     alignItems: 'flex-start',
@@ -682,13 +682,13 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   branchTitle: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 16,
     fontWeight: '900',
     lineHeight: 21,
   },
   branchMeta: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 12,
     lineHeight: 17,
   },
@@ -703,7 +703,7 @@ const styles = StyleSheet.create({
   },
   statusPillActive: {
     backgroundColor: '#E7F4ED',
-    color: MiraDesign.color.primaryDeep,
+    color: MiraDesign.color.showcaseBlueDeep,
   },
   statusPillInactive: {
     backgroundColor: '#FFE8E8',
@@ -724,13 +724,13 @@ const styles = StyleSheet.create({
     padding: 10,
   },
   metaLabel: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 11,
     fontWeight: '900',
     textTransform: 'uppercase',
   },
   metaValue: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 13,
     fontWeight: '900',
     marginTop: 4,
@@ -759,7 +759,7 @@ const styles = StyleSheet.create({
   },
   restoreButton: {
     alignItems: 'center',
-    backgroundColor: MiraDesign.color.primary,
+    backgroundColor: MiraDesign.color.showcaseBlue,
     borderRadius: 8,
     justifyContent: 'center',
     minHeight: 38,

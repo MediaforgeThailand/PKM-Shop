@@ -22,7 +22,7 @@ const logo = require('@/assets/images/mira-care-logo.png');
 
 const statusTone: Record<ShowcaseStatus, { backgroundColor: string; color: string; label: string }> = {
   concept: { backgroundColor: '#EAF0FF', color: '#3155A5', label: 'CONCEPT' },
-  live: { backgroundColor: '#E6F7F0', color: '#087B5D', label: 'LIVE' },
+  live: { backgroundColor: '#E7F8F2', color: '#087B5D', label: 'LIVE' },
   mockup: { backgroundColor: '#FFF3CF', color: '#7A5A05', label: 'MOCKUP' },
   planned: { backgroundColor: '#EDF2F7', color: '#587177', label: 'PLANNED' },
 };
@@ -164,7 +164,7 @@ export function MiniLabel({ label, value }: { label: string; value: string }) {
 
 const styles = StyleSheet.create({
   safeArea: {
-    backgroundColor: '#EEF6FF',
+    backgroundColor: MiraDesign.color.showcaseCanvas,
     flex: 1,
   },
   container: {
@@ -193,13 +193,13 @@ const styles = StyleSheet.create({
     width: 152,
   },
   eyebrow: {
-    color: MiraDesign.color.blue,
+    color: MiraDesign.color.showcaseBlue,
     fontSize: 12,
     fontWeight: '900',
     textTransform: 'uppercase',
   },
   title: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 38,
     fontWeight: '900',
     lineHeight: 44,
@@ -209,7 +209,7 @@ const styles = StyleSheet.create({
     lineHeight: 36,
   },
   subtitle: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 15,
     lineHeight: 22,
     maxWidth: 760,
@@ -221,8 +221,8 @@ const styles = StyleSheet.create({
     gap: MiraDesign.space.sm,
   },
   panel: {
-    backgroundColor: MiraDesign.color.surface,
-    borderColor: '#D8E9F8',
+    backgroundColor: MiraDesign.color.showcaseSurface,
+    borderColor: '#C6E0FA',
     borderRadius: MiraDesign.radius.sm,
     borderWidth: 1,
     gap: MiraDesign.space.md,
@@ -236,18 +236,18 @@ const styles = StyleSheet.create({
     minWidth: 150,
   },
   metricValue: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 28,
     fontWeight: '900',
     lineHeight: 32,
   },
   metricLabel: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 13,
     fontWeight: '900',
   },
   metricDetail: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 12,
     lineHeight: 17,
   },
@@ -260,13 +260,13 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
   authChip: {
-    backgroundColor: MiraDesign.color.surface,
-    borderColor: '#BBD5EF',
+    backgroundColor: MiraDesign.color.showcaseSurface,
+    borderColor: '#BBD8F8',
     borderRadius: MiraDesign.radius.pill,
     minHeight: 28,
   },
   authText: {
-    color: MiraDesign.color.blue,
+    color: MiraDesign.color.showcaseBlueDeep,
     fontSize: 11,
     fontWeight: '900',
   },
@@ -279,7 +279,7 @@ const styles = StyleSheet.create({
   },
   linkButton: {
     alignItems: 'center',
-    backgroundColor: MiraDesign.color.blue,
+    backgroundColor: MiraDesign.color.showcaseBlue,
     borderRadius: MiraDesign.radius.sm,
     minHeight: 42,
     justifyContent: 'center',
@@ -291,8 +291,8 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
   miniLabel: {
-    backgroundColor: '#F5FAFF',
-    borderColor: '#D8E9F8',
+    backgroundColor: MiraDesign.color.showcaseBlueSoft,
+    borderColor: '#BBD8F8',
     borderRadius: MiraDesign.radius.sm,
     borderWidth: 1,
     flexGrow: 1,
@@ -301,13 +301,13 @@ const styles = StyleSheet.create({
     padding: MiraDesign.space.md,
   },
   miniLabelText: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 11,
     fontWeight: '900',
     textTransform: 'uppercase',
   },
   miniLabelValue: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 14,
     fontWeight: '900',
   },

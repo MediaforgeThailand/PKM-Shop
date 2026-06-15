@@ -28,15 +28,15 @@ export default function AdminDashboardScreen() {
       <ShowcaseScreen>
         <ShowcaseHeader
           actions={<LinkButton href={{ pathname: '/tour/[module]', params: { module: 'admin' } }} label="กลับทัวร์" />}
-          eyebrow="ADMIN PANEL"
+          eyebrow="หลังบ้านโรงพยาบาล"
           subtitle="ภาพรวมสำหรับทีมบริหาร ดูยอด ออเดอร์ และแพ็กเกจที่ขายดีจากข้อมูลตัวอย่าง"
           title="ภาพรวมร้าน"
         />
 
         <View style={styles.metrics}>
-          <MetricTile label="ออเดอร์วันนี้" value={`${showcaseDemoAdminOrders.length}`} detail="จาก chat/referral" />
-          <MetricTile label="ยอดขายเดือนนี้" value={`${monthSales.toLocaleString('th-TH')}฿`} detail="PromptPay confirmed" />
-          <MetricTile label="ปิดการขายจากแชท" value="28%" detail="mock conversion" />
+          <MetricTile label="ออเดอร์วันนี้" value={`${showcaseDemoAdminOrders.length}`} detail="จากแชท/ผู้แนะนำ" />
+          <MetricTile label="ยอดขายเดือนนี้" value={`${monthSales.toLocaleString('th-TH')}฿`} detail="ยืนยัน PromptPay แล้ว" />
+          <MetricTile label="ปิดการขายจากแชท" value="28%" detail="conversion ตัวอย่าง" />
           <MetricTile label="ขายดี" value={topProduct.title} detail={`${topProduct.priceAmount.toLocaleString('th-TH')} บาท`} />
         </View>
 
@@ -44,7 +44,7 @@ export default function AdminDashboardScreen() {
           <Panel style={styles.chartPanel}>
             <View style={styles.panelHead}>
               <Text style={styles.panelTitle}>ออเดอร์ 7 วัน</Text>
-              <Text style={styles.panelMeta}>fixture</Text>
+              <Text style={styles.panelMeta}>ข้อมูลตัวอย่าง</Text>
             </View>
             <View style={styles.chart}>
               {weekBars.map((item) => (
@@ -122,12 +122,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   panelTitle: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 18,
     fontWeight: '900',
   },
   panelMeta: {
-    color: MiraDesign.color.blue,
+    color: MiraDesign.color.showcaseBlue,
     fontSize: 12,
     fontWeight: '900',
   },
@@ -144,7 +144,7 @@ const styles = StyleSheet.create({
     gap: 7,
   },
   barTrack: {
-    backgroundColor: MiraDesign.color.blueSoft,
+    backgroundColor: MiraDesign.color.showcaseBlueSoft,
     borderRadius: MiraDesign.radius.sm,
     height: 210,
     justifyContent: 'flex-end',
@@ -152,24 +152,24 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   barFill: {
-    backgroundColor: MiraDesign.color.blue,
+    backgroundColor: MiraDesign.color.showcaseBlue,
     borderTopLeftRadius: MiraDesign.radius.sm,
     borderTopRightRadius: MiraDesign.radius.sm,
     minHeight: 28,
     width: '100%',
   },
   barValue: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 12,
     fontWeight: '900',
   },
   barLabel: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 12,
     fontWeight: '900',
   },
   linkText: {
-    color: MiraDesign.color.blue,
+    color: MiraDesign.color.showcaseBlue,
     fontSize: 13,
     fontWeight: '900',
   },
@@ -192,12 +192,12 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   orderName: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 14,
     fontWeight: '900',
   },
   orderMeta: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 12,
     fontWeight: '800',
   },
@@ -206,12 +206,12 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   amountText: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 14,
     fontWeight: '900',
   },
   statusText: {
-    color: MiraDesign.color.blue,
+    color: MiraDesign.color.showcaseBlue,
     fontSize: 11,
     fontWeight: '900',
   },

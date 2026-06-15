@@ -50,7 +50,23 @@ const statusFilters = ['all', 'active', 'archived'] as const;
 
 type StatusFilter = (typeof statusFilters)[number];
 
-export function CatalogCrud({ title = 'Catalog CRUD' }: { title?: string }) {
+function statusFilterLabel(status: StatusFilter) {
+  if (status === 'active') {
+    return 'เปิดขาย';
+  }
+
+  if (status === 'archived') {
+    return 'เก็บถาวร';
+  }
+
+  return 'ทั้งหมด';
+}
+
+function productStatusLabel(status: HospitalProductStatus) {
+  return status === 'active' ? 'เปิดขาย' : 'เก็บถาวร';
+}
+
+export function CatalogCrud({ title = 'จัดการแค็ตตาล็อก' }: { title?: string }) {
   const auth = useAuthSession();
   const { width } = useWindowDimensions();
   const [draft, setDraft] = useState<HospitalProductDraft>(emptyDraft);
@@ -478,7 +494,7 @@ export function CatalogCrud({ title = 'Catalog CRUD' }: { title?: string }) {
       <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
         <View style={[styles.topBar, !isWide ? styles.topBarStack : null]}>
           <View style={styles.titleGroup}>
-            <Text style={styles.eyebrow}>MiraCare v2 Phase 1</Text>
+            <Text style={styles.eyebrow}>หลังบ้านโรงพยาบาล</Text>
             <Text style={styles.title}>{title}</Text>
             <Text style={styles.subtitle}>
               Tenant: {tenantContext?.display_name ?? defaultTenantSlug}
@@ -487,7 +503,7 @@ export function CatalogCrud({ title = 'Catalog CRUD' }: { title?: string }) {
           </View>
           <View style={styles.topActions}>
             <Pressable disabled={isLoading} onPress={refreshProducts} style={[styles.secondaryButton, isLoading ? styles.disabled : null]}>
-              <Text style={styles.secondaryButtonText}>{isLoading ? 'Refreshing' : 'Refresh'}</Text>
+              <Text style={styles.secondaryButtonText}>{isLoading ? 'กำลังรีเฟรช' : 'รีเฟรช'}</Text>
             </Pressable>
             {canEditCatalog ? (
               <Pressable
@@ -496,18 +512,18 @@ export function CatalogCrud({ title = 'Catalog CRUD' }: { title?: string }) {
                 style={[styles.secondaryButton, isBulkSyncing || busyProductId !== null || stripeSyncTargets.length === 0 ? styles.disabled : null]}
               >
                 <Text style={styles.secondaryButtonText}>
-                  {isBulkSyncing ? 'Syncing Stripe' : `Sync missing Stripe (${stripeSyncTargets.length})`}
+                  {isBulkSyncing ? 'กำลังซิงก์ Stripe' : `ซิงก์ Stripe (${stripeSyncTargets.length})`}
                 </Text>
               </Pressable>
             ) : null}
             <Link href="/admin/branches" asChild>
               <Pressable style={styles.secondaryButton}>
-                <Text style={styles.secondaryButtonText}>Branches</Text>
+                <Text style={styles.secondaryButtonText}>สาขา</Text>
               </Pressable>
             </Link>
             <Link href="/" asChild>
               <Pressable style={styles.primaryButton}>
-                <Text style={styles.primaryButtonText}>Product Overview</Text>
+                <Text style={styles.primaryButtonText}>หน้าโมดูล</Text>
               </Pressable>
             </Link>
           </View>
@@ -522,15 +538,15 @@ export function CatalogCrud({ title = 'Catalog CRUD' }: { title?: string }) {
 
         {auth.session && !tenantContext && !isLoading ? (
           <View style={styles.notice}>
-            <Text style={styles.noticeTitle}>Tenant membership required</Text>
-            <Text style={styles.noticeBody}>This admin route is available only to accounts listed in tenant_members.</Text>
+            <Text style={styles.noticeTitle}>ต้องมีสิทธิ์ใน tenant</Text>
+            <Text style={styles.noticeBody}>บัญชีที่อยู่ใน tenant_members เท่านั้นที่จะใช้หน้าแอดมินนี้ได้</Text>
           </View>
         ) : null}
 
         {tenantContext && !canEditCatalog ? (
           <View style={styles.notice}>
-            <Text style={styles.noticeTitle}>Read-only catalog access</Text>
-            <Text style={styles.noticeBody}>Only tenant_admin or superadmin roles can create, upload, archive, or restore products.</Text>
+            <Text style={styles.noticeTitle}>สิทธิ์อ่านอย่างเดียว</Text>
+            <Text style={styles.noticeBody}>เฉพาะ tenant_admin หรือ superadmin เท่านั้นที่สร้าง อัปโหลด archive หรือ restore สินค้าได้</Text>
           </View>
         ) : null}
 
@@ -538,27 +554,27 @@ export function CatalogCrud({ title = 'Catalog CRUD' }: { title?: string }) {
           <View style={styles.formPane}>
             <View style={styles.panelHeader}>
               <View>
-                <Text style={styles.panelTitle}>{editingProduct ? 'Edit Product' : 'New Product'}</Text>
-                <Text style={styles.panelMeta}>{editingProduct ? `Key: ${editingProduct.catalogKey}` : 'Catalog key generated on save'}</Text>
+                <Text style={styles.panelTitle}>{editingProduct ? 'แก้ไขสินค้า' : 'เพิ่มสินค้า'}</Text>
+                <Text style={styles.panelMeta}>{editingProduct ? `Key: ${editingProduct.catalogKey}` : 'สร้าง catalog key ตอนบันทึก'}</Text>
               </View>
               {editingProduct ? (
                 <Pressable onPress={resetForm} style={styles.textButton}>
-                  <Text style={styles.textButtonLabel}>New</Text>
+                  <Text style={styles.textButtonLabel}>รายการใหม่</Text>
                 </Pressable>
               ) : null}
             </View>
 
-            <Field label="Name" onChangeText={(value) => updateDraft('title', value)} value={draft.title} />
-            <Field label="Description" multiline onChangeText={(value) => updateDraft('description', value)} value={draft.description} />
+            <Field label="ชื่อสินค้า" onChangeText={(value) => updateDraft('title', value)} value={draft.title} />
+            <Field label="รายละเอียด" multiline onChangeText={(value) => updateDraft('description', value)} value={draft.description} />
             <View style={styles.twoColumn}>
-              <Field label="Price THB" onChangeText={(value) => updateDraft('priceAmount', value)} value={draft.priceAmount} />
+              <Field label="ราคา THB" onChangeText={(value) => updateDraft('priceAmount', value)} value={draft.priceAmount} />
               <View style={styles.imageField}>
-                <Text style={styles.fieldLabel}>Image</Text>
+                <Text style={styles.fieldLabel}>รูปสินค้า</Text>
                 <View style={styles.imageInputRow}>
                   <TextInput
                     onChangeText={(value) => updateDraft('imageUrl', value)}
-                    placeholder="Public URL or uploaded product image"
-                    placeholderTextColor={MiraDesign.color.muted}
+                    placeholder="Public URL หรือรูปสินค้าที่อัปโหลดแล้ว"
+                    placeholderTextColor={MiraDesign.color.showcaseNavySoft}
                     style={[styles.input, styles.imageUrlInput]}
                     value={draft.imageUrl ?? ''}
                   />
@@ -567,7 +583,7 @@ export function CatalogCrud({ title = 'Catalog CRUD' }: { title?: string }) {
                     onPress={chooseProductImage}
                     style={[styles.uploadButton, isUploadingImage || !canEditCatalog ? styles.disabled : null]}
                   >
-                    <Text style={styles.uploadButtonText}>{isUploadingImage ? 'Uploading' : 'Upload'}</Text>
+                    <Text style={styles.uploadButtonText}>{isUploadingImage ? 'กำลังอัปโหลด' : 'อัปโหลด'}</Text>
                   </Pressable>
                 </View>
                 {draft.imageUrl ? (
@@ -583,14 +599,14 @@ export function CatalogCrud({ title = 'Catalog CRUD' }: { title?: string }) {
 
             {draft.branchInfo ? (
               <View style={styles.legacyNotice}>
-                <Text style={styles.legacyTitle}>Legacy branch_info TODO</Text>
+                <Text style={styles.legacyTitle}>branch_info เดิม</Text>
                 <Text style={styles.legacyBody}>{draft.branchInfo}</Text>
-                <Text style={styles.helperText}>Use branch availability below for v3. Legacy text is preserved but not parsed.</Text>
+                <Text style={styles.helperText}>ใช้การเลือกสาขาด้านล่างสำหรับ v3 ข้อความเดิมยังถูกเก็บไว้แต่ไม่ถูก parse</Text>
               </View>
             ) : null}
 
             <View style={styles.controlGroup}>
-              <Text style={styles.fieldLabel}>Category</Text>
+              <Text style={styles.fieldLabel}>หมวดหมู่</Text>
               <View style={styles.segmentRow}>
                 {activeCategoryOptions.map((category) => (
                   <Pressable
@@ -609,40 +625,40 @@ export function CatalogCrud({ title = 'Catalog CRUD' }: { title?: string }) {
 
             {canEditCatalog ? (
               <View style={styles.inlineAdminPanel}>
-                <Text style={styles.fieldLabel}>Add Category</Text>
+                <Text style={styles.fieldLabel}>เพิ่มหมวดหมู่</Text>
                 <View style={styles.categoryAdminRow}>
                   <TextInput
                     onChangeText={(value) => setCategoryDraft((current) => ({ ...current, key: value }))}
                     placeholder="key"
-                    placeholderTextColor={MiraDesign.color.muted}
+                    placeholderTextColor={MiraDesign.color.showcaseNavySoft}
                     style={[styles.input, styles.compactInput]}
                     value={categoryDraft.key}
                   />
                   <TextInput
                     onChangeText={(value) => setCategoryDraft((current) => ({ ...current, labelTh: value }))}
                     placeholder="label_th"
-                    placeholderTextColor={MiraDesign.color.muted}
+                    placeholderTextColor={MiraDesign.color.showcaseNavySoft}
                     style={[styles.input, styles.compactInput]}
                     value={categoryDraft.labelTh}
                   />
                   <TextInput
                     onChangeText={(value) => setCategoryDraft((current) => ({ ...current, icon: value }))}
                     placeholder="icon"
-                    placeholderTextColor={MiraDesign.color.muted}
+                    placeholderTextColor={MiraDesign.color.showcaseNavySoft}
                     style={[styles.input, styles.iconInput]}
                     value={categoryDraft.icon ?? ''}
                   />
                   <Pressable disabled={isSaving} onPress={addCategory} style={[styles.inlineButton, isSaving ? styles.disabled : null]}>
-                    <Text style={styles.inlineButtonText}>Add</Text>
+                    <Text style={styles.inlineButtonText}>เพิ่ม</Text>
                   </Pressable>
                 </View>
               </View>
             ) : null}
 
             <View style={styles.controlGroup}>
-              <Text style={styles.fieldLabel}>Branch Availability</Text>
+              <Text style={styles.fieldLabel}>สาขาที่ให้บริการ</Text>
               {branches.length === 0 ? (
-                <Text style={styles.helperText}>No branches yet. Add a branch before assigning availability.</Text>
+                <Text style={styles.helperText}>ยังไม่มีสาขา เพิ่มสาขาก่อนผูกสินค้าเข้ากับสาขา</Text>
               ) : (
                 <View style={styles.branchOptionList}>
                   {branches.map((branch) => {
@@ -659,10 +675,10 @@ export function CatalogCrud({ title = 'Catalog CRUD' }: { title?: string }) {
                         <View style={styles.branchOptionCopy}>
                           <Text style={styles.branchOptionTitle}>
                             {branch.name}
-                            {!branch.active ? ' (inactive)' : ''}
+                            {!branch.active ? ' (ปิดใช้งาน)' : ''}
                           </Text>
                           <Text numberOfLines={2} style={styles.branchOptionMeta}>
-                            {[branch.address, branch.district, branch.phone].filter(Boolean).join(' · ') || 'No address'}
+                            {[branch.address, branch.district, branch.phone].filter(Boolean).join(' · ') || 'ยังไม่มีที่อยู่'}
                           </Text>
                         </View>
                       </Pressable>
@@ -673,14 +689,14 @@ export function CatalogCrud({ title = 'Catalog CRUD' }: { title?: string }) {
             </View>
 
             <View style={styles.controlGroup}>
-              <Text style={styles.fieldLabel}>Booking</Text>
+              <Text style={styles.fieldLabel}>การจอง</Text>
               <View style={styles.segmentRow}>
                 <Pressable
                   onPress={() => updateDraft('requiresAppointment', true)}
                   style={[styles.segment, draft.requiresAppointment !== false ? styles.segmentActive : null]}
                 >
                   <Text style={[styles.segmentText, draft.requiresAppointment !== false ? styles.segmentTextActive : null]}>
-                    Appointment
+                    ต้องนัดหมาย
                   </Text>
                 </Pressable>
                 <Pressable
@@ -688,7 +704,7 @@ export function CatalogCrud({ title = 'Catalog CRUD' }: { title?: string }) {
                   style={[styles.segment, draft.requiresAppointment === false ? styles.segmentActive : null]}
                 >
                   <Text style={[styles.segmentText, draft.requiresAppointment === false ? styles.segmentTextActive : null]}>
-                    Walk-in
+                    Walk-in ได้
                   </Text>
                 </Pressable>
               </View>
@@ -698,29 +714,29 @@ export function CatalogCrud({ title = 'Catalog CRUD' }: { title?: string }) {
             {message ? <Text style={styles.successText}>{message}</Text> : null}
 
             <Pressable disabled={!canSave || isSaving} onPress={saveDraft} style={[styles.saveButton, !canSave || isSaving ? styles.disabled : null]}>
-              <Text style={styles.saveButtonText}>{isSaving ? 'Saving' : editingProduct ? 'Save Changes' : 'Create Product'}</Text>
+              <Text style={styles.saveButtonText}>{isSaving ? 'กำลังบันทึก' : editingProduct ? 'บันทึกสินค้า' : 'สร้างสินค้า'}</Text>
             </Pressable>
           </View>
 
           <View style={styles.listPane}>
             <View style={styles.panelHeader}>
               <View>
-                <Text style={styles.panelTitle}>Products</Text>
-                <Text style={styles.panelMeta}>{isLoading ? 'Loading' : `${filteredProducts.length} shown`}</Text>
+                <Text style={styles.panelTitle}>สินค้า</Text>
+                <Text style={styles.panelMeta}>{isLoading ? 'กำลังโหลด' : `แสดง ${filteredProducts.length} รายการ`}</Text>
               </View>
               <View style={styles.summaryRow}>
-                <Metric label="Total" value={`${summary.total}`} />
-                <Metric label="Active" value={`${summary.active}`} />
-                <Metric label="Archived" value={`${summary.archived}`} />
-                <Metric label="Stripe missing" value={`${summary.stripeMissing}`} />
+                <Metric label="ทั้งหมด" value={`${summary.total}`} />
+                <Metric label="เปิดขาย" value={`${summary.active}`} />
+                <Metric label="เก็บถาวร" value={`${summary.archived}`} />
+                <Metric label="ยังไม่ซิงก์ Stripe" value={`${summary.stripeMissing}`} />
               </View>
             </View>
 
             <View style={styles.filterBar}>
               <TextInput
                 onChangeText={setQuery}
-                placeholder="Search name, key, description, branch"
-                placeholderTextColor={MiraDesign.color.muted}
+                placeholder="ค้นหาชื่อสินค้า รหัส รายละเอียด หรือสาขา"
+                placeholderTextColor={MiraDesign.color.showcaseNavySoft}
                 style={styles.searchInput}
                 value={query}
               />
@@ -735,8 +751,8 @@ export function CatalogCrud({ title = 'Catalog CRUD' }: { title?: string }) {
 
             {filteredProducts.length === 0 ? (
               <View style={styles.emptyState}>
-                <Text style={styles.emptyTitle}>No products found</Text>
-                <Text style={styles.emptyBody}>Create the first v2 product or adjust the filters.</Text>
+                <Text style={styles.emptyTitle}>ไม่พบสินค้า</Text>
+                <Text style={styles.emptyBody}>สร้างสินค้าแรก หรือปรับตัวกรองใหม่</Text>
               </View>
             ) : (
               filteredProducts.map((product) => (
@@ -801,7 +817,7 @@ function FilterChips({
             onPress={() => onStatusChange(status)}
             style={[styles.filterChip, activeStatus === status ? styles.filterChipActive : null]}
           >
-            <Text style={[styles.filterChipText, activeStatus === status ? styles.filterChipTextActive : null]}>{status}</Text>
+            <Text style={[styles.filterChipText, activeStatus === status ? styles.filterChipTextActive : null]}>{statusFilterLabel(status)}</Text>
           </Pressable>
         ))}
       </View>
@@ -810,7 +826,7 @@ function FilterChips({
           onPress={() => onCategoryChange('all')}
           style={[styles.filterChip, activeCategory === 'all' ? styles.filterChipActive : null]}
         >
-          <Text style={[styles.filterChipText, activeCategory === 'all' ? styles.filterChipTextActive : null]}>all</Text>
+          <Text style={[styles.filterChipText, activeCategory === 'all' ? styles.filterChipTextActive : null]}>ทุกหมวด</Text>
         </Pressable>
         {activeCategories.map((category) => (
           <Pressable
@@ -862,7 +878,7 @@ function ProductRow({
           <Text style={styles.productKey}>{product.catalogKey}</Text>
         </View>
         <View style={styles.rowPills}>
-          <Pill label={product.status} tone={isActive ? 'mint' : 'amber'} />
+          <Pill label={productStatusLabel(product.status)} tone={isActive ? 'mint' : 'amber'} />
           <Pill label={productCategoryLabel} tone="blue" />
         </View>
       </View>
@@ -870,37 +886,37 @@ function ProductRow({
         {product.description}
       </Text>
       <View style={styles.productMetaGrid}>
-        <Meta label="Price" value={`${product.priceAmount.toLocaleString('th-TH')} THB`} />
-        <Meta label="Booking" value={product.requiresAppointment ? 'Appointment' : 'Walk-in'} />
-        <Meta label="Branches" value={branchNames || 'Not assigned'} />
+        <Meta label="ราคา" value={`${product.priceAmount.toLocaleString('th-TH')} THB`} />
+        <Meta label="การจอง" value={product.requiresAppointment ? 'ต้องนัดหมาย' : 'Walk-in ได้'} />
+        <Meta label="สาขา" value={branchNames || 'ยังไม่ผูกสาขา'} />
         <Meta label="Stripe" value={stripeStatus.label} />
       </View>
       <View style={styles.stripePanel}>
         <Pill label={stripeStatus.label} tone={stripeStatus.tone} />
         <Text numberOfLines={1} style={styles.stripeId}>
-          Product: {product.stripeProductId ?? 'not synced'}
+          Product: {product.stripeProductId ?? 'ยังไม่ซิงก์'}
         </Text>
         <Text numberOfLines={1} style={styles.stripeId}>
-          Price: {product.stripePriceId ?? 'not synced'}
+          Price: {product.stripePriceId ?? 'ยังไม่ซิงก์'}
         </Text>
       </View>
-      {product.hospitalAddress ? <Text style={styles.helperText}>Legacy branch_info TODO: {product.hospitalAddress}</Text> : null}
+      {product.hospitalAddress ? <Text style={styles.helperText}>branch_info เดิม: {product.hospitalAddress}</Text> : null}
       <View style={styles.productFooter}>
         <Pressable onPress={onEdit} style={styles.editButton}>
-          <Text style={styles.editButtonText}>Edit</Text>
+          <Text style={styles.editButtonText}>แก้ไข</Text>
         </Pressable>
         <Pressable disabled={disabled} onPress={onSyncStripe} style={[styles.stripeButton, disabled ? styles.disabled : null]}>
           <Text style={styles.stripeButtonText}>
-            {isBusy ? 'Syncing' : product.stripeProductId && product.stripePriceId ? 'Re-sync Stripe' : 'Sync Stripe'}
+            {isBusy ? 'กำลังซิงก์' : product.stripeProductId && product.stripePriceId ? 'ซิงก์ Stripe อีกครั้ง' : 'ซิงก์ Stripe'}
           </Text>
         </Pressable>
         {isActive ? (
           <Pressable disabled={disabled} onPress={onArchive} style={[styles.dangerButton, disabled ? styles.disabled : null]}>
-            <Text style={styles.dangerButtonText}>{isBusy ? 'Archiving' : 'Archive'}</Text>
+            <Text style={styles.dangerButtonText}>{isBusy ? 'กำลังเก็บ' : 'เก็บถาวร'}</Text>
           </Pressable>
         ) : (
           <Pressable disabled={disabled} onPress={onRestore} style={[styles.restoreButton, disabled ? styles.disabled : null]}>
-            <Text style={styles.restoreButtonText}>{isBusy ? 'Restoring' : 'Restore'}</Text>
+            <Text style={styles.restoreButtonText}>{isBusy ? 'กำลังกู้คืน' : 'กู้คืน'}</Text>
           </Pressable>
         )}
       </View>
@@ -911,20 +927,20 @@ function ProductRow({
 function getStripeStatus(product: HospitalProduct): { label: string; tone: 'amber' | 'blue' | 'danger' | 'mint' } {
   if (product.stripeProductId && product.stripePriceId) {
     return {
-      label: 'Synced',
+      label: 'ซิงก์แล้ว',
       tone: 'mint',
     };
   }
 
   if (product.stripeProductId && !product.stripePriceId) {
     return {
-      label: 'Stripe price missing',
+      label: 'ขาดราคา Stripe',
       tone: 'danger',
     };
   }
 
   return {
-    label: 'Not synced',
+    label: 'ยังไม่ซิงก์',
     tone: 'amber',
   };
 }
@@ -946,7 +962,7 @@ function Field({
       <TextInput
         multiline={multiline}
         onChangeText={onChangeText}
-        placeholderTextColor={MiraDesign.color.muted}
+        placeholderTextColor={MiraDesign.color.showcaseNavySoft}
         style={[styles.input, multiline ? styles.multilineInput : null]}
         textAlignVertical={multiline ? 'top' : 'center'}
         value={value}
@@ -999,19 +1015,19 @@ const styles = StyleSheet.create({
     gap: 7,
   },
   eyebrow: {
-    color: MiraDesign.color.primaryDeep,
+    color: MiraDesign.color.showcaseBlueDeep,
     fontSize: 13,
     fontWeight: '900',
     textTransform: 'uppercase',
   },
   title: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 30,
     fontWeight: '900',
     lineHeight: 36,
   },
   subtitle: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 14,
     lineHeight: 21,
     maxWidth: 760,
@@ -1023,7 +1039,7 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     alignItems: 'center',
-    backgroundColor: MiraDesign.color.primary,
+    backgroundColor: MiraDesign.color.showcaseBlue,
     borderRadius: 8,
     justifyContent: 'center',
     minHeight: 44,
@@ -1036,8 +1052,8 @@ const styles = StyleSheet.create({
   },
   secondaryButton: {
     alignItems: 'center',
-    backgroundColor: MiraDesign.color.surface,
-    borderColor: MiraDesign.color.line,
+    backgroundColor: MiraDesign.color.showcaseSurface,
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 8,
     borderWidth: 1,
     justifyContent: 'center',
@@ -1045,7 +1061,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   secondaryButtonText: {
-    color: MiraDesign.color.primaryDeep,
+    color: MiraDesign.color.showcaseBlueDeep,
     fontSize: 13,
     fontWeight: '900',
   },
@@ -1090,8 +1106,8 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
   },
   formPane: {
-    backgroundColor: MiraDesign.color.surface,
-    borderColor: MiraDesign.color.line,
+    backgroundColor: MiraDesign.color.showcaseSurface,
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 8,
     borderWidth: 1,
     flex: 0.8,
@@ -1101,8 +1117,8 @@ const styles = StyleSheet.create({
     ...softShadow,
   },
   listPane: {
-    backgroundColor: MiraDesign.color.surface,
-    borderColor: MiraDesign.color.line,
+    backgroundColor: MiraDesign.color.showcaseSurface,
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 8,
     borderWidth: 1,
     flex: 1.2,
@@ -1117,43 +1133,44 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   panelTitle: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 18,
     fontWeight: '900',
   },
   panelMeta: {
-    color: MiraDesign.color.primary,
+    color: MiraDesign.color.showcaseBlue,
     fontSize: 12,
     fontWeight: '900',
     marginTop: 3,
   },
   textButton: {
-    backgroundColor: MiraDesign.color.surfaceSoft,
+    backgroundColor: MiraDesign.color.showcaseBlueSoft,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 9,
   },
   textButtonLabel: {
-    color: MiraDesign.color.primaryDeep,
+    color: MiraDesign.color.showcaseBlueDeep,
     fontSize: 12,
     fontWeight: '900',
   },
   field: {
     flex: 1,
     gap: 6,
+    minWidth: 0,
   },
   fieldLabel: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 12,
     fontWeight: '900',
     textTransform: 'uppercase',
   },
   input: {
     backgroundColor: '#F7FBFA',
-    borderColor: MiraDesign.color.line,
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 8,
     borderWidth: 1,
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 14,
     minHeight: 46,
     paddingHorizontal: 12,
@@ -1164,26 +1181,32 @@ const styles = StyleSheet.create({
   },
   twoColumn: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 12,
   },
   imageField: {
     flex: 1,
     gap: 6,
+    minWidth: 220,
   },
   imageInputRow: {
     alignItems: 'stretch',
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
   },
   imageUrlInput: {
     flex: 1,
+    minWidth: 220,
   },
   uploadButton: {
     alignItems: 'center',
-    backgroundColor: MiraDesign.color.primaryDeep,
+    alignSelf: 'flex-start',
+    backgroundColor: MiraDesign.color.showcaseBlueDeep,
     borderRadius: 8,
     justifyContent: 'center',
     minHeight: 46,
+    minWidth: 112,
     paddingHorizontal: 14,
   },
   uploadButtonText: {
@@ -1194,7 +1217,7 @@ const styles = StyleSheet.create({
   imagePreviewRow: {
     alignItems: 'center',
     backgroundColor: '#F7FBFA',
-    borderColor: MiraDesign.color.line,
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 8,
     borderWidth: 1,
     flexDirection: 'row',
@@ -1208,7 +1231,7 @@ const styles = StyleSheet.create({
     width: 70,
   },
   imagePreviewText: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     flex: 1,
     fontSize: 11,
     lineHeight: 15,
@@ -1232,21 +1255,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   segmentActive: {
-    backgroundColor: MiraDesign.color.surface,
-    borderColor: MiraDesign.color.line,
+    backgroundColor: MiraDesign.color.showcaseSurface,
+    borderColor: MiraDesign.color.showcaseLine,
     borderWidth: 1,
   },
   segmentText: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 12,
     fontWeight: '900',
   },
   segmentTextActive: {
-    color: MiraDesign.color.primaryDeep,
+    color: MiraDesign.color.showcaseBlueDeep,
   },
   inlineAdminPanel: {
     backgroundColor: '#F7FBFA',
-    borderColor: MiraDesign.color.line,
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 8,
     borderWidth: 1,
     gap: 8,
@@ -1267,7 +1290,7 @@ const styles = StyleSheet.create({
   },
   inlineButton: {
     alignItems: 'center',
-    backgroundColor: MiraDesign.color.primaryDeep,
+    backgroundColor: MiraDesign.color.showcaseBlueDeep,
     borderRadius: 8,
     justifyContent: 'center',
     minHeight: 46,
@@ -1284,7 +1307,7 @@ const styles = StyleSheet.create({
   branchOption: {
     alignItems: 'center',
     backgroundColor: '#F7FBFA',
-    borderColor: MiraDesign.color.line,
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 8,
     borderWidth: 1,
     flexDirection: 'row',
@@ -1294,33 +1317,33 @@ const styles = StyleSheet.create({
   },
   branchOptionActive: {
     backgroundColor: '#E7F4ED',
-    borderColor: MiraDesign.color.primary,
+    borderColor: MiraDesign.color.showcaseBlue,
   },
   branchOptionInactive: {
     opacity: 0.65,
   },
   radioDot: {
-    borderColor: MiraDesign.color.inkSoft,
+    borderColor: MiraDesign.color.showcaseNavySoft,
     borderRadius: 8,
     borderWidth: 2,
     height: 16,
     width: 16,
   },
   radioDotActive: {
-    backgroundColor: MiraDesign.color.primary,
-    borderColor: MiraDesign.color.primary,
+    backgroundColor: MiraDesign.color.showcaseBlue,
+    borderColor: MiraDesign.color.showcaseBlue,
   },
   branchOptionCopy: {
     flex: 1,
     gap: 3,
   },
   branchOptionTitle: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 13,
     fontWeight: '900',
   },
   branchOptionMeta: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 12,
     lineHeight: 17,
   },
@@ -1339,19 +1362,19 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   legacyBody: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 13,
     fontWeight: '800',
     lineHeight: 18,
   },
   helperText: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 12,
     lineHeight: 17,
   },
   saveButton: {
     alignItems: 'center',
-    backgroundColor: MiraDesign.color.primary,
+    backgroundColor: MiraDesign.color.showcaseBlue,
     borderRadius: 8,
     justifyContent: 'center',
     minHeight: 46,
@@ -1370,7 +1393,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   successText: {
-    color: MiraDesign.color.primaryDeep,
+    color: MiraDesign.color.showcaseBlueDeep,
     fontSize: 13,
     fontWeight: '800',
   },
@@ -1382,20 +1405,20 @@ const styles = StyleSheet.create({
   },
   metric: {
     backgroundColor: '#F7FBFA',
-    borderColor: MiraDesign.color.line,
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 8,
     borderWidth: 1,
     minWidth: 82,
     padding: 10,
   },
   metricLabel: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 10,
     fontWeight: '900',
     textTransform: 'uppercase',
   },
   metricValue: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 17,
     fontWeight: '900',
     marginTop: 4,
@@ -1405,10 +1428,10 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     backgroundColor: '#F7FBFA',
-    borderColor: MiraDesign.color.line,
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 8,
     borderWidth: 1,
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 14,
     minHeight: 44,
     paddingHorizontal: 12,
@@ -1423,18 +1446,18 @@ const styles = StyleSheet.create({
   },
   filterChip: {
     backgroundColor: '#F7FBFA',
-    borderColor: MiraDesign.color.line,
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 8,
     borderWidth: 1,
     paddingHorizontal: 10,
     paddingVertical: 8,
   },
   filterChipActive: {
-    backgroundColor: MiraDesign.color.primary,
-    borderColor: MiraDesign.color.primary,
+    backgroundColor: MiraDesign.color.showcaseBlue,
+    borderColor: MiraDesign.color.showcaseBlue,
   },
   filterChipText: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 12,
     fontWeight: '900',
   },
@@ -1443,32 +1466,32 @@ const styles = StyleSheet.create({
   },
   emptyState: {
     backgroundColor: '#F7FBFA',
-    borderColor: MiraDesign.color.line,
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 8,
     borderWidth: 1,
     gap: 4,
     padding: 16,
   },
   emptyTitle: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 15,
     fontWeight: '900',
   },
   emptyBody: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 13,
     lineHeight: 19,
   },
   productRow: {
     backgroundColor: '#FFFFFF',
-    borderColor: MiraDesign.color.line,
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 8,
     borderWidth: 1,
     gap: 12,
     padding: 14,
   },
   productRowSelected: {
-    borderColor: MiraDesign.color.primary,
+    borderColor: MiraDesign.color.showcaseBlue,
   },
   productHead: {
     alignItems: 'flex-start',
@@ -1481,13 +1504,13 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   productTitle: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 16,
     fontWeight: '900',
     lineHeight: 21,
   },
   productKey: {
-    color: MiraDesign.color.primaryDeep,
+    color: MiraDesign.color.showcaseBlueDeep,
     fontSize: 12,
     fontWeight: '900',
   },
@@ -1499,7 +1522,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   productDescription: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 13,
     lineHeight: 19,
   },
@@ -1518,13 +1541,13 @@ const styles = StyleSheet.create({
     padding: 10,
   },
   metaLabel: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 11,
     fontWeight: '900',
     textTransform: 'uppercase',
   },
   metaValue: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 13,
     fontWeight: '900',
     marginTop: 4,
@@ -1537,21 +1560,21 @@ const styles = StyleSheet.create({
   },
   stripePanel: {
     backgroundColor: '#F7FBFA',
-    borderColor: MiraDesign.color.line,
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 8,
     borderWidth: 1,
     gap: 6,
     padding: 10,
   },
   stripeId: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 11,
     fontWeight: '800',
   },
   stripeButton: {
     alignItems: 'center',
     backgroundColor: '#EAF3F2',
-    borderColor: MiraDesign.color.line,
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 8,
     borderWidth: 1,
     justifyContent: 'center',
@@ -1560,13 +1583,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   stripeButtonText: {
-    color: MiraDesign.color.primaryDeep,
+    color: MiraDesign.color.showcaseBlueDeep,
     fontSize: 12,
     fontWeight: '900',
   },
   editButton: {
     alignItems: 'center',
-    backgroundColor: MiraDesign.color.surfaceSoft,
+    backgroundColor: MiraDesign.color.showcaseBlueSoft,
     borderRadius: 8,
     justifyContent: 'center',
     minHeight: 38,
@@ -1574,7 +1597,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   editButtonText: {
-    color: MiraDesign.color.primaryDeep,
+    color: MiraDesign.color.showcaseBlueDeep,
     fontSize: 12,
     fontWeight: '900',
   },
@@ -1596,7 +1619,7 @@ const styles = StyleSheet.create({
   },
   restoreButton: {
     alignItems: 'center',
-    backgroundColor: MiraDesign.color.primary,
+    backgroundColor: MiraDesign.color.showcaseBlue,
     borderRadius: 8,
     justifyContent: 'center',
     minHeight: 38,

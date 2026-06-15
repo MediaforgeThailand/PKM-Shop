@@ -116,19 +116,19 @@ const styles = StyleSheet.create({
     padding: MiraDesign.space.xl,
   },
   dropIcon: {
-    color: MiraDesign.color.blue,
+    color: MiraDesign.color.showcaseBlue,
     fontSize: 46,
     fontWeight: '900',
     lineHeight: 50,
   },
   dropTitle: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 20,
     fontWeight: '900',
     textAlign: 'center',
   },
   dropBody: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 13,
     fontWeight: '800',
   },
@@ -138,12 +138,12 @@ const styles = StyleSheet.create({
     gap: MiraDesign.space.sm,
   },
   panelTitle: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 19,
     fontWeight: '900',
   },
   panelMeta: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 13,
     fontWeight: '800',
     marginTop: 4,
@@ -162,13 +162,13 @@ const styles = StyleSheet.create({
     width: 14,
   },
   stepDotDone: {
-    backgroundColor: MiraDesign.color.blue,
+    backgroundColor: MiraDesign.color.showcaseBlue,
   },
   stepDotCurrent: {
     backgroundColor: MiraDesign.color.amber,
   },
   stepText: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 15,
     fontWeight: '900',
   },
@@ -185,23 +185,23 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   tableRow: {
-    backgroundColor: MiraDesign.color.surface,
+    backgroundColor: MiraDesign.color.showcaseSurface,
     borderBottomColor: '#D8E9F8',
     borderBottomWidth: 1,
     flexDirection: 'row',
   },
   tableHeader: {
-    backgroundColor: MiraDesign.color.blueSoft,
+    backgroundColor: MiraDesign.color.showcaseBlueSoft,
   },
   cell: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     flex: 1,
     fontSize: 13,
     fontWeight: '800',
     padding: MiraDesign.space.md,
   },
   headerText: {
-    color: MiraDesign.color.blue,
+    color: MiraDesign.color.showcaseBlue,
     fontWeight: '900',
   },
   confirmedText: {

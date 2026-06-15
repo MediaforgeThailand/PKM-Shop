@@ -7,6 +7,8 @@ Workflow: same as v2/v3 — Codex implements phase by phase, updates the DoD che
 
 > **Revision 2026-06-13 (owner-directed):** The showcase now ships under a `/showcase` base path so the marketing landing can own `/` on `mira.mediaforge.co` (see `docs/mira-landing-plan.md` §8.6). Two consequences for the route table below: the showcase home (`app/index.tsx`) is served at `/showcase` on the domain (still `/` inside the Expo app), and the module-tour route was renamed `app/showcase/[module].tsx` → `app/tour/[module].tsx`, served at `/showcase/tour/[module]`. Route names in this doc that read `/showcase/[module]` refer to the renamed `/tour/[module]` file.
 
+> **Revision 2026-06-14 (owner-directed scope extension):** The redesign scope includes the registered destination pages inside each showcase module, not only the showcase home/tour pages. Hard exclusions remain: the marketing landing page (`mira.mediaforge.co` / `website/src/pages/index.astro`) and `/prototype` are not redesigned in this pass.
+
 ---
 
 ## 0. Product intent (read first)
@@ -200,8 +202,8 @@ Static phone frame (reuse the prototype's phone-frame styling approach, NOT its 
 ## 8. Visual system notes
 
 - All new showcase components use `MiraDesign` tokens (`constants/Design.ts`) + the spec values in §4–§6; if a needed token is missing (e.g. ink-dark canvas), ADD it to `constants/Design.ts` rather than inlining hex in components (showcase home dark palette: add `color.canvasDark`, `color.onDark`, `color.onDarkSoft`).
-- Thai-first: every presenter-facing string in Thai; EN only as small subtitles. Product surfaces (`/chatbot` etc.) are NOT restyled by this plan.
-- This plan deliberately does NOT redesign product pages — UX/UI will deliver designs later into the mockup layouts. Codex must keep mockup component trees clean (one component per section, props-typed) to make that drop-in cheap.
+- Thai-first: every presenter-facing string in Thai; EN only as small subtitles.
+- The original S0-S3 plan did not redesign product pages; the 2026-06-14 owner extension supersedes that for registered showcase destinations only. Keep `/prototype` and the marketing landing untouched.
 
 ## 9. Phases & Definition of Done
 
@@ -211,7 +213,7 @@ DoD: ✅ 2026-06-12 `npm run showcase:route-audit` passes and fails correctly wh
 
 **S1 — Showcase Home + Module pages rebuild.**
 §4 + §5 exactly; branded fallback posters; poster asset slots `assets/showcase/<id>.png` (use fallback until owner drops screenshots); demo script content per module (Thai, owner reviews wording in PR).
-DoD: ✅ 2026-06-14 home renders 2×2 ≥760px / 1-col mobile; ✅ 2026-06-14 every row shows correct badge+auth chip from registry; ✅ 2026-06-14 no English-primary strings on presenter surfaces; ✅ 2026-06-14 `เปิดหน้า` appends `?tour=`; ❌ owner screenshot review.
+DoD: ✅ 2026-06-14 home renders 2×2 ≥760px / 1-col mobile; ✅ 2026-06-14 every row shows correct badge+auth chip from registry; ✅ 2026-06-14 no English-primary strings on presenter surfaces; ✅ 2026-06-14 `เปิดหน้า` appends `?tour=`; ✅ 2026-06-14 static export creates direct `/showcase/tour/<module>` pages; ✅ 2026-06-14 restored the health mockup assets on `/showcase`, `/body-overview`, `/health-check-results`, `/wearable-health`, and `/tour/health`; ✅ 2026-06-14 owner extension: registered destination pages in referral/admin/AI-chat/health modules were reskinned to the blue MiraCare showcase system, excluding `/prototype` and the marketing landing; ✅ 2026-06-14 desktop/mobile screenshots checked for representative destination pages; ✅ 2026-06-14 `npm run v2:verify` green after the destination-page redesign; ❌ owner screenshot review.
 
 **S2 — Mockup pages (§6.1–6.5).**
 DoD: ❌ all five routes render logged-out with fixtures, zero network errors in console (`/admin/branches` remains a LIVE branch manager, not a mockup ribbon page); ✅ 2026-06-14 ribbon present + registry `status:'mockup'|'concept'` for `/orders`, `/admin/dashboard`, `/health/lab-upload`, `/showcase/line-preview`; ✅ 2026-06-14 typed against `lib/types/api` (no `any` fixtures); ✅ 2026-06-14 `/order-status` redirects to `/orders`; ✅ 2026-06-14 route audit green.

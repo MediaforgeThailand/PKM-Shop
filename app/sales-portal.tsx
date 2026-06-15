@@ -17,7 +17,7 @@ import QRCode from 'react-native-qrcode-svg';
 import Svg, { Circle, Defs, G, Line, LinearGradient, Path, Stop, Text as SvgText } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { softShadow } from '@/constants/Design';
+import { MiraDesign, softShadow } from '@/constants/Design';
 import { useAuthSession } from '@/lib/auth/useAuthSession';
 import { getProductCategoryLabel, loadActiveHospitalProducts, type HospitalProduct } from '@/lib/marketplace/hospitalProducts';
 import {
@@ -32,16 +32,16 @@ import { healthPackages } from '@/services/mockBackend';
 import type { HealthPackage } from '@/domain/health';
 
 const logoPalette = {
-  blue: '#2060E0',
-  blueDeep: '#102A5F',
-  blueMid: '#6098FF',
-  blueSoft: '#A8C8FF',
-  brandWash: '#DDEBFF',
-  canvas: '#EAF3FF',
-  line: '#CFE0FF',
-  mist: '#F5F9FF',
-  muted: '#536B88',
-  text: '#102A5F',
+  blue: MiraDesign.color.showcaseBlue,
+  blueDeep: MiraDesign.color.showcaseBlueDeep,
+  blueMid: MiraDesign.color.showcaseCyan,
+  blueSoft: '#BBD8F8',
+  brandWash: MiraDesign.color.showcaseBlueSoft,
+  canvas: MiraDesign.color.showcaseCanvas,
+  line: MiraDesign.color.showcaseLine,
+  mist: MiraDesign.color.showcaseSurface,
+  muted: MiraDesign.color.showcaseNavySoft,
+  text: MiraDesign.color.showcaseNavy,
 } as const;
 
 const productPreviewImages = {
@@ -60,8 +60,8 @@ const fallbackCommissionRateByPreviewKey = {
 
 const salesTabs = [
   { id: 'products', label: 'สินค้า' },
-  { id: 'referral', label: 'Referral' },
-  { id: 'dashboard', label: 'Dashboard' },
+  { id: 'referral', label: 'ลิงก์แนะนำ' },
+  { id: 'dashboard', label: 'ยอดขาย' },
 ] as const;
 
 type SalesTab = (typeof salesTabs)[number]['id'];
@@ -254,7 +254,8 @@ export default function SalesPortalScreen() {
   if (auth.isLoading) {
     return (
       <PageShell>
-        <CenteredCard title="กำลังตรวจ account" body="กำลังเตรียม portal สำหรับหมอหรือพนักงานขายสินค้า" />
+        <ReferralBrandHeader />
+        <CenteredCard title="กำลังตรวจบัญชี" body="กำลังเตรียมพอร์ทัลสำหรับทีมขายสินค้าโรงพยาบาล" />
       </PageShell>
     );
   }
@@ -262,11 +263,12 @@ export default function SalesPortalScreen() {
   if (!auth.session) {
     return (
       <PageShell>
+        <ReferralBrandHeader />
         <AccessCard
-          body="เข้าสู่ระบบด้วย account หมอหรือพนักงานก่อนเปิดสินค้า referral link และ dashboard commission"
-          cta="Login sales account"
+          body="เข้าสู่ระบบด้วยบัญชีหมอหรือพนักงานก่อนเปิดสินค้า ลิงก์แนะนำ และแดชบอร์ดค่าคอมมิชชัน"
+          cta="เข้าสู่ระบบทีมขาย"
           href={{ pathname: '/', params: { redirect: '/sales-portal' } }}
-          title="Sales portal สำหรับหน้างาน"
+          title="พอร์ทัลทีมขายหน้างาน"
         />
       </PageShell>
     );
@@ -275,7 +277,8 @@ export default function SalesPortalScreen() {
   if (!referralAccount) {
     return (
       <PageShell>
-        <CenteredCard title="Account นี้ยังไม่มีสิทธิ์" body="หน้านี้เปิดให้เฉพาะ account หมอหรือพนักงานเท่านั้น" />
+        <ReferralBrandHeader />
+        <CenteredCard title="บัญชีนี้ยังไม่มีสิทธิ์" body="หน้านี้เปิดให้เฉพาะบัญชีหมอหรือพนักงานเท่านั้น" />
       </PageShell>
     );
   }
@@ -295,6 +298,7 @@ export default function SalesPortalScreen() {
 
       {activeTab === 'products' && selectedProduct ? (
         <ProductDetail
+          isCompact={isCompact}
           onBack={() => setSelectedProductId(null)}
           onCreateReferral={() => openReferralOrder(selectedProduct)}
           product={selectedProduct}
@@ -314,13 +318,14 @@ export default function SalesPortalScreen() {
       ) : null}
 
       {activeTab === 'referral' ? (
-        <ReferralGenerator account={referralAccount} onCopy={(value) => setMessage(`Mock copied: ${value}`)} />
+        <ReferralGenerator account={referralAccount} isCompact={isCompact} onCopy={(value) => setMessage(`คัดลอกตัวอย่างแล้ว: ${value}`)} />
       ) : null}
 
       {activeTab === 'dashboard' ? <CommissionDashboard isCompact={isCompact} selectedProduct={selectedProduct} /> : null}
 
       <ReferralOrderModal
         form={customerForm}
+        isCompact={isCompact}
         modalStep={modalStep}
         onChangeForm={updateCustomerForm}
         onClose={() => setReferralModalVisible(false)}
@@ -344,9 +349,16 @@ function PageShell({
   onTabChange?: (tab: SalesTab) => void;
   showTabs?: boolean;
 }) {
+  const { width } = useWindowDimensions();
+  const isCompact = width < 720;
+
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.pageContent} keyboardShouldPersistTaps="handled" style={styles.pageScroll}>
+      <ScrollView
+        contentContainerStyle={[styles.pageContent, isCompact ? styles.pageContentCompact : null, showTabs ? styles.pageContentWithTabs : null]}
+        keyboardShouldPersistTaps="handled"
+        style={styles.pageScroll}
+      >
         {children}
       </ScrollView>
       {showTabs && activeTab && onTabChange ? <BottomTabBar activeTab={activeTab} onTabChange={onTabChange} /> : null}
@@ -376,7 +388,7 @@ function BottomTabBar({ activeTab, onTabChange }: { activeTab: SalesTab; onTabCh
 function AccessCard({ body, cta, href, title }: { body: string; cta: string; href: Parameters<typeof Link>[0]['href']; title: string }) {
   return (
     <View style={styles.accessCard}>
-      <Text style={styles.eyebrow}>Restricted</Text>
+      <Text style={styles.eyebrow}>จำกัดสิทธิ์</Text>
       <Text style={styles.accessTitle}>{title}</Text>
       <Text style={styles.accessBody}>{body}</Text>
       <Link href={href} asChild>
@@ -401,7 +413,7 @@ function ReferralBrandHeader() {
   return (
     <View style={styles.brandHero}>
       <Image resizeMode="contain" source={require('@/assets/images/mira-care-logo.png')} style={styles.brandLogo} />
-      <Text style={styles.brandProgramText}>referral program</Text>
+      <Text style={styles.brandProgramText}>พอร์ทัลแนะนำลูกค้า</Text>
     </View>
   );
 }
@@ -423,7 +435,7 @@ function ProductCatalog({
   selectedProductId: string | null;
   setQuery: (value: string) => void;
 }) {
-  const cardWidth: DimensionValue = isCompact ? '48%' : 220;
+  const cardWidth: DimensionValue = isCompact ? '100%' : 220;
 
   return (
     <View style={styles.panel}>
@@ -432,10 +444,10 @@ function ProductCatalog({
           onChangeText={setQuery}
           placeholder="ค้นหาสินค้า โรงพยาบาล หรือหมวดหมู่"
           placeholderTextColor={logoPalette.muted}
-          style={styles.searchInput}
+          style={[styles.searchInput, isCompact ? styles.searchInputCompact : null]}
           value={query}
         />
-        <Text style={styles.resultCount}>{isLoading ? 'syncing' : `${products.length} items`}</Text>
+        <Text style={styles.resultCount}>{isLoading ? 'กำลังซิงก์' : `${products.length} รายการ`}</Text>
       </View>
 
       <View style={styles.productGrid}>
@@ -485,10 +497,12 @@ function SalesProductCard({
 }
 
 function ProductDetail({
+  isCompact,
   onBack,
   onCreateReferral,
   product,
 }: {
+  isCompact: boolean;
   onBack: () => void;
   onCreateReferral: () => void;
   product: SalesProduct;
@@ -502,16 +516,16 @@ function ProductDetail({
       </Pressable>
 
       <View style={styles.detailLayout}>
-        <View style={styles.detailImagePanel}>
-          <Image resizeMode="contain" source={product.imageUri ? { uri: product.imageUri } : productPreviewImages[product.previewKey]} style={styles.detailImage} />
+        <View style={[styles.detailImagePanel, isCompact ? styles.detailImagePanelCompact : null]}>
+          <Image resizeMode="contain" source={product.imageUri ? { uri: product.imageUri } : productPreviewImages[product.previewKey]} style={[styles.detailImage, isCompact ? styles.detailImageCompact : null]} />
         </View>
 
-        <View style={styles.detailInfoPanel}>
+        <View style={[styles.detailInfoPanel, isCompact ? styles.detailInfoPanelCompact : null]}>
           <Text style={styles.detailTitle}>{product.title}</Text>
           <View style={styles.shopMetaRow}>
-            <Text style={styles.shopMetaText}>4.9 rating</Text>
+            <Text style={styles.shopMetaText}>คะแนน 4.9</Text>
             <Text style={styles.shopMetaDivider}>|</Text>
-            <Text style={styles.shopMetaText}>128 sold</Text>
+            <Text style={styles.shopMetaText}>ขายแล้ว 128</Text>
             <Text style={styles.shopMetaDivider}>|</Text>
             <Text style={styles.shopMetaText}>พร้อมขายหน้างาน</Text>
           </View>
@@ -519,8 +533,8 @@ function ProductDetail({
 
           <View style={styles.commissionStrip}>
             <View>
-              <Text style={styles.commissionLabel}>Commission estimate</Text>
-              <Text style={styles.commissionValue}>{commission.toLocaleString('th-TH')} THB ต่อ order</Text>
+              <Text style={styles.commissionLabel}>ค่าคอมฯ โดยประมาณ</Text>
+              <Text style={styles.commissionValue}>{commission.toLocaleString('th-TH')} THB ต่อออเดอร์</Text>
             </View>
             <Text style={styles.commissionRate}>{formatPercent(product.commissionRate)}</Text>
           </View>
@@ -536,7 +550,7 @@ function ProductDetail({
           </View>
 
           <Pressable onPress={onCreateReferral} style={styles.buyReferralButton}>
-            <Text style={styles.buyReferralButtonText}>สร้าง referral code</Text>
+            <Text style={styles.buyReferralButtonText}>สร้างรหัสแนะนำ</Text>
           </Pressable>
         </View>
       </View>
@@ -546,6 +560,7 @@ function ProductDetail({
 
 function ReferralOrderModal({
   form,
+  isCompact,
   modalStep,
   onChangeForm,
   onClose,
@@ -555,6 +570,7 @@ function ReferralOrderModal({
   visible,
 }: {
   form: CustomerForm;
+  isCompact: boolean;
   modalStep: ModalStep;
   onChangeForm: (field: keyof CustomerForm, value: string) => void;
   onClose: () => void;
@@ -574,9 +590,9 @@ function ReferralOrderModal({
           <ScrollView contentContainerStyle={styles.modalContent} keyboardShouldPersistTaps="handled">
             <View style={styles.modalHeader}>
               <View style={styles.modalHeaderCopy}>
-                <Text style={styles.eyebrow}>Referral checkout</Text>
+                <Text style={styles.eyebrow}>เช็กเอาต์แนะนำลูกค้า</Text>
                 <Text style={styles.modalTitle}>{product?.title ?? 'เลือกสินค้า'}</Text>
-                <Text style={styles.modalBody}>สร้าง order mock สำหรับลูกค้า สแกนจ่าย และส่งข้อมูลให้หลังบ้าน</Text>
+                <Text style={styles.modalBody}>สร้างออเดอร์ตัวอย่างสำหรับลูกค้า สแกนจ่าย และส่งข้อมูลให้หลังบ้าน</Text>
               </View>
               <Pressable onPress={onClose} style={styles.closeButton}>
                 <Text style={styles.closeButtonText}>ปิด</Text>
@@ -586,7 +602,7 @@ function ReferralOrderModal({
             {modalStep === 'form' ? (
               <View style={styles.formSection}>
                 <View style={styles.formGrid}>
-                  <View style={[styles.inputGroup, styles.halfInputGroup]}>
+                  <View style={[styles.inputGroup, styles.halfInputGroup, isCompact ? styles.fullInputGroup : null]}>
                     <Text style={styles.inputLabel}>ชื่อ</Text>
                     <TextInput
                       onChangeText={(value) => onChangeForm('firstName', value)}
@@ -597,7 +613,7 @@ function ReferralOrderModal({
                     />
                   </View>
 
-                  <View style={[styles.inputGroup, styles.halfInputGroup]}>
+                  <View style={[styles.inputGroup, styles.halfInputGroup, isCompact ? styles.fullInputGroup : null]}>
                     <Text style={styles.inputLabel}>นามสกุล</Text>
                     <TextInput
                       onChangeText={(value) => onChangeForm('lastName', value)}
@@ -622,7 +638,7 @@ function ReferralOrderModal({
                 </View>
 
                 <View style={styles.formGrid}>
-                  <View style={[styles.inputGroup, styles.halfInputGroup]}>
+                  <View style={[styles.inputGroup, styles.halfInputGroup, isCompact ? styles.fullInputGroup : null]}>
                     <Text style={styles.inputLabel}>อายุ</Text>
                     <TextInput
                       keyboardType="number-pad"
@@ -635,7 +651,7 @@ function ReferralOrderModal({
                     <Text style={[styles.inputHint, form.age.length > 0 && !isValidAge(form.age) ? styles.inputHintError : null]}>{ageHint}</Text>
                   </View>
 
-                  <View style={[styles.inputGroup, styles.halfInputGroup]}>
+                  <View style={[styles.inputGroup, styles.halfInputGroup, isCompact ? styles.fullInputGroup : null]}>
                     <Text style={styles.inputLabel}>เลขบัตรประชาชน 13 หลัก</Text>
                     <TextInput
                       keyboardType="number-pad"
@@ -691,7 +707,7 @@ function ReferralOrderModal({
                 </View>
 
                 <View style={styles.formGrid}>
-                  <View style={[styles.inputGroup, styles.halfInputGroup]}>
+                  <View style={[styles.inputGroup, styles.halfInputGroup, isCompact ? styles.fullInputGroup : null]}>
                     <Text style={styles.inputLabel}>ผู้ติดต่อฉุกเฉิน (optional)</Text>
                     <TextInput
                       onChangeText={(value) => onChangeForm('emergencyContactName', value)}
@@ -702,7 +718,7 @@ function ReferralOrderModal({
                     />
                   </View>
 
-                  <View style={[styles.inputGroup, styles.halfInputGroup]}>
+                  <View style={[styles.inputGroup, styles.halfInputGroup, isCompact ? styles.fullInputGroup : null]}>
                     <Text style={styles.inputLabel}>เบอร์ผู้ติดต่อ (optional)</Text>
                     <TextInput
                       keyboardType="phone-pad"
@@ -741,8 +757,8 @@ function ReferralOrderModal({
                 <View style={styles.paymentSummary}>
                   <Text style={styles.paymentTitle}>ให้ลูกค้าสแกนเพื่อจ่าย</Text>
                   <Text style={styles.paymentAmount}>{paymentRequest.product.priceAmount.toLocaleString('th-TH')} THB</Text>
-                  <Text style={styles.paymentLine}>Order: {paymentRequest.id}</Text>
-                  <Text style={styles.paymentLine}>Referral: {paymentRequest.referralCode}</Text>
+                  <Text style={styles.paymentLine}>ออเดอร์: {paymentRequest.id}</Text>
+                  <Text style={styles.paymentLine}>รหัสแนะนำ: {paymentRequest.referralCode}</Text>
                   <Text style={styles.paymentLine}>ลูกค้า: {paymentRequest.customerName}</Text>
                 </View>
                 <View style={styles.paymentWaitingBox}>
@@ -755,10 +771,10 @@ function ReferralOrderModal({
             {modalStep === 'complete' && paymentRequest ? (
               <View style={styles.completeSection}>
                 <Text style={styles.completeTitle}>ชำระเงินสำเร็จ</Text>
-                <Text style={styles.completeBody}>ระบบ mock ส่งข้อมูลไปให้หลังบ้านแล้ว เพื่อบันทึกการซื้อสินค้าและ referral attribution</Text>
+                <Text style={styles.completeBody}>ระบบตัวอย่างส่งข้อมูลไปให้หลังบ้านแล้ว เพื่อบันทึกการซื้อสินค้าและ attribution จากผู้แนะนำ</Text>
                 <View style={styles.backendStatusBox}>
-                  <Text style={styles.paymentLine}>Order: {paymentRequest.id}</Text>
-                  <Text style={styles.paymentLine}>Backend sync: {paymentRequest.backendStatus}</Text>
+                  <Text style={styles.paymentLine}>ออเดอร์: {paymentRequest.id}</Text>
+                  <Text style={styles.paymentLine}>ซิงก์หลังบ้าน: {paymentRequest.backendStatus}</Text>
                 </View>
                 <Pressable onPress={onClose} style={styles.modalPrimaryButton}>
                   <Text style={styles.modalPrimaryButtonText}>ปิด</Text>
@@ -772,40 +788,40 @@ function ReferralOrderModal({
   );
 }
 
-function ReferralGenerator({ account, onCopy }: { account: ReferralAccount; onCopy: (value: string) => void }) {
+function ReferralGenerator({ account, isCompact, onCopy }: { account: ReferralAccount; isCompact: boolean; onCopy: (value: string) => void }) {
   const referralLink = createAccountReferralLink(account);
   const deepLink = createAppReferralDeepLink(account);
 
   return (
     <View style={styles.referralLayout}>
-      <View style={styles.referralCard}>
-        <Text style={styles.panelTitle}>Referral link ของคุณ</Text>
+      <View style={[styles.referralCard, isCompact ? styles.referralCardCompact : null]}>
+        <Text style={styles.panelTitle}>ลิงก์แนะนำของคุณ</Text>
         <Text style={styles.panelBody}>ส่งลิงก์นี้ให้ลูกค้า ถ้ามีแอปอยู่แล้วจะเปิดเข้าแอปพร้อมผูก code ถ้ายังไม่มีแอปจะพาไปหน้าโหลดก่อน</Text>
         <View style={styles.qrBox}>
           <QRCode backgroundColor="#FFFFFF" color={logoPalette.blueDeep} quietZone={10} size={220} value={referralLink} />
         </View>
         <View style={styles.codeBox}>
-          <Text style={styles.codeLabel}>Referral code</Text>
+          <Text style={styles.codeLabel}>รหัสแนะนำ</Text>
           <Text style={styles.codeText}>{account.code}</Text>
           <Text numberOfLines={2} style={styles.linkText}>{referralLink}</Text>
         </View>
-        <View style={styles.actionRow}>
+        <View style={[styles.actionRow, isCompact ? styles.actionRowCompact : null]}>
           <Pressable onPress={() => onCopy(account.code)} style={styles.secondaryAction}>
-            <Text style={styles.secondaryActionText}>Copy code</Text>
+            <Text style={styles.secondaryActionText}>คัดลอกรหัส</Text>
           </Pressable>
           <Pressable onPress={() => onCopy(referralLink)} style={styles.secondaryAction}>
-            <Text style={styles.secondaryActionText}>Copy link</Text>
+            <Text style={styles.secondaryActionText}>คัดลอกลิงก์</Text>
           </Pressable>
         </View>
       </View>
 
-      <View style={styles.flowCard}>
-        <Text style={styles.panelTitle}>Customer flow</Text>
+      <View style={[styles.flowCard, isCompact ? styles.flowCardCompact : null]}>
+        <Text style={styles.panelTitle}>เส้นทางลูกค้า</Text>
         {[
           'ลูกค้ากด referral link หรือสแกน QR',
-          'ถ้ามี app แล้ว เปิดเข้า app พร้อมผูก code',
-          'ถ้ายังไม่มี app พาไปหน้า download ก่อน',
-          'เมื่อลูกค้าซื้อสินค้า commission จะเข้าบัญชีนี้',
+          'ถ้ามีแอปแล้ว เปิดเข้าแอปพร้อมผูกรหัส',
+          'ถ้ายังไม่มีแอป พาไปหน้าโหลดก่อน',
+          'เมื่อลูกค้าซื้อสินค้า ค่าคอมมิชชันจะเข้าบัญชีนี้',
         ].map((step, index) => (
           <View key={step} style={styles.flowStep}>
             <Text style={styles.flowNumber}>{index + 1}</Text>
@@ -813,7 +829,7 @@ function ReferralGenerator({ account, onCopy }: { account: ReferralAccount; onCo
           </View>
         ))}
         <View style={styles.deepLinkBox}>
-          <Text style={styles.deepLinkLabel}>App deep link mock</Text>
+          <Text style={styles.deepLinkLabel}>ดีปลิงก์ตัวอย่าง</Text>
           <Text style={styles.deepLinkText}>{deepLink}</Text>
         </View>
       </View>
@@ -869,8 +885,8 @@ function CommissionDashboard({
     { label: '10k', y: lineChartBottom },
   ];
   const stats = [
-    { label: 'ยอด commission เดือนนี้', value: '28,450 THB' },
-    { label: 'ลูกค้าที่ผูก code', value: '42' },
+    { label: 'ค่าคอมมิชชันเดือนนี้', value: '28,450 THB' },
+    { label: 'ลูกค้าที่ผูกรหัส', value: '42' },
     { label: 'รอ payout', value: '12,700 THB' },
     { label: 'Conversion', value: '8.4%' },
   ];
@@ -889,8 +905,8 @@ function CommissionDashboard({
       <View style={dashboardPanelStyle}>
         <View style={styles.chartHeader}>
           <View>
-            <Text style={styles.panelTitle}>Commission trend</Text>
-            <Text style={styles.chartSubtitle}>ยอดสะสมรายเดือนจาก referral order</Text>
+            <Text style={styles.panelTitle}>แนวโน้มค่าคอมมิชชัน</Text>
+            <Text style={styles.chartSubtitle}>ยอดสะสมรายเดือนจากออเดอร์ที่มีรหัสแนะนำ</Text>
           </View>
           <Text style={styles.chartTotal}>+18%</Text>
         </View>
@@ -905,7 +921,7 @@ function CommissionDashboard({
             </Defs>
 
             <SvgText fill={logoPalette.blueDeep} fontSize={11} fontWeight="900" textAnchor="start" x={lineChartLeft} y={12}>
-              COMMISSION
+              COMM.
             </SvgText>
 
             {areaChartGridRows.map((row) => (
@@ -940,8 +956,8 @@ function CommissionDashboard({
       <View style={dashboardPanelStyle}>
         <View style={styles.chartHeader}>
           <View>
-            <Text style={styles.panelTitle}>Referral funnel</Text>
-            <Text style={styles.chartSubtitle}>ลูกค้าจาก code จนถึงจ่ายสำเร็จ</Text>
+            <Text style={styles.panelTitle}>ฟันเนลผู้แนะนำ</Text>
+            <Text style={styles.chartSubtitle}>ลูกค้าจากรหัสแนะนำจนถึงจ่ายสำเร็จ</Text>
           </View>
           <Text style={styles.chartTotal}>26%</Text>
         </View>
@@ -964,16 +980,16 @@ function CommissionDashboard({
       </View>
 
       <View style={dashboardPanelStyle}>
-        <Text style={styles.panelTitle}>Selected product estimate</Text>
+        <Text style={styles.panelTitle}>ค่าคอมฯ ต่อสินค้า</Text>
         {selectedProduct ? (
           <>
             <Text numberOfLines={2} style={styles.dashboardProductName}>{selectedProduct.title}</Text>
             <Text style={[styles.panelBody, styles.dashboardEstimateText]}>
-              จะได้ commission ประมาณ {projectedCommission.toLocaleString('th-TH')} THB ต่อ order
+              จะได้ค่าคอมมิชชันประมาณ {projectedCommission.toLocaleString('th-TH')} THB ต่อออเดอร์
             </Text>
           </>
         ) : (
-          <Text style={[styles.panelBody, styles.dashboardEstimateText]}>เลือกสินค้าจาก tab สินค้า เพื่อดู commission estimate รายสินค้า</Text>
+          <Text style={[styles.panelBody, styles.dashboardEstimateText]}>เลือกสินค้าจากแท็บสินค้าเพื่อดูค่าคอมมิชชันโดยประมาณรายสินค้า</Text>
         )}
       </View>
     </View>
@@ -1088,6 +1104,13 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 24,
     width: '100%',
+  },
+  pageContentCompact: {
+    gap: 12,
+    padding: 12,
+  },
+  pageContentWithTabs: {
+    paddingBottom: 104,
   },
   brandHero: {
     alignItems: 'center',
@@ -1217,6 +1240,11 @@ const styles = StyleSheet.create({
     minWidth: 250,
     paddingHorizontal: 13,
   },
+  searchInputCompact: {
+    flexBasis: '100%',
+    minWidth: 0,
+    width: '100%',
+  },
   resultCount: {
     color: logoPalette.blue,
     fontSize: 12,
@@ -1297,10 +1325,18 @@ const styles = StyleSheet.create({
     minWidth: 300,
     overflow: 'hidden',
   },
+  detailImagePanelCompact: {
+    flexBasis: '100%',
+    minWidth: 0,
+    width: '100%',
+  },
   detailImage: {
     backgroundColor: '#FFFFFF',
     height: 360,
     width: '100%',
+  },
+  detailImageCompact: {
+    height: 248,
   },
   detailInfoPanel: {
     backgroundColor: '#FFFFFF',
@@ -1311,6 +1347,11 @@ const styles = StyleSheet.create({
     gap: 12,
     minWidth: 300,
     padding: 14,
+  },
+  detailInfoPanelCompact: {
+    flexBasis: '100%',
+    minWidth: 0,
+    width: '100%',
   },
   detailTitle: {
     color: logoPalette.text,
@@ -1412,6 +1453,11 @@ const styles = StyleSheet.create({
     minWidth: 300,
     padding: 14,
   },
+  referralCardCompact: {
+    flexBasis: '100%',
+    minWidth: 0,
+    width: '100%',
+  },
   flowCard: {
     backgroundColor: '#FFFFFF',
     borderColor: logoPalette.line,
@@ -1421,6 +1467,11 @@ const styles = StyleSheet.create({
     gap: 10,
     minWidth: 300,
     padding: 14,
+  },
+  flowCardCompact: {
+    flexBasis: '100%',
+    minWidth: 0,
+    width: '100%',
   },
   panelTitle: {
     color: logoPalette.text,
@@ -1470,6 +1521,9 @@ const styles = StyleSheet.create({
   actionRow: {
     flexDirection: 'row',
     gap: 8,
+  },
+  actionRowCompact: {
+    flexDirection: 'column',
   },
   secondaryAction: {
     alignItems: 'center',
@@ -1550,7 +1604,7 @@ const styles = StyleSheet.create({
   statCardCompact: {
     flexGrow: 0,
     minWidth: 0,
-    width: '48%',
+    width: '100%',
   },
   statValue: {
     color: logoPalette.blueDeep,
@@ -1773,6 +1827,11 @@ const styles = StyleSheet.create({
   halfInputGroup: {
     flex: 1,
     minWidth: 150,
+  },
+  fullInputGroup: {
+    flexBasis: '100%',
+    minWidth: 0,
+    width: '100%',
   },
   inputLabel: {
     color: logoPalette.text,

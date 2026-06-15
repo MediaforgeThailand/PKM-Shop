@@ -185,7 +185,7 @@ export default function UserProfileScreen() {
       await refreshProfile();
       setMessage('ลบสิ่งที่ผู้ช่วยจำไว้แล้ว');
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'ลบ memory ไม่สำเร็จ');
+      setMessage(error instanceof Error ? error.message : 'ลบความจำไม่สำเร็จ');
     } finally {
       setIsBusy(false);
     }
@@ -194,7 +194,7 @@ export default function UserProfileScreen() {
   async function handleGrantConsent() {
     if (isDemoMode) {
       setHealthMemoryStatus(showcaseDemoHealthMemoryStatus);
-      setMessage('โหมดตัวอย่าง — เปิด health memory ตัวอย่างแล้ว');
+      setMessage('โหมดตัวอย่าง — เปิดความจำสุขภาพตัวอย่างแล้ว');
       return;
     }
 
@@ -204,9 +204,9 @@ export default function UserProfileScreen() {
     try {
       await grantHealthMemoryConsent();
       await refreshProfile();
-      setMessage('เปิด health memory แล้ว หลังจากนี้ผู้ช่วยจะจำข้อมูลสำคัญแบบเงียบๆ');
+      setMessage('เปิดความจำสุขภาพแล้ว หลังจากนี้ผู้ช่วยจะจำข้อมูลสำคัญแบบเงียบๆ');
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'เปิด health memory ไม่สำเร็จ');
+      setMessage(error instanceof Error ? error.message : 'เปิดความจำสุขภาพไม่สำเร็จ');
     } finally {
       setIsBusy(false);
     }
@@ -224,7 +224,7 @@ export default function UserProfileScreen() {
     try {
       await revokeHealthMemoryConsent();
       await refreshProfile();
-      setMessage('ถอน consent สำหรับ health memory แล้ว');
+      setMessage('ถอน consent สำหรับความจำสุขภาพแล้ว');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'ถอน consent ไม่สำเร็จ');
     } finally {
@@ -291,7 +291,7 @@ export default function UserProfileScreen() {
     return (
       <Screen>
         <Card>
-          <Text style={styles.cardTitle}>กำลังโหลด Health Profile</Text>
+          <Text style={styles.cardTitle}>กำลังโหลดโปรไฟล์สุขภาพ</Text>
           <Text style={styles.cardBody}>กำลังตรวจ session และข้อมูล consent</Text>
         </Card>
       </Screen>
@@ -311,14 +311,14 @@ export default function UserProfileScreen() {
           <View style={styles.identity}>
             <Text style={styles.name}>{displayName}</Text>
             <Text style={styles.meta}>{auth.user?.email ?? 'demo@miracare.local'}</Text>
-            <Text style={styles.meta}>User ID {auth.user?.id.slice(0, 8) ?? 'demo-user'}</Text>
+            <Text style={styles.meta}>รหัสผู้ใช้ {auth.user?.id.slice(0, 8) ?? 'demo-user'}</Text>
           </View>
         </View>
         <View style={styles.heroVisual}>
-          <StatusRing value={facts.length ? 74 : 24} label="Context" size={118} color={MiraDesign.color.blue} />
+          <StatusRing value={facts.length ? 74 : 24} label="บริบท" size={118} color={MiraDesign.color.showcaseBlue} />
           <View style={styles.contextBox}>
-            <Text style={styles.contextLabel}>Health memory</Text>
-            <Text style={styles.contextValue}>{facts.length + agentMemory.length} items</Text>
+            <Text style={styles.contextLabel}>ความจำสุขภาพ</Text>
+            <Text style={styles.contextValue}>{facts.length + agentMemory.length} รายการ</Text>
             <FreshnessDots active={Math.min(4, Math.max(1, facts.length + agentMemory.length))} />
           </View>
         </View>
@@ -336,7 +336,7 @@ export default function UserProfileScreen() {
         </Card>
       ) : null}
 
-      <SectionHeader title="คำสั่งซื้อและสถานะคิว" meta={ordersQuery.isFetching ? 'กำลังอัปเดต' : `${activeOrderCount} active`} />
+      <SectionHeader title="คำสั่งซื้อและสถานะคิว" meta={ordersQuery.isFetching ? 'กำลังอัปเดต' : `${activeOrderCount} กำลังดำเนินการ`} />
       {auth.session && ordersQuery.error ? (
         <Card style={styles.orderNoticeCard}>
           <Text style={styles.cardTitle}>โหลดสถานะคำสั่งซื้อไม่สำเร็จ</Text>
@@ -382,29 +382,29 @@ export default function UserProfileScreen() {
         </View>
       ) : null}
 
-      <SectionHeader title="Consent status" />
+      <SectionHeader title="สถานะการยินยอม" />
       <View style={styles.consentRow}>
         <View style={styles.consentCard}>
           <View style={consentGranted ? styles.consentDot : [styles.consentDot, styles.consentAmber]} />
-          <Text style={styles.consentTitle}>Chat health memory</Text>
-          <Text style={styles.consentValue}>{consentGranted ? 'On' : 'Off'}</Text>
+          <Text style={styles.consentTitle}>ความจำสุขภาพในแชท</Text>
+          <Text style={styles.consentValue}>{consentGranted ? 'เปิด' : 'ปิด'}</Text>
           {!consentGranted ? (
             <Pressable disabled={isBusy} onPress={handleGrantConsent} style={styles.inlineAction}>
-              <Text style={styles.inlineActionText}>Enable</Text>
+              <Text style={styles.inlineActionText}>เปิดใช้งาน</Text>
             </Pressable>
           ) : null}
         </View>
         <View style={styles.consentCard}>
           <View style={[styles.consentDot, styles.consentAmber]} />
-          <Text style={styles.consentTitle}>Hospital sharing</Text>
-          <Text style={styles.consentValue}>Off</Text>
+          <Text style={styles.consentTitle}>แชร์กับโรงพยาบาล</Text>
+          <Text style={styles.consentValue}>ปิด</Text>
         </View>
       </View>
 
-      <SectionHeader title="สิ่งที่จำเกี่ยวกับคุณ" meta={`${agentMemory.length} items`} />
+      <SectionHeader title="สิ่งที่จำเกี่ยวกับคุณ" meta={`${agentMemory.length} รายการ`} />
       {agentMemory.length === 0 ? (
         <Card>
-          <Text style={styles.cardTitle}>ยังไม่มี personal memory</Text>
+          <Text style={styles.cardTitle}>ยังไม่มีความจำส่วนตัว</Text>
           <Text style={styles.cardBody}>หลังเปิด consent ผู้ช่วยจะจำข้อมูลอย่างเช่นงบ พื้นที่สะดวก เป้าหมายสุขภาพ และความสนใจแพ็กเกจ</Text>
         </Card>
       ) : (
@@ -421,14 +421,14 @@ export default function UserProfileScreen() {
               </View>
               <Text style={styles.factMeta}>จำเมื่อ {new Date(memory.observedAt).toLocaleDateString('th-TH')}</Text>
               <Pressable disabled={isBusy} onPress={() => handleDeleteAgentMemory(memory.id)} style={styles.textButton}>
-                <Text style={styles.textButtonDanger}>ลบ memory นี้</Text>
+                <Text style={styles.textButtonDanger}>ลบความจำนี้</Text>
               </Pressable>
             </View>
           ))}
         </View>
       )}
 
-      <SectionHeader title="Confirmed health facts" meta={`${facts.length} records`} />
+      <SectionHeader title="ข้อมูลสุขภาพที่ยืนยันแล้ว" meta={`${facts.length} รายการ`} />
       {facts.length === 0 ? (
         <Card>
           <Text style={styles.cardTitle}>ยังไม่มีข้อมูลสุขภาพที่ยืนยันแล้ว</Text>
@@ -457,7 +457,7 @@ export default function UserProfileScreen() {
         </View>
       )}
 
-      <SectionHeader title="Record freshness" />
+      <SectionHeader title="ความสดใหม่ของข้อมูล" />
       <Card>
         <View style={styles.freshTop}>
           <View>
@@ -466,19 +466,19 @@ export default function UserProfileScreen() {
           </View>
           <Pill label="MVP" tone="amber" />
         </View>
-        <MiniTrend color={MiraDesign.color.primary} />
+        <MiniTrend color={MiraDesign.color.showcaseBlue} />
       </Card>
 
-      <SectionHeader title="Data controls" />
+      <SectionHeader title="จัดการข้อมูล" />
       <Card>
-        <ActionButton disabled={isBusy} label="Export health data snapshot" onPress={handleExport} />
-        <ActionButton disabled={isBusy} label="Revoke health memory consent" onPress={handleRevokeConsent} variant="secondary" />
-        <ActionButton disabled={isBusy} label="Sign out" onPress={handleSignOut} variant="secondary" />
+        <ActionButton disabled={isBusy} label="ส่งออก snapshot ข้อมูลสุขภาพ" onPress={handleExport} />
+        <ActionButton disabled={isBusy} label="ถอน consent ความจำสุขภาพ" onPress={handleRevokeConsent} variant="secondary" />
+        <ActionButton disabled={isBusy} label="ออกจากระบบ" onPress={handleSignOut} variant="secondary" />
       </Card>
 
       {snapshot ? (
         <Card>
-          <Text style={styles.cardTitle}>Export snapshot</Text>
+          <Text style={styles.cardTitle}>Snapshot สำหรับ export</Text>
           <Text style={styles.snapshotText}>{JSON.stringify(snapshot, null, 2)}</Text>
         </Card>
       ) : null}
@@ -488,8 +488,8 @@ export default function UserProfileScreen() {
 
 const styles = StyleSheet.create({
   profileHero: {
-    backgroundColor: MiraDesign.color.surface,
-    borderColor: MiraDesign.color.line,
+    backgroundColor: MiraDesign.color.showcaseSurface,
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: MiraDesign.radius.lg,
     borderWidth: 1,
     gap: MiraDesign.space.lg,
@@ -503,7 +503,7 @@ const styles = StyleSheet.create({
   },
   avatar: {
     alignItems: 'center',
-    backgroundColor: MiraDesign.color.primary,
+    backgroundColor: MiraDesign.color.showcaseBlue,
     borderRadius: MiraDesign.radius.lg,
     height: 76,
     justifyContent: 'center',
@@ -519,18 +519,18 @@ const styles = StyleSheet.create({
     gap: MiraDesign.space.xs,
   },
   name: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 24,
     fontWeight: '900',
   },
   meta: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 13,
     fontWeight: '800',
   },
   heroVisual: {
     alignItems: 'center',
-    backgroundColor: MiraDesign.color.surfaceSoft,
+    backgroundColor: MiraDesign.color.showcaseBlueSoft,
     borderRadius: MiraDesign.radius.lg,
     flexDirection: 'row',
     gap: MiraDesign.space.md,
@@ -541,26 +541,26 @@ const styles = StyleSheet.create({
     gap: MiraDesign.space.sm,
   },
   contextLabel: {
-    color: MiraDesign.color.primaryDeep,
+    color: MiraDesign.color.showcaseBlueDeep,
     fontSize: 12,
     fontWeight: '900',
     textTransform: 'uppercase',
   },
   contextValue: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 26,
     fontWeight: '900',
   },
   messageCard: {
-    backgroundColor: MiraDesign.color.primarySoft,
+    backgroundColor: MiraDesign.color.showcaseBlueSoft,
   },
   messageText: {
-    color: MiraDesign.color.primaryDeep,
+    color: MiraDesign.color.showcaseBlueDeep,
     fontSize: 13,
     fontWeight: '900',
   },
   orderNoticeCard: {
-    backgroundColor: MiraDesign.color.surface,
+    backgroundColor: MiraDesign.color.showcaseSurface,
   },
   profileOrderList: {
     gap: MiraDesign.space.md,
@@ -570,8 +570,8 @@ const styles = StyleSheet.create({
   },
   profileOrderHeader: {
     alignItems: 'center',
-    backgroundColor: MiraDesign.color.surface,
-    borderColor: MiraDesign.color.line,
+    backgroundColor: MiraDesign.color.showcaseSurface,
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: MiraDesign.radius.md,
     borderWidth: 1,
     flexDirection: 'row',
@@ -587,17 +587,17 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   profileOrderTitle: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 15,
     fontWeight: '900',
   },
   profileOrderMeta: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 12,
     fontWeight: '800',
   },
   profileOrderChip: {
-    backgroundColor: MiraDesign.color.primarySoft,
+    backgroundColor: MiraDesign.color.showcaseBlueSoft,
     borderRadius: MiraDesign.radius.pill,
     paddingHorizontal: MiraDesign.space.md,
     paddingVertical: MiraDesign.space.xs,
@@ -609,7 +609,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFE2E2',
   },
   profileOrderChipText: {
-    color: MiraDesign.color.primaryDeep,
+    color: MiraDesign.color.showcaseBlueDeep,
     fontSize: 11,
     fontWeight: '900',
   },
@@ -621,8 +621,8 @@ const styles = StyleSheet.create({
     gap: MiraDesign.space.md,
   },
   consentCard: {
-    backgroundColor: MiraDesign.color.surface,
-    borderColor: MiraDesign.color.line,
+    backgroundColor: MiraDesign.color.showcaseSurface,
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: MiraDesign.radius.lg,
     borderWidth: 1,
     flex: 1,
@@ -640,25 +640,25 @@ const styles = StyleSheet.create({
     backgroundColor: MiraDesign.color.amber,
   },
   consentTitle: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 12,
     fontWeight: '900',
   },
   consentValue: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 18,
     fontWeight: '900',
   },
   inlineAction: {
     alignSelf: 'flex-start',
-    backgroundColor: MiraDesign.color.primarySoft,
+    backgroundColor: MiraDesign.color.showcaseBlueSoft,
     borderRadius: MiraDesign.radius.pill,
     marginTop: MiraDesign.space.xs,
     paddingHorizontal: MiraDesign.space.md,
     paddingVertical: MiraDesign.space.xs,
   },
   inlineActionText: {
-    color: MiraDesign.color.primaryDeep,
+    color: MiraDesign.color.showcaseBlueDeep,
     fontSize: 12,
     fontWeight: '900',
   },
@@ -666,8 +666,8 @@ const styles = StyleSheet.create({
     gap: MiraDesign.space.md,
   },
   factCard: {
-    backgroundColor: MiraDesign.color.surface,
-    borderColor: MiraDesign.color.line,
+    backgroundColor: MiraDesign.color.showcaseSurface,
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: MiraDesign.radius.md,
     borderWidth: 1,
     gap: MiraDesign.space.sm,
@@ -683,18 +683,18 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   factType: {
-    color: MiraDesign.color.primaryDeep,
+    color: MiraDesign.color.showcaseBlueDeep,
     fontSize: 12,
     fontWeight: '900',
   },
   factValue: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 17,
     fontWeight: '900',
     marginTop: MiraDesign.space.xs,
   },
   factMeta: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 12,
     fontWeight: '800',
   },
@@ -715,18 +715,18 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   cardTitle: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 17,
     fontWeight: '900',
   },
   cardBody: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 13,
     lineHeight: 19,
     marginTop: MiraDesign.space.xs,
   },
   snapshotText: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontFamily: 'SpaceMono',
     fontSize: 11,
     lineHeight: 17,

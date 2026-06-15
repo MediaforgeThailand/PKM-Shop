@@ -19,6 +19,18 @@ export const MiraDesign = {
     coral: '#EE6B6E',
     danger: '#EE6B6E',
     lavender: '#8D7EF5',
+    showcaseCanvas: '#EAF6FF',
+    showcaseCanvasDeep: '#D7ECFF',
+    showcaseSurface: '#F9FDFF',
+    showcaseNavy: '#071D49',
+    showcaseNavySoft: '#385780',
+    showcaseBlue: '#176BFF',
+    showcaseBlueDeep: '#0A3A9E',
+    showcaseBlueSoft: '#DDEEFF',
+    showcaseCyan: '#65D8FF',
+    showcaseLine: '#C6E0FA',
+    showcaseLineSoft: '#D1E7FF',
+    showcaseMint: '#18B883',
   },
   radius: {
     xs: 6,
@@ -38,15 +50,15 @@ export const MiraDesign = {
 };
 
 export const shadow = {
-  shadowColor: '#6B9297',
+  shadowColor: '#7FADE8',
   shadowOffset: { width: 0, height: 10 },
-  shadowOpacity: 0.12,
-  shadowRadius: 22,
+  shadowOpacity: 0.14,
+  shadowRadius: 20,
   elevation: 7,
 };
 
 export const softShadow = {
-  shadowColor: '#9BB7BB',
+  shadowColor: '#9EBFE8',
   shadowOffset: { width: 0, height: 6 },
   shadowOpacity: 0.08,
   shadowRadius: 16,

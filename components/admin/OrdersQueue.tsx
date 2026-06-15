@@ -53,10 +53,10 @@ type OrderMutationAction = Extract<AdminOrderActionRequest, { action: 'book' | '
 const activeStatuses: OrderStatus[] = ['selecting_branch', 'collecting_info', 'awaiting_payment', 'submitted', 'confirmed', 'booked'];
 const notePresets = ['โทรแล้ว-ไม่รับ', 'โทรแล้ว-เลื่อน'] as const;
 const actionLabels: Record<OrderMutationAction, string> = {
-  book: 'Book appointment',
-  cancel: 'Cancel',
-  confirm: 'Confirm payment',
-  done: 'Mark done',
+  book: 'บันทึกนัดหมาย',
+  cancel: 'ยกเลิก',
+  confirm: 'ยืนยันชำระเงิน',
+  done: 'ปิดงาน',
 };
 
 const calendarWeekdays = ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'] as const;
@@ -304,6 +304,38 @@ function statusTone(status: OrderStatus): 'amber' | 'blue' | 'danger' | 'mint' {
   return 'amber';
 }
 
+function statusLabel(status: OrderStatus) {
+  if (status === 'selecting_branch') {
+    return 'เลือกสาขา';
+  }
+
+  if (status === 'collecting_info') {
+    return 'เก็บข้อมูล';
+  }
+
+  if (status === 'awaiting_payment') {
+    return 'รอชำระ';
+  }
+
+  if (status === 'submitted') {
+    return 'รอตรวจ';
+  }
+
+  if (status === 'confirmed') {
+    return 'ยืนยันแล้ว';
+  }
+
+  if (status === 'booked') {
+    return 'นัดแล้ว';
+  }
+
+  if (status === 'done') {
+    return 'เสร็จสิ้น';
+  }
+
+  return 'ยกเลิก';
+}
+
 function formatPayment(order: Pick<OrderQueueRow, 'payment_provider' | 'stripe_payment_status'>) {
   if (!order.payment_provider) {
     return 'not set';
@@ -339,7 +371,7 @@ function canAct(order: OrderQueueRow, action: OrderMutationAction) {
   return order.status !== 'done' && order.status !== 'cancelled';
 }
 
-export function OrdersQueue({ title = 'Orders Queue' }: { title?: string }) {
+export function OrdersQueue({ title = 'คิวคำสั่งซื้อ' }: { title?: string }) {
   const auth = useAuthSession();
   const { width } = useWindowDimensions();
   const [tenant, setTenant] = useState<TenantContext | null>(null);
@@ -701,10 +733,10 @@ export function OrdersQueue({ title = 'Orders Queue' }: { title?: string }) {
         note: trimmedNote,
         order_id: selectedOrder.id,
       });
-      setMessage('Saved internal note.');
+      setMessage('บันทึกโน้ตภายในแล้ว');
       await refreshOrders(result.order.tenant_id);
     } catch (noteError) {
-      setError(noteError instanceof Error ? noteError.message : 'Unable to save note.');
+      setError(noteError instanceof Error ? noteError.message : 'บันทึกโน้ตไม่สำเร็จ');
     } finally {
       setIsSavingNote(false);
     }
@@ -715,19 +747,19 @@ export function OrdersQueue({ title = 'Orders Queue' }: { title?: string }) {
       <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
         <View style={[styles.topBar, !isWide ? styles.topBarStack : null]}>
           <View style={styles.titleGroup}>
-            <Text style={styles.eyebrow}>MiraCare v2 Phase 3</Text>
+            <Text style={styles.eyebrow}>หลังบ้านโรงพยาบาล</Text>
             <Text style={styles.title}>{title}</Text>
             <Text style={styles.subtitle}>
-              {tenant ? `${tenant.display_name} · ${tenant.role}` : isLoading ? 'Loading tenant access' : defaultTenantSlug}
+              {tenant ? `${tenant.display_name} · ${tenant.role}` : isLoading ? 'กำลังโหลดสิทธิ์ tenant' : defaultTenantSlug}
             </Text>
           </View>
           <View style={styles.topActions}>
             <Pressable disabled={isLoading} onPress={() => void refreshOrders()} style={[styles.secondaryButton, isLoading ? styles.disabled : null]}>
-              <Text style={styles.secondaryButtonText}>{isLoading ? 'Refreshing' : 'Refresh'}</Text>
+              <Text style={styles.secondaryButtonText}>{isLoading ? 'กำลังรีเฟรช' : 'รีเฟรช'}</Text>
             </Pressable>
             <Link href="/admin/catalog" asChild>
               <Pressable style={styles.primaryButton}>
-                <Text style={styles.primaryButtonText}>Catalog</Text>
+                <Text style={styles.primaryButtonText}>แค็ตตาล็อก</Text>
               </Pressable>
             </Link>
           </View>
@@ -738,22 +770,22 @@ export function OrdersQueue({ title = 'Orders Queue' }: { title?: string }) {
         {isDemoMode ? <Banner tone="success" text="โหมดตัวอย่าง: เปิดดูคิวออเดอร์ได้โดยไม่ต้องล็อกอิน และปุ่ม action จะไม่ส่งข้อมูลจริง" /> : null}
 
         <View style={styles.metrics}>
-          <Metric label="Total" value={`${summary.total}`} />
-          <Metric label="Active" value={`${summary.active}`} />
-          <Metric label="Submitted" value={`${summary.submitted}`} />
+          <Metric label="ทั้งหมด" value={`${summary.total}`} />
+          <Metric label="กำลังดำเนินการ" value={`${summary.active}`} />
+          <Metric label="รอตรวจ" value={`${summary.submitted}`} />
         </View>
 
         <View style={styles.filters}>
           <TextInput
             onChangeText={setQuery}
-            placeholder="Search order, buyer, phone, product, branch"
-            placeholderTextColor={MiraDesign.color.muted}
+            placeholder="ค้นหา order, ลูกค้า, เบอร์, แพ็กเกจ หรือสาขา"
+            placeholderTextColor={MiraDesign.color.showcaseNavySoft}
             style={styles.searchInput}
             value={query}
           />
           <Pressable onPress={() => setShowActiveOnly((current) => !current)} style={[styles.filterButton, showActiveOnly ? styles.filterButtonActive : null]}>
             <Text style={[styles.filterButtonText, showActiveOnly ? styles.filterButtonTextActive : null]}>
-              {showActiveOnly ? 'Active only' : 'All orders'}
+              {showActiveOnly ? 'เฉพาะรายการ active' : 'ทุกคำสั่งซื้อ'}
             </Text>
           </Pressable>
         </View>
@@ -762,8 +794,8 @@ export function OrdersQueue({ title = 'Orders Queue' }: { title?: string }) {
           <View style={styles.queuePane}>
             {filteredOrders.length === 0 ? (
               <View style={styles.emptyState}>
-                <Text style={styles.emptyTitle}>{isLoading ? 'Loading orders' : 'No orders found'}</Text>
-                <Text style={styles.emptyBody}>Orders from chat checkout will appear here in realtime.</Text>
+                <Text style={styles.emptyTitle}>{isLoading ? 'กำลังโหลดคำสั่งซื้อ' : 'ไม่พบคำสั่งซื้อ'}</Text>
+                <Text style={styles.emptyBody}>คำสั่งซื้อจาก chat checkout จะแสดงที่นี่เมื่อมีข้อมูลเข้าระบบ</Text>
               </View>
             ) : (
               filteredOrders.map((order) => (
@@ -803,8 +835,8 @@ export function OrdersQueue({ title = 'Orders Queue' }: { title?: string }) {
               />
             ) : (
               <View style={styles.emptyState}>
-                <Text style={styles.emptyTitle}>Select an order</Text>
-                <Text style={styles.emptyBody}>Open an order to inspect buyer details, payment state, and transcript.</Text>
+                <Text style={styles.emptyTitle}>เลือกคำสั่งซื้อ</Text>
+                <Text style={styles.emptyBody}>เปิดรายการเพื่อดูข้อมูลผู้ซื้อ สถานะชำระเงิน และบทสนทนา</Text>
               </View>
             )}
           </View>
@@ -836,7 +868,7 @@ function OrderRowCard({ onSelect, order, selected }: { onSelect: () => void; ord
   const product = fromJoin(order.products);
   const customer = fromJoin(order.customers);
   const referrer = fromJoin(order.referrers);
-  const buyerName = order.buyer_name || customer?.nickname || 'Unnamed buyer';
+  const buyerName = order.buyer_name || customer?.nickname || 'ไม่ระบุชื่อผู้ซื้อ';
   const phone = order.buyer_phone || customer?.phone || '-';
 
   return (
@@ -844,23 +876,23 @@ function OrderRowCard({ onSelect, order, selected }: { onSelect: () => void; ord
       <View style={styles.orderHead}>
         <View style={styles.orderTitleBlock}>
           <Text numberOfLines={1} style={styles.orderTitle}>
-            {product?.name ?? 'Unknown product'}
+            {product?.name ?? 'ไม่พบสินค้า'}
           </Text>
           <Text style={styles.orderMeta}>{formatDateTime(order.created_at)}</Text>
         </View>
-        <Pill label={order.status} tone={statusTone(order.status)} />
+        <Pill label={statusLabel(order.status)} tone={statusTone(order.status)} />
       </View>
       <View style={styles.orderMetaGrid}>
-        <Meta label="Buyer" value={buyerName} />
-        <Meta label="Age" value={order.buyer_age ? `${order.buyer_age}` : '-'} />
-        <Meta label="Phone" value={phone} />
-        <Meta label="Branch" value={branch?.name ?? 'ไม่ระบุสาขา'} />
-        <Meta label="Channel" value={order.channel} />
-        <Meta label="Payment" value={formatPayment(order)} />
-        <Meta label="Customer date" value={formatPreferredDateRange(order)} />
-        <Meta label="Customer time" value={formatPreferredTimeWindow(order)} />
-        <Meta label="Referrer" value={referrer ? `${referrer.name} (${referrer.ref_code})` : '-'} />
-        <Meta label="Amount" value={formatMoney(order.amount_baht)} />
+        <Meta label="ผู้ซื้อ" value={buyerName} />
+        <Meta label="อายุ" value={order.buyer_age ? `${order.buyer_age}` : '-'} />
+        <Meta label="เบอร์โทร" value={phone} />
+        <Meta label="สาขา" value={branch?.name ?? 'ไม่ระบุสาขา'} />
+        <Meta label="ช่องทาง" value={order.channel} />
+        <Meta label="ชำระเงิน" value={formatPayment(order)} />
+        <Meta label="วันที่ลูกค้าสะดวก" value={formatPreferredDateRange(order)} />
+        <Meta label="เวลาที่ลูกค้าสะดวก" value={formatPreferredTimeWindow(order)} />
+        <Meta label="ผู้แนะนำ" value={referrer ? `${referrer.name} (${referrer.ref_code})` : '-'} />
+        <Meta label="ยอดเงิน" value={formatMoney(order.amount_baht)} />
       </View>
     </Pressable>
   );
@@ -907,26 +939,26 @@ function OrderDetail({
     <View style={styles.detail}>
       <View style={styles.detailHead}>
         <View style={styles.detailTitleBlock}>
-          <Text style={styles.detailEyebrow}>Order {order.id.slice(0, 8)}</Text>
-          <Text style={styles.detailTitle}>{product?.name ?? 'Unknown product'}</Text>
+          <Text style={styles.detailEyebrow}>ออเดอร์ {order.id.slice(0, 8)}</Text>
+          <Text style={styles.detailTitle}>{product?.name ?? 'ไม่พบสินค้า'}</Text>
         </View>
-        <Pill label={order.status} tone={statusTone(order.status)} />
+        <Pill label={statusLabel(order.status)} tone={statusTone(order.status)} />
       </View>
 
       <View style={styles.detailGrid}>
-        <Meta label="Created" value={formatDateTime(order.created_at)} />
-        <Meta label="Buyer" value={order.buyer_name || customer?.nickname || '-'} />
-        <Meta label="Age" value={order.buyer_age ? `${order.buyer_age}` : '-'} />
-        <Meta label="Phone" value={order.buyer_phone || customer?.phone || '-'} />
-        <Meta label="Branch" value={branch?.name ?? 'ไม่ระบุสาขา'} />
-        <Meta label="Channel" value={order.channel} />
-        <Meta label="Payment" value={formatPayment(order)} />
-        <Meta label="Paid at" value={formatDateTime(order.paid_at)} />
-        <Meta label="Amount" value={formatMoney(order.amount_baht)} />
-        <Meta label="Referrer" value={referrer ? `${referrer.name} (${referrer.ref_code})` : '-'} />
-        <Meta label="Customer date" value={formatPreferredDateRange(order)} />
-        <Meta label="Customer time" value={formatPreferredTimeWindow(order)} />
-        <Meta label="Booked at" value={formatDateTime(order.booking_at)} />
+        <Meta label="สร้างเมื่อ" value={formatDateTime(order.created_at)} />
+        <Meta label="ผู้ซื้อ" value={order.buyer_name || customer?.nickname || '-'} />
+        <Meta label="อายุ" value={order.buyer_age ? `${order.buyer_age}` : '-'} />
+        <Meta label="เบอร์โทร" value={order.buyer_phone || customer?.phone || '-'} />
+        <Meta label="สาขา" value={branch?.name ?? 'ไม่ระบุสาขา'} />
+        <Meta label="ช่องทาง" value={order.channel} />
+        <Meta label="ชำระเงิน" value={formatPayment(order)} />
+        <Meta label="เวลาชำระ" value={formatDateTime(order.paid_at)} />
+        <Meta label="ยอดเงิน" value={formatMoney(order.amount_baht)} />
+        <Meta label="ผู้แนะนำ" value={referrer ? `${referrer.name} (${referrer.ref_code})` : '-'} />
+        <Meta label="วันที่ลูกค้าสะดวก" value={formatPreferredDateRange(order)} />
+        <Meta label="เวลาที่ลูกค้าสะดวก" value={formatPreferredTimeWindow(order)} />
+        <Meta label="เวลานัดหมาย" value={formatDateTime(order.booking_at)} />
         <Meta label="Stripe session" value={order.stripe_checkout_session_id ? order.stripe_checkout_session_id.slice(-12) : '-'} />
       </View>
 
@@ -934,16 +966,16 @@ function OrderDetail({
         <View style={styles.slipRow}>
           {slipImageUrl ? <Image source={{ uri: slipImageUrl }} style={styles.slipImage} /> : null}
           <View style={styles.slipCopy}>
-            <Text style={styles.sectionTitle}>Slip</Text>
+            <Text style={styles.sectionTitle}>สลิป</Text>
             <Text numberOfLines={2} style={styles.helperText}>
-              {slipImageUrl ? 'Signed URL valid for 60 minutes.' : order.slip_url}
+              {slipImageUrl ? 'ลิงก์ดูสลิปใช้ได้ 60 นาที' : order.slip_url}
             </Text>
           </View>
         </View>
       ) : null}
 
       <View style={styles.formBlock}>
-        <Text style={styles.sectionTitle}>Booking</Text>
+        <Text style={styles.sectionTitle}>นัดหมาย</Text>
         <View style={styles.dateTimeRow}>
           <BookingDatePicker onChange={onBookingDateChange} value={bookingDate} />
           <BookingTimePicker onChange={onBookingTimeChange} value={bookingTime} />
@@ -951,8 +983,8 @@ function OrderDetail({
         <TextInput
           multiline
           onChangeText={onNoteChange}
-          placeholder="Internal note"
-          placeholderTextColor={MiraDesign.color.muted}
+          placeholder="โน้ตภายใน"
+          placeholderTextColor={MiraDesign.color.showcaseNavySoft}
           style={[styles.input, styles.noteInput]}
           value={note}
         />
@@ -971,7 +1003,7 @@ function OrderDetail({
             </Pressable>
           ))}
           <Pressable disabled={isSavingNote} onPress={() => onSaveNote()} style={[styles.noteSaveButton, isSavingNote ? styles.disabled : null]}>
-            <Text style={styles.noteSaveText}>{isSavingNote ? 'Saving' : 'Save Note'}</Text>
+            <Text style={styles.noteSaveText}>{isSavingNote ? 'กำลังบันทึก' : 'บันทึกโน้ต'}</Text>
           </Pressable>
         </View>
       </View>
@@ -984,9 +1016,9 @@ function OrderDetail({
       </View>
 
       <View style={styles.transcript}>
-        <Text style={styles.sectionTitle}>Transcript</Text>
+        <Text style={styles.sectionTitle}>บทสนทนา</Text>
         {transcript.length === 0 ? (
-          <Text style={styles.helperText}>No chat transcript attached.</Text>
+          <Text style={styles.helperText}>ยังไม่มีบทสนทนาที่ผูกกับออเดอร์นี้</Text>
         ) : (
           transcript.map((message) => (
             <View key={message.id} style={styles.transcriptItem}>
@@ -1019,7 +1051,7 @@ function BookingDatePicker({ onChange, value }: { onChange: (value: string) => v
   return (
     <View style={styles.pickerField}>
       <View style={styles.pickerLabelRow}>
-        <Text style={styles.formLabel}>Date</Text>
+        <Text style={styles.formLabel}>วันที่</Text>
         <Text numberOfLines={1} style={styles.selectedPickerValue}>
           {value ? fullDateLabel(value) : 'เลือกวันที่'}
         </Text>
@@ -1027,13 +1059,13 @@ function BookingDatePicker({ onChange, value }: { onChange: (value: string) => v
       <View style={styles.calendarPanel}>
         <View style={styles.calendarHeader}>
           <Pressable accessibilityRole="button" onPress={() => moveMonth(-1)} style={styles.calendarNavButton}>
-            <Text style={styles.calendarNavText}>Prev</Text>
+            <Text style={styles.calendarNavText}>ก่อนหน้า</Text>
           </Pressable>
           <Text numberOfLines={1} style={styles.calendarMonthTitle}>
             {calendarMonthLabel(visibleMonth)}
           </Text>
           <Pressable accessibilityRole="button" onPress={() => moveMonth(1)} style={styles.calendarNavButton}>
-            <Text style={styles.calendarNavText}>Next</Text>
+            <Text style={styles.calendarNavText}>ถัดไป</Text>
           </Pressable>
         </View>
         <View style={styles.calendarWeekRow}>
@@ -1099,12 +1131,12 @@ function BookingTimePicker({ onChange, value }: { onChange: (value: string) => v
   return (
     <View style={styles.pickerField}>
       <View style={styles.pickerLabelRow}>
-        <Text style={styles.formLabel}>Time</Text>
+        <Text style={styles.formLabel}>เวลา</Text>
         <Text style={styles.selectedPickerValue}>{value || 'เลือกเวลา'}</Text>
       </View>
       <View style={styles.timePickerPanel}>
         <View style={styles.timePickerColumn}>
-          <Text style={styles.timePickerColumnTitle}>Hour</Text>
+          <Text style={styles.timePickerColumnTitle}>ชั่วโมง</Text>
           <View style={styles.timePickerGrid}>
             {hourOptions.map((hour) => {
               const isSelected = hour === selectedHour;
@@ -1124,7 +1156,7 @@ function BookingTimePicker({ onChange, value }: { onChange: (value: string) => v
           </View>
         </View>
         <View style={styles.timePickerColumn}>
-          <Text style={styles.timePickerColumnTitle}>Minute</Text>
+          <Text style={styles.timePickerColumnTitle}>นาที</Text>
           <View style={styles.timePickerGrid}>
             {minuteOptions.map((minute) => {
               const isSelected = minute === selectedMinute;
@@ -1170,25 +1202,25 @@ function ActionButton({
       onPress={() => onAction(action)}
       style={[styles.actionButton, danger ? styles.dangerActionButton : null, disabled || busyAction ? styles.disabled : null]}
     >
-      <Text style={[styles.actionButtonText, danger ? styles.dangerActionButtonText : null]}>{isBusy ? 'Saving' : label}</Text>
+      <Text style={[styles.actionButtonText, danger ? styles.dangerActionButtonText : null]}>{isBusy ? 'กำลังบันทึก' : label}</Text>
     </Pressable>
   );
 }
 
 function actionSuccessMessage(action: OrderMutationAction, order: OrderRow) {
   if (action === 'confirm') {
-    return 'Payment confirmed. Call the customer, choose a booking date/time, then book the appointment.';
+    return 'ยืนยันชำระเงินแล้ว โทรหาลูกค้า เลือกวันเวลา แล้วบันทึกนัดหมาย';
   }
 
   if (action === 'book') {
-    return `Appointment booked for ${formatDateTime(order.booking_at)}.`;
+    return `บันทึกนัดหมายแล้วสำหรับ ${formatDateTime(order.booking_at)}`;
   }
 
   if (action === 'done') {
-    return 'Order marked done.';
+    return 'ปิดงานออเดอร์นี้แล้ว';
   }
 
-  return `Order moved to ${order.status}.`;
+  return `อัปเดตออเดอร์เป็น ${statusLabel(order.status)} แล้ว`;
 }
 
 function Meta({ label, value }: { label: string; value: string }) {
@@ -1204,7 +1236,7 @@ function Meta({ label, value }: { label: string; value: string }) {
 
 const styles = StyleSheet.create({
   screen: {
-    backgroundColor: '#F5F8F7',
+    backgroundColor: MiraDesign.color.showcaseCanvas,
     flex: 1,
   },
   container: {
@@ -1226,19 +1258,19 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   eyebrow: {
-    color: MiraDesign.color.primaryDeep,
+    color: MiraDesign.color.showcaseBlueDeep,
     fontSize: 13,
     fontWeight: '900',
     textTransform: 'uppercase',
   },
   title: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 30,
     fontWeight: '900',
     lineHeight: 36,
   },
   subtitle: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 14,
     lineHeight: 20,
   },
@@ -1249,7 +1281,7 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     alignItems: 'center',
-    backgroundColor: MiraDesign.color.primary,
+    backgroundColor: MiraDesign.color.showcaseBlue,
     borderRadius: 8,
     justifyContent: 'center',
     minHeight: 42,
@@ -1262,8 +1294,8 @@ const styles = StyleSheet.create({
   },
   secondaryButton: {
     alignItems: 'center',
-    backgroundColor: MiraDesign.color.surface,
-    borderColor: MiraDesign.color.line,
+    backgroundColor: MiraDesign.color.showcaseSurface,
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 8,
     borderWidth: 1,
     justifyContent: 'center',
@@ -1271,13 +1303,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
   },
   secondaryButtonText: {
-    color: MiraDesign.color.primaryDeep,
+    color: MiraDesign.color.showcaseBlueDeep,
     fontSize: 13,
     fontWeight: '900',
   },
   notice: {
     backgroundColor: '#FFFFFF',
-    borderColor: MiraDesign.color.line,
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 8,
     borderWidth: 1,
     gap: 10,
@@ -1286,12 +1318,12 @@ const styles = StyleSheet.create({
     ...softShadow,
   },
   noticeTitle: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 18,
     fontWeight: '900',
   },
   noticeBody: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 14,
     lineHeight: 20,
   },
@@ -1325,7 +1357,7 @@ const styles = StyleSheet.create({
   },
   metric: {
     backgroundColor: '#FFFFFF',
-    borderColor: MiraDesign.color.line,
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 8,
     borderWidth: 1,
     flexGrow: 1,
@@ -1333,13 +1365,13 @@ const styles = StyleSheet.create({
     padding: 13,
   },
   metricLabel: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 11,
     fontWeight: '900',
     textTransform: 'uppercase',
   },
   metricValue: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 22,
     fontWeight: '900',
     marginTop: 5,
@@ -1352,10 +1384,10 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     backgroundColor: '#FFFFFF',
-    borderColor: MiraDesign.color.line,
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 8,
     borderWidth: 1,
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     flex: 1,
     fontSize: 14,
     minHeight: 44,
@@ -1365,7 +1397,7 @@ const styles = StyleSheet.create({
   filterButton: {
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderColor: MiraDesign.color.line,
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 8,
     borderWidth: 1,
     justifyContent: 'center',
@@ -1373,11 +1405,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
   },
   filterButtonActive: {
-    backgroundColor: MiraDesign.color.primary,
-    borderColor: MiraDesign.color.primary,
+    backgroundColor: MiraDesign.color.showcaseBlue,
+    borderColor: MiraDesign.color.showcaseBlue,
   },
   filterButtonText: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 13,
     fontWeight: '900',
   },
@@ -1400,7 +1432,7 @@ const styles = StyleSheet.create({
   },
   detailPane: {
     backgroundColor: '#FFFFFF',
-    borderColor: MiraDesign.color.line,
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 8,
     borderWidth: 1,
     flex: 0.95,
@@ -1411,14 +1443,14 @@ const styles = StyleSheet.create({
   },
   orderRow: {
     backgroundColor: '#FFFFFF',
-    borderColor: MiraDesign.color.line,
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 8,
     borderWidth: 1,
     gap: 12,
     padding: 14,
   },
   orderRowSelected: {
-    borderColor: MiraDesign.color.primary,
+    borderColor: MiraDesign.color.showcaseBlue,
     borderWidth: 2,
   },
   orderHead: {
@@ -1433,12 +1465,12 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   orderTitle: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 16,
     fontWeight: '900',
   },
   orderMeta: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 12,
     fontWeight: '800',
   },
@@ -1448,8 +1480,8 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   metaCell: {
-    backgroundColor: '#F7FBFA',
-    borderColor: '#E5EFEE',
+    backgroundColor: '#F7FBFF',
+    borderColor: MiraDesign.color.showcaseLineSoft,
     borderRadius: 8,
     borderWidth: 1,
     flexGrow: 1,
@@ -1457,13 +1489,13 @@ const styles = StyleSheet.create({
     padding: 9,
   },
   metaLabel: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 10,
     fontWeight: '900',
     textTransform: 'uppercase',
   },
   metaValue: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 13,
     fontWeight: '900',
     marginTop: 4,
@@ -1482,13 +1514,13 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   detailEyebrow: {
-    color: MiraDesign.color.primary,
+    color: MiraDesign.color.showcaseBlue,
     fontSize: 12,
     fontWeight: '900',
     textTransform: 'uppercase',
   },
   detailTitle: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 19,
     fontWeight: '900',
     lineHeight: 24,
@@ -1500,8 +1532,8 @@ const styles = StyleSheet.create({
   },
   slipRow: {
     alignItems: 'center',
-    backgroundColor: '#F7FBFA',
-    borderColor: MiraDesign.color.line,
+    backgroundColor: '#F7FBFF',
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 8,
     borderWidth: 1,
     flexDirection: 'row',
@@ -1509,7 +1541,7 @@ const styles = StyleSheet.create({
     padding: 10,
   },
   slipImage: {
-    backgroundColor: '#EAF3F2',
+    backgroundColor: MiraDesign.color.showcaseBlueSoft,
     borderRadius: 8,
     height: 72,
     width: 72,
@@ -1519,13 +1551,13 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   sectionTitle: {
-    color: MiraDesign.color.primaryDeep,
+    color: MiraDesign.color.showcaseBlueDeep,
     fontSize: 12,
     fontWeight: '900',
     textTransform: 'uppercase',
   },
   helperText: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 13,
     lineHeight: 19,
   },
@@ -1549,19 +1581,19 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   formLabel: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 11,
     fontWeight: '900',
     textTransform: 'uppercase',
   },
   selectedPickerValue: {
-    color: MiraDesign.color.primary,
+    color: MiraDesign.color.showcaseBlue,
     fontSize: 12,
     fontWeight: '900',
   },
   calendarPanel: {
-    backgroundColor: '#F7FBFA',
-    borderColor: MiraDesign.color.line,
+    backgroundColor: '#F7FBFF',
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 8,
     borderWidth: 1,
     overflow: 'hidden',
@@ -1569,7 +1601,7 @@ const styles = StyleSheet.create({
   calendarHeader: {
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderBottomColor: MiraDesign.color.line,
+    borderBottomColor: MiraDesign.color.showcaseLine,
     borderBottomWidth: 1,
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1577,7 +1609,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
   },
   calendarMonthTitle: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     flex: 1,
     fontSize: 14,
     fontWeight: '900',
@@ -1585,7 +1617,7 @@ const styles = StyleSheet.create({
   },
   calendarNavButton: {
     alignItems: 'center',
-    borderColor: MiraDesign.color.line,
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 8,
     borderWidth: 1,
     justifyContent: 'center',
@@ -1594,7 +1626,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
   },
   calendarNavText: {
-    color: MiraDesign.color.primaryDeep,
+    color: MiraDesign.color.showcaseBlueDeep,
     fontSize: 12,
     fontWeight: '900',
   },
@@ -1605,7 +1637,7 @@ const styles = StyleSheet.create({
     paddingTop: 8,
   },
   calendarWeekday: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 11,
     fontWeight: '900',
     textAlign: 'center',
@@ -1629,32 +1661,32 @@ const styles = StyleSheet.create({
     opacity: 0.55,
   },
   calendarCellToday: {
-    borderColor: MiraDesign.color.primary,
+    borderColor: MiraDesign.color.showcaseBlue,
   },
   calendarCellSelected: {
-    backgroundColor: MiraDesign.color.primary,
-    borderColor: MiraDesign.color.primary,
+    backgroundColor: MiraDesign.color.showcaseBlue,
+    borderColor: MiraDesign.color.showcaseBlue,
   },
   calendarCellDisabled: {
     opacity: 0.28,
   },
   calendarCellText: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 13,
     fontWeight: '900',
   },
   calendarCellTextMuted: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
   },
   calendarCellTextSelected: {
     color: '#FFFFFF',
   },
   calendarCellTextDisabled: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
   },
   timePickerPanel: {
-    backgroundColor: '#F7FBFA',
-    borderColor: MiraDesign.color.line,
+    backgroundColor: '#F7FBFF',
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 8,
     borderWidth: 1,
     flexDirection: 'row',
@@ -1666,7 +1698,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   timePickerColumnTitle: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 11,
     fontWeight: '900',
     textTransform: 'uppercase',
@@ -1679,7 +1711,7 @@ const styles = StyleSheet.create({
   timePickerButton: {
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderColor: MiraDesign.color.line,
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 8,
     borderWidth: 1,
     justifyContent: 'center',
@@ -1688,11 +1720,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   timePickerButtonActive: {
-    backgroundColor: MiraDesign.color.primary,
-    borderColor: MiraDesign.color.primary,
+    backgroundColor: MiraDesign.color.showcaseBlue,
+    borderColor: MiraDesign.color.showcaseBlue,
   },
   timePickerButtonText: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 12,
     fontWeight: '900',
   },
@@ -1700,11 +1732,11 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   input: {
-    backgroundColor: '#F7FBFA',
-    borderColor: MiraDesign.color.line,
+    backgroundColor: '#F7FBFF',
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 8,
     borderWidth: 1,
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 14,
     minHeight: 44,
     paddingHorizontal: 12,
@@ -1721,20 +1753,20 @@ const styles = StyleSheet.create({
   },
   notePresetButton: {
     alignItems: 'center',
-    backgroundColor: MiraDesign.color.surfaceSoft,
+    backgroundColor: MiraDesign.color.showcaseBlueSoft,
     borderRadius: 8,
     justifyContent: 'center',
     minHeight: 36,
     paddingHorizontal: 10,
   },
   notePresetText: {
-    color: MiraDesign.color.primaryDeep,
+    color: MiraDesign.color.showcaseBlueDeep,
     fontSize: 12,
     fontWeight: '900',
   },
   noteSaveButton: {
     alignItems: 'center',
-    backgroundColor: MiraDesign.color.primaryDeep,
+    backgroundColor: MiraDesign.color.showcaseBlueDeep,
     borderRadius: 8,
     justifyContent: 'center',
     minHeight: 36,
@@ -1752,7 +1784,7 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     alignItems: 'center',
-    backgroundColor: MiraDesign.color.primary,
+    backgroundColor: MiraDesign.color.showcaseBlue,
     borderRadius: 8,
     justifyContent: 'center',
     minHeight: 38,
@@ -1774,33 +1806,33 @@ const styles = StyleSheet.create({
     color: '#A23538',
   },
   transcript: {
-    borderTopColor: MiraDesign.color.line,
+    borderTopColor: MiraDesign.color.showcaseLine,
     borderTopWidth: 1,
     gap: 8,
     paddingTop: 12,
   },
   transcriptItem: {
-    backgroundColor: '#F7FBFA',
-    borderColor: '#E5EFEE',
+    backgroundColor: '#F7FBFF',
+    borderColor: MiraDesign.color.showcaseLineSoft,
     borderRadius: 8,
     borderWidth: 1,
     gap: 4,
     padding: 9,
   },
   transcriptRole: {
-    color: MiraDesign.color.primary,
+    color: MiraDesign.color.showcaseBlue,
     fontSize: 10,
     fontWeight: '900',
     textTransform: 'uppercase',
   },
   transcriptText: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 13,
     lineHeight: 19,
   },
   emptyState: {
     backgroundColor: '#FFFFFF',
-    borderColor: MiraDesign.color.line,
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 8,
     borderStyle: 'dashed',
     borderWidth: 1,
@@ -1808,12 +1840,12 @@ const styles = StyleSheet.create({
     padding: 18,
   },
   emptyTitle: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 16,
     fontWeight: '900',
   },
   emptyBody: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 13,
     lineHeight: 19,
   },

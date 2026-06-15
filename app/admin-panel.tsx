@@ -23,13 +23,13 @@ const adminActions = [
     body: 'สร้าง แก้ไข archive/restore จัดสาขา และ sync Stripe ในหน้าเดียว',
     href: '/admin/catalog',
     meta: 'inventory',
-    title: 'Manage products',
+    title: 'จัดการสินค้า',
   },
   {
     body: 'ดู order ที่จ่ายเงินแล้ว โทรนัดลูกค้า และอัปเดต booking status',
     href: '/admin/orders',
     meta: 'booking',
-    title: 'Orders queue',
+    title: 'คิวคำสั่งซื้อ',
   },
 ] as const;
 
@@ -159,8 +159,8 @@ export default function AdminPanelScreen() {
     <Screen>
       <BrandHeader
         compact
-        eyebrow="Admin panel"
-        title="Product, RAG, and booking operations."
+        eyebrow="หลังบ้านโรงพยาบาล"
+        title="ศูนย์ปฏิบัติการหลังบ้าน"
         subtitle="ศูนย์กลางสำหรับ admin จัดการสินค้าโรงพยาบาล review RAG และเช็ค order ที่ต้องนัดหมายหลังชำระเงิน"
       />
 
@@ -168,30 +168,30 @@ export default function AdminPanelScreen() {
         <Card style={styles.noticeCard}>
           <View style={styles.noticeTop}>
             <Text style={styles.noticeTitle}>ยังไม่ได้ login เป็น admin/staff</Text>
-            <Pill label="read only" tone="amber" />
+              <Pill label="ดูอย่างเดียว" tone="amber" />
           </View>
           <Text style={styles.body}>หน้า admin panel เปิดให้ดู workflow ได้ แต่ action จริงอย่าง approve, archive, retry embedding และ booking save ต้องใช้ account ที่มีสิทธิ์</Text>
           <Link href={{ pathname: '/', params: { redirect: '/admin-panel' } }} asChild>
-            <ActionButton label="Login admin account" />
+            <ActionButton label="เข้าสู่ระบบแอดมิน" />
           </Link>
         </Card>
       ) : null}
 
       <View style={styles.statGrid}>
-        <StatTile detail="products waiting for reviewer action" label="Pending review" value={`${stats.pendingReview}`} />
-        <StatTile detail="approved products visible to users" label="Active products" value={`${stats.active}`} />
-        <StatTile detail="RAG chunks needing retry" label="Embedding errors" value={`${stats.embeddingErrors}`} />
-        <StatTile detail="paid orders awaiting booking call" label="Booking queue" value={`${stats.bookingWaiting}`} />
+        <StatTile detail="รอทีมตรวจสอบและอนุมัติ" label="รอตรวจ" value={`${stats.pendingReview}`} />
+        <StatTile detail="แพ็กเกจที่ลูกค้าเห็นอยู่ตอนนี้" label="เปิดขาย" value={`${stats.active}`} />
+        <StatTile detail="ต้อง retry embedding" label="RAG error" value={`${stats.embeddingErrors}`} />
+        <StatTile detail="รอโรงพยาบาลโทรนัด" label="คิวจอง" value={`${stats.bookingWaiting}`} />
       </View>
 
-      <SectionHeader title="Admin actions" meta="product + booking" />
+      <SectionHeader title="งานหลักของแอดมิน" meta="product + booking" />
       <View style={styles.actionGrid}>
         {adminActions.map((action) => (
           <Link key={action.href} href={action.href} asChild>
             <Pressable style={styles.actionCard}>
               <View style={styles.actionTop}>
                 <Text style={styles.actionMeta}>{action.meta}</Text>
-                <Text style={styles.actionArrow}>Open</Text>
+                <Text style={styles.actionArrow}>เปิด</Text>
               </View>
               <Text style={styles.actionTitle}>{action.title}</Text>
               <Text style={styles.body}>{action.body}</Text>
@@ -200,13 +200,13 @@ export default function AdminPanelScreen() {
         ))}
       </View>
 
-      <SectionHeader title="Product review queue" meta={isLoadingProducts ? 'loading' : `${reviewQueue.length} attention`} />
+      <SectionHeader title="คิวตรวจสินค้า" meta={isLoadingProducts ? 'กำลังโหลด' : `${reviewQueue.length} รายการ`} />
       <View style={styles.queueList}>
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
         {reviewQueue.length === 0 ? (
           <Card>
-            <Text style={styles.emptyTitle}>ยังไม่มีสินค้าใน review queue</Text>
-            <Text style={styles.body}>เมื่อ hospital staff submit product ใหม่ หรือ embedding fail รายการจะขึ้นตรงนี้ให้ admin เข้าไปจัดการ</Text>
+            <Text style={styles.emptyTitle}>ยังไม่มีสินค้าในคิวตรวจ</Text>
+            <Text style={styles.body}>เมื่อทีมโรงพยาบาลส่งสินค้าใหม่ หรือ embedding ล้มเหลว รายการจะขึ้นตรงนี้ให้ admin เข้าไปจัดการ</Text>
           </Card>
         ) : (
           reviewQueue.map((product) => (
@@ -224,12 +224,12 @@ export default function AdminPanelScreen() {
         )}
       </View>
 
-      <SectionHeader title="Booking status preview" meta={`${bookingOrders.length} live order`} />
+      <SectionHeader title="สถานะการจองล่าสุด" meta={`${bookingOrders.length} order`} />
       <View style={styles.queueList}>
         {bookingOrders.length === 0 ? (
           <Card>
-            <Text style={styles.emptyTitle}>ยังไม่มี paid order ใน queue</Text>
-            <Text style={styles.body}>เมื่อ Stripe webhook เปลี่ยน order เป็น submitted รายการจะขึ้นที่นี่และใน Orders Queue หลัก</Text>
+            <Text style={styles.emptyTitle}>ยังไม่มีออเดอร์ที่ชำระแล้วในคิว</Text>
+            <Text style={styles.body}>เมื่อออเดอร์เข้าสถานะรอตรวจ รายการจะขึ้นที่นี่และในคิวคำสั่งซื้อหลัก</Text>
           </Card>
         ) : (
           bookingOrders.map((order) => {
@@ -239,7 +239,7 @@ export default function AdminPanelScreen() {
               <Card key={order.id} style={styles.queueCard}>
                 <View style={styles.queueTop}>
                   <View style={styles.queueCopy}>
-                    <Text style={styles.queueTitle}>{product?.name ?? 'Unknown product'}</Text>
+                    <Text style={styles.queueTitle}>{product?.name ?? 'ไม่พบสินค้า'}</Text>
                     <Text style={styles.queueMeta}>{order.id} · {formatMoney(order.amount_baht)}</Text>
                   </View>
                   <Pill label={getBookingStatusLabel(order.status)} tone={order.status === 'booked' ? 'mint' : 'amber'} />
@@ -256,13 +256,13 @@ export default function AdminPanelScreen() {
 
 const styles = StyleSheet.create({
   actionArrow: {
-    color: MiraDesign.color.primary,
+    color: MiraDesign.color.showcaseBlue,
     fontSize: 12,
     fontWeight: '900',
   },
   actionCard: {
-    backgroundColor: MiraDesign.color.surface,
-    borderColor: MiraDesign.color.line,
+    backgroundColor: MiraDesign.color.showcaseSurface,
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 8,
     borderWidth: 1,
     flex: 1,
@@ -276,13 +276,13 @@ const styles = StyleSheet.create({
     gap: MiraDesign.space.md,
   },
   actionMeta: {
-    color: MiraDesign.color.primaryDeep,
+    color: MiraDesign.color.showcaseBlueDeep,
     fontSize: 11,
     fontWeight: '900',
     textTransform: 'uppercase',
   },
   actionTitle: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 18,
     fontWeight: '900',
   },
@@ -292,12 +292,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   body: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 13,
     lineHeight: 19,
   },
   emptyTitle: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 16,
     fontWeight: '900',
   },
@@ -332,12 +332,12 @@ const styles = StyleSheet.create({
     gap: MiraDesign.space.md,
   },
   queueMeta: {
-    color: MiraDesign.color.inkSoft,
+    color: MiraDesign.color.showcaseNavySoft,
     fontSize: 12,
     fontWeight: '800',
   },
   queueTitle: {
-    color: MiraDesign.color.ink,
+    color: MiraDesign.color.showcaseNavy,
     fontSize: 16,
     fontWeight: '900',
   },
