@@ -12,7 +12,20 @@ const steps = [
 ---
 
 <Section id="admin" tone="light" class="admin-section">
-  <h2 class="sr-only">หลังบ้านครบ ทีมคุณคุมเองได้หมด — เพิ่มสินค้า ตั้งราคา ตั้งคอมมิชชั่น คิวออเดอร์ และยอดขาย พร้อม AI ช่วยปิดการขาย</h2>
+  <header class="section-head admin-head">
+    <span class="ghost-word" aria-hidden="true">BACK OFFICE</span>
+    <p class="kicker" data-reveal>
+      <span class="kicker-num">03</span>
+      <span class="kicker-rule"></span>
+      ADMIN DASHBOARD
+    </p>
+    <h2 class="section-title" data-reveal>
+      คุมทุกอย่างจากที่เดียว — <span class="gradient-text">สินค้า ราคา ออเดอร์ และยอดขาย</span>
+    </h2>
+    <p class="section-sub" data-reveal>
+      ทีมคุณแก้สินค้า ตั้งราคา ตั้ง commission ยืนยันออเดอร์ และดู performance ได้เอง ทุกการเปลี่ยนแปลง Mira รู้ทันที
+    </p>
+  </header>
 
   <figure class="bo-video" data-reveal>
     <MotionLoop name="back-office" />
@@ -26,11 +39,15 @@ const steps = [
 </Section>
 
 <style>
+  .admin-head {
+    max-width: 860px;
+  }
+
   .bo-video {
     /* ~10% safe zone each side; staying below the 1920px source keeps it crisp */
     position: relative;
     width: 80vw;
-    margin: 0 calc(50% - 40vw);
+    margin: clamp(2rem, 4vw, 3rem) calc(50% - 40vw) 0;
     aspect-ratio: 16 / 9;
     overflow: hidden;
     border-radius: clamp(16px, 1.6vw, 28px);

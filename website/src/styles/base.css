@@ -356,9 +356,11 @@ video {
   z-index: 1;
 }
 
-#ai-chat::before,
-#channels::before,
-#referral::before {
+#what-is-mira::before,
+#admin::before,
+#implementation::before,
+#referral::before,
+#proof::before {
   content: "";
   position: absolute;
   inset: 0 0 auto;
@@ -367,14 +369,18 @@ video {
   pointer-events: none;
 }
 
-/* light section under a dark one (hero → #ai-chat, #referral → #channels) */
-#ai-chat::before,
-#channels::before {
+/* light/surface section sitting under a dark one — fade the night tone in
+   (Problem → #what-is-mira, Referral → #admin, Proof → #implementation) */
+#what-is-mira::before,
+#admin::before,
+#implementation::before {
   background: linear-gradient(180deg, var(--night), transparent);
 }
 
-/* dark section under a light one (#admin → #referral) */
-#referral::before {
+/* dark section sitting under a light one — fade the canvas tone in
+   (AI Chat → #referral, MiraBeauty → #proof) */
+#referral::before,
+#proof::before {
   background: linear-gradient(180deg, var(--canvas), transparent);
 }
 
