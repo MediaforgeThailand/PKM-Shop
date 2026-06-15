@@ -167,6 +167,36 @@ export async function pushLineMessages(tenantSlug: string, lineUserId: string, m
   }
 }
 
+// Best-effort lookup of a LINE user's display name so the agent console can show a
+// real name instead of a generic placeholder. Returns null on any failure (the user
+// has not added the OA as a friend, the token is missing, the API hiccups) — never
+// throws, so it can run inside a normal message turn without breaking it.
+export async function fetchLineProfile(
+  tenantSlug: string,
+  lineUserId: string,
+): Promise<{ displayName: string; pictureUrl?: string } | null> {
+  try {
+    const token = requireLineChannelToken(tenantSlug);
+    const response = await fetch(`https://api.line.me/v2/bot/profile/${encodeURIComponent(lineUserId)}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      console.warn('line_profile_failed', response.status);
+      return null;
+    }
+
+    const data = (await response.json()) as { displayName?: string; pictureUrl?: string };
+
+    return data?.displayName ? { displayName: data.displayName, pictureUrl: data.pictureUrl } : null;
+  } catch (error) {
+    console.warn('line_profile_error', error instanceof Error ? error.message : error);
+    return null;
+  }
+}
+
 export async function startLineLoading(tenantSlug: string, lineUserId: string, seconds = 20) {
   const token = requireLineChannelToken(tenantSlug);
   const response = await fetch('https://api.line.me/v2/bot/chat/loading/start', {

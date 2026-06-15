@@ -13,6 +13,7 @@ import {
 } from './db.ts';
 import { recordFormAgeFact } from './facts.ts';
 import { HttpError, z } from './http.ts';
+import { fetchLineProfile } from './line.ts';
 import { filterKnownProductMarkerKeys, parseChatMarker } from './marker.ts';
 import {
   assertOrderBelongsToSession,
@@ -1069,8 +1070,10 @@ async function updateCollectingOrderFromMessage(order: OrderWithProductRow | nul
   return order;
 }
 
-async function resolveOrCreateLineCustomer(tenantId: string, lineUserId: string) {
-  return upsertRow<CustomerRow>(
+const CUSTOMER_SELECT = 'id,tenant_id,auth_user_id,line_user_id,nickname,phone,referred_by,referred_at,created_at';
+
+async function resolveOrCreateLineCustomer(tenantId: string, tenantSlug: string, lineUserId: string) {
+  const customer = await upsertRow<CustomerRow>(
     'customers',
     {
       line_user_id: lineUserId,
@@ -1078,9 +1081,29 @@ async function resolveOrCreateLineCustomer(tenantId: string, lineUserId: string)
     },
     'tenant_id,line_user_id',
     {
-      select: 'id,tenant_id,auth_user_id,line_user_id,nickname,phone,referred_by,referred_at,created_at',
+      select: CUSTOMER_SELECT,
     },
   );
+
+  // Backfill the LINE display name once so the agent console shows a real name
+  // instead of "ลูกค้า LINE". Only when empty — never overwrite a name the customer
+  // or staff already set. Best-effort: a failed lookup just leaves the placeholder.
+  if (!customer.nickname || !customer.nickname.trim()) {
+    const profile = await fetchLineProfile(tenantSlug, lineUserId);
+    const displayName = profile?.displayName?.trim();
+
+    if (displayName) {
+      const updated = await updateRows<CustomerRow>('customers', { nickname: displayName }, {
+        id: `eq.${customer.id}`,
+        select: CUSTOMER_SELECT,
+        tenant_id: `eq.${tenantId}`,
+      });
+
+      return updated[0] ?? { ...customer, nickname: displayName };
+    }
+  }
+
+  return customer;
 }
 
 async function resolveOrCreateLatestSession({
@@ -1348,7 +1371,7 @@ export async function orchestrateLine(request: {
   tenant_slug: string;
 }): Promise<ChatOrchestratorResponse | null> {
   const tenant = await assertTenant(request.tenant_slug);
-  const customer = await resolveOrCreateLineCustomer(tenant.id, request.line_user_id);
+  const customer = await resolveOrCreateLineCustomer(tenant.id, tenant.slug, request.line_user_id);
   const session = await resolveOrCreateLatestSession({
     channel: 'line',
     customer,
