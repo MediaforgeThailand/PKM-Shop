@@ -181,16 +181,17 @@ const row = { auth_user_id: authUserId, tenant_id: tenantId,
 
 | # | สถานะ | สิ่งที่ทำ |
 |---|---|---|
-| **C1** | ✅ แก้ในโค้ด (รอ owner apply live) | migration `supabase/migrations/20260614000000_c1_revoke_transition_order_execute.sql` (`revoke execute ... from public/anon/authenticated` + `grant ... to service_role`) · gate ใหม่ `scripts/rpc-grant-audit.mjs` ต่อเข้า `v2:verify` (`orders:rpc-grant-audit`) · live assertion ใน `scripts/rls-check.mjs` (`expectTransitionOrderRpcDenied`) + cleanup `order_events`/`commission_entries` |
+| **C1** | ✅ **APPLIED + VERIFIED บน prod (2026-06-15)** | migration `supabase/migrations/20260614000000_c1_revoke_transition_order_execute.sql` (`revoke execute ... from public/anon/authenticated` + `grant ... to service_role`) · gate ใหม่ `scripts/rpc-grant-audit.mjs` ต่อเข้า `v2:verify` (`orders:rpc-grant-audit`) · live assertion ใน `scripts/rls-check.mjs` (`expectTransitionOrderRpcDenied`) — **CI live-regression ยืนยันว่า authenticated เรียก transition_order ตรงไม่ได้แล้วบน prod** |
 | **H1** | ✅ แก้แล้ว | `_shared/db.ts` `resolveOrCreateCustomer` ใส่ `nickname` ลง upsert เฉพาะเมื่อถูกส่งมาจริง (เลิกทับ null) |
 | **L1** | ✅ แก้แล้ว | `lib/auth/useAuthSession.ts` `ensureProfile` เป็น best-effort (legacy `profiles` ล้มไม่ทำ sign-in พัง) |
-| **H2** | ✅ แก้ในโค้ด (รอ owner apply live) | migration `20260614010000_h2_line_webhook_event_dedup.sql` (ตาราง `line_webhook_events` event_id PK + RLS staff-read) · `line-webhook/index.ts` claim ทุก event ด้วย `webhookEventId` ก่อนทำงาน redelivery ที่ซ้ำจะถูก skip (release claim เมื่อ fail เพื่อให้ retry ได้) |
+| **H2** | ✅ **APPLIED + DEPLOYED บน prod (2026-06-15)** | migration `20260614010000_h2_line_webhook_event_dedup.sql` (ตาราง `line_webhook_events` event_id PK + RLS staff-read) · `line-webhook/index.ts` claim ทุก event ด้วย `webhookEventId` ก่อนทำงาน redelivery ที่ซ้ำจะถูก skip (release claim เมื่อ fail เพื่อให้ retry ได้) — เหลือ manual LINE dup-tap spot-check |
 | **M1** | ✅ แก้แล้ว | `line-webhook/index.ts` หุ้มแต่ละ event ด้วย try/catch — event เดียว fail ไม่ทำให้ทั้ง batch 500/redeliver; ตอบ `{ processed, skipped }` |
 | **M2** | ✅ แก้แล้ว | `_shared/openai.ts` `callOrderFieldExtractor` normalize (ตัด `space`/`-`) + validate `^0[689]\d{8}$` แบบเดียวกับ form; เบอร์ไม่ผ่านถูก drop (ถามต่อ) — ไม่แตะสัญญา `callMiraPrompt` |
 | **L2** | ✅ แก้แล้ว | `_shared/orders.ts` `toOrderPanel` หุ้ม `buildPromptPayPayload` ด้วย try/catch → degrade เป็น panel ไม่มี QR + log แทน 500; ที่มาของจำนวนเงินไม่เปลี่ยน |
 
 ยืนยันหลังแก้ (รอบรวม): `npm run v2:verify` ✅ **เขียวทั้งชุด** (typecheck · 17 deterministic gates รวม `orders:rpc-grant-audit` ใหม่ · `v2:deno-check` · `v2:deno-test` 113/113)
-(`v2:rls-check` เป็น live gate ต้องรันตอน owner มี secrets/CI — มี assertion ใหม่ `expectTransitionOrderRpcDenied` รออยู่)
+
+**Shipped to prod 2026-06-15:** PR #18 merged → main · C1 + H2 migrations applied to live `xwixdxmemwcuoamcloty` · ทั้ง 14 edge functions redeployed (bundle mojibake-verified) · **CI `live-regression` เขียวทั้งก่อนและหลัง deploy** (ยิงเข้า prod จริง รวม assertion `expectTransitionOrderRpcDenied`). เหลือเดียว: manual LINE dup-tap spot-check (CI จำลอง LINE ไม่ได้)
 
 > หมายเหตุ LINE: หลัง dedup นี้ การ "ปิด LINE Webhook redelivery" ไม่จำเป็นต้องเป็นเงื่อนไขบังคับอีก (webhook idempotent ระดับ event แล้ว) — เป็น at-most-once: ถ้า event สำเร็จแล้ว LINE ส่งซ้ำจะถูก skip; ถ้า fail จะปล่อย claim ให้ retry ได้
 
