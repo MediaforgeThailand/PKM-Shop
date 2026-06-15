@@ -4,8 +4,60 @@ import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput,
 
 import { ActionButton, Card, Pill, Screen } from '@/components/MiraUI';
 import { MiraDesign, shadow } from '@/constants/Design';
-import { signInWithEmailPassword, signUpWithEmailPassword, useAuthSession, useSignOut } from '@/lib/auth/useAuthSession';
+import {
+  signInWithEmailPassword,
+  signUpWithEmailPassword,
+  useAuthSession,
+  useSignOut,
+  type AuthAccountKind,
+} from '@/lib/auth/useAuthSession';
 import { supabaseConfigStatus } from '@/lib/supabase';
+
+type LoginMode = 'admin' | 'chat' | 'referral';
+
+type LoginCopy = {
+  accountKind: AuthAccountKind;
+  defaultRedirect: string;
+  eyebrow: string;
+  footerLabel: string;
+  hint: string;
+  primaryLabel: string;
+  tone: 'amber' | 'blue' | 'mint';
+  title: string;
+};
+
+const modeCopy: Record<LoginMode, LoginCopy> = {
+  admin: {
+    accountKind: 'staff',
+    defaultRedirect: '/admin-panel',
+    eyebrow: 'Admin Panel',
+    footerLabel: 'Admin',
+    hint: 'สำหรับทีมงานโรงพยาบาลเท่านั้น ต้องมีสิทธิ์ใน tenant_members ก่อนจึงจะอ่านหรือแก้ข้อมูล backend ได้',
+    primaryLabel: 'เข้าสู่ระบบทีมงาน',
+    tone: 'blue',
+    title: 'เข้าสู่ระบบ Admin Panel',
+  },
+  chat: {
+    accountKind: 'customer',
+    defaultRedirect: '/prototype',
+    eyebrow: 'Chat AI',
+    footerLabel: 'Chat AI',
+    hint: 'บัญชีลูกค้าสำหรับคุยกับ Mira AI, เก็บประวัติแชต, ออเดอร์ และข้อมูลสุขภาพของตัวเอง',
+    primaryLabel: 'เข้าสู่ระบบลูกค้า',
+    tone: 'mint',
+    title: 'เข้าสู่ระบบ Chat AI',
+  },
+  referral: {
+    accountKind: 'referrer',
+    defaultRedirect: '/partner',
+    eyebrow: 'Referral',
+    footerLabel: 'Referral',
+    hint: 'บัญชีผู้แนะนำแยกจากลูกค้าและทีมงาน ใช้ ref code ที่ admin สร้างให้เพื่อ claim โปรไฟล์และดูค่าคอมมิชชัน',
+    primaryLabel: 'เข้าสู่ระบบ Referral',
+    tone: 'amber',
+    title: 'เข้าสู่ระบบ Referral',
+  },
+};
 
 function firstParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
@@ -19,35 +71,55 @@ function safeRedirect(value: string | undefined, fallback: string) {
   return value;
 }
 
+function resolveMode(mode: string | undefined, redirect: string | undefined): LoginMode {
+  if (mode === 'admin' || mode === 'chat' || mode === 'referral') {
+    return mode;
+  }
+
+  if (redirect?.startsWith('/admin')) {
+    return 'admin';
+  }
+
+  if (redirect?.startsWith('/partner') || redirect?.startsWith('/sales-portal')) {
+    return 'referral';
+  }
+
+  return 'chat';
+}
+
 export default function LoginScreen() {
   const auth = useAuthSession();
   const router = useRouter();
   const params = useLocalSearchParams<{ mode?: string; redirect?: string }>();
   const signOut = useSignOut();
-  const mode = firstParam(params.mode);
-  const redirect = safeRedirect(firstParam(params.redirect), mode === 'admin' ? '/admin-panel' : '/prototype');
-  const isAdminMode = mode === 'admin' || redirect.startsWith('/admin');
+  const requestedMode = firstParam(params.mode);
+  const requestedRedirect = firstParam(params.redirect);
+  const mode = resolveMode(requestedMode, requestedRedirect);
+  const copy = modeCopy[mode];
+  const redirect = safeRedirect(requestedRedirect, copy.defaultRedirect);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [refCode, setRefCode] = useState('');
   const [isSignUp, setIsSignUp] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
-  const copy = useMemo(
+  const switchLinks = useMemo(
     () =>
-      isAdminMode
-        ? {
-            eyebrow: 'Admin access',
-            hint: 'ใช้บัญชีที่ถูกเพิ่มไว้ใน tenant_members แล้วเท่านั้น จึงจะเห็นข้อมูลจริงและแก้ไขหลังบ้านได้',
-            title: 'เข้าสู่ระบบแอดมิน',
-          }
-        : {
-            eyebrow: 'Mira AI chat',
-            hint: 'ใช้บัญชีลูกค้าเพื่อเปิด live AI chat, ประวัติแชต และคำสั่งซื้อจาก backend จริง',
-            title: 'เข้าสู่ระบบแชต AI',
+      (Object.keys(modeCopy) as LoginMode[]).map((item) => ({
+        href: {
+          params: {
+            mode: item,
+            redirect: modeCopy[item].defaultRedirect,
           },
-    [isAdminMode],
+          pathname: '/login',
+        } as Href,
+        label: modeCopy[item].footerLabel,
+        selected: item === mode,
+      })),
+    [mode],
   );
 
   async function submit() {
@@ -61,19 +133,31 @@ export default function LoginScreen() {
       return;
     }
 
+    if (isSignUp && mode === 'referral' && !refCode.trim()) {
+      setMessage('สมัครบัญชี Referral ต้องใช้ ref code ที่ admin สร้างให้');
+      return;
+    }
+
     try {
       setIsBusy(true);
       setMessage(null);
 
+      const access = {
+        accountKind: copy.accountKind,
+        displayName,
+        phone,
+        refCode,
+      };
+
       if (isSignUp) {
-        const result = await signUpWithEmailPassword(email, password, displayName);
+        const result = await signUpWithEmailPassword(email, password, displayName, access);
 
         if (!result.session) {
           setMessage('สมัครบัญชีแล้ว กรุณาตรวจอีเมลเพื่อยืนยันก่อนเข้าสู่ระบบ');
           return;
         }
       } else {
-        await signInWithEmailPassword(email, password);
+        await signInWithEmailPassword(email, password, access);
       }
 
       router.replace(redirect as Href);
@@ -101,7 +185,7 @@ export default function LoginScreen() {
     <Screen>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.shell}>
         <View style={styles.hero}>
-          <Pill label={copy.eyebrow} tone={isAdminMode ? 'blue' : 'mint'} />
+          <Pill label={copy.eyebrow} tone={copy.tone} />
           <Text style={styles.title}>{copy.title}</Text>
           <Text style={styles.subtitle}>{copy.hint}</Text>
         </View>
@@ -112,6 +196,7 @@ export default function LoginScreen() {
               <View style={styles.sessionBox}>
                 <Text style={styles.sessionLabel}>กำลัง login อยู่</Text>
                 <Text style={styles.sessionEmail}>{auth.user?.email ?? 'ไม่พบอีเมล'}</Text>
+                <Text style={styles.sessionHint}>ถ้าจะเข้าอีก platform ให้ logout แล้วใช้บัญชีของ platform นั้น</Text>
               </View>
               <View style={styles.actionRow}>
                 <ActionButton disabled={isBusy} label="ไปหน้าที่ต้องการ" onPress={() => router.replace(redirect as Href)} />
@@ -135,7 +220,7 @@ export default function LoginScreen() {
                   <TextInput
                     autoCapitalize="words"
                     onChangeText={setDisplayName}
-                    placeholder="เช่น Admin User"
+                    placeholder={mode === 'admin' ? 'เช่น Admin User' : mode === 'referral' ? 'เช่น พญ. นก' : 'เช่น คุณบอส'}
                     placeholderTextColor={MiraDesign.color.showcaseNavySoft}
                     style={styles.input}
                     value={displayName}
@@ -150,7 +235,7 @@ export default function LoginScreen() {
                   autoComplete="email"
                   keyboardType="email-address"
                   onChangeText={setEmail}
-                  placeholder="admin@hospital.com"
+                  placeholder={mode === 'admin' ? 'staff@hospital.com' : mode === 'referral' ? 'doctor@example.com' : 'customer@example.com'}
                   placeholderTextColor={MiraDesign.color.showcaseNavySoft}
                   style={styles.input}
                   value={email}
@@ -170,9 +255,37 @@ export default function LoginScreen() {
                 />
               </View>
 
+              {mode === 'chat' || mode === 'referral' ? (
+                <View style={styles.fieldGroup}>
+                  <Text style={styles.label}>เบอร์โทร</Text>
+                  <TextInput
+                    keyboardType="phone-pad"
+                    onChangeText={setPhone}
+                    placeholder="08xxxxxxxx"
+                    placeholderTextColor={MiraDesign.color.showcaseNavySoft}
+                    style={styles.input}
+                    value={phone}
+                  />
+                </View>
+              ) : null}
+
+              {mode === 'referral' ? (
+                <View style={styles.fieldGroup}>
+                  <Text style={styles.label}>Ref code</Text>
+                  <TextInput
+                    autoCapitalize="characters"
+                    onChangeText={(value) => setRefCode(value.replace(/[^0-9A-Za-z]/g, '').toUpperCase().slice(0, 6))}
+                    placeholder="เช่น DRNOK2"
+                    placeholderTextColor={MiraDesign.color.showcaseNavySoft}
+                    style={styles.input}
+                    value={refCode}
+                  />
+                </View>
+              ) : null}
+
               <ActionButton
                 disabled={isBusy || !supabaseConfigStatus.isConfigured}
-                label={isBusy ? 'กำลังทำรายการ' : isSignUp ? 'สมัครและเข้าสู่ระบบ' : 'เข้าสู่ระบบ'}
+                label={isBusy ? 'กำลังทำรายการ' : isSignUp ? `สมัคร${copy.footerLabel}` : copy.primaryLabel}
                 onPress={() => void submit()}
               />
             </>
@@ -183,16 +296,18 @@ export default function LoginScreen() {
         </Card>
 
         <View style={styles.footerLinks}>
-          <Link href="/prototype" asChild>
-            <Pressable style={styles.footerLink}>
-              <Text style={styles.footerLinkText}>เปิด Chat AI</Text>
-            </Pressable>
-          </Link>
-          <Link href="/admin-panel" asChild>
-            <Pressable style={styles.footerLink}>
-              <Text style={styles.footerLinkText}>เปิด Admin Panel</Text>
-            </Pressable>
-          </Link>
+          {switchLinks.map((item) => {
+            const footerLinkStyle = StyleSheet.flatten([styles.footerLink, item.selected ? styles.footerLinkActive : null]);
+            const footerLinkTextStyle = StyleSheet.flatten([styles.footerLinkText, item.selected ? styles.footerLinkTextActive : null]);
+
+            return (
+              <Link key={item.label} href={item.href} asChild>
+                <Pressable style={footerLinkStyle}>
+                  <Text style={footerLinkTextStyle}>{item.label}</Text>
+                </Pressable>
+              </Link>
+            );
+          })}
         </View>
       </KeyboardAvoidingView>
     </Screen>
@@ -215,10 +330,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: MiraDesign.space.md,
     paddingVertical: MiraDesign.space.sm,
   },
+  footerLinkActive: {
+    backgroundColor: MiraDesign.color.showcaseBlueSoft,
+    borderColor: MiraDesign.color.showcaseBlue,
+  },
   footerLinkText: {
     color: MiraDesign.color.showcaseBlueDeep,
     fontSize: 13,
     fontWeight: '900',
+  },
+  footerLinkTextActive: {
+    color: MiraDesign.color.showcaseNavy,
   },
   footerLinks: {
     flexDirection: 'row',
@@ -235,7 +357,7 @@ const styles = StyleSheet.create({
   hero: {
     alignSelf: 'center',
     gap: MiraDesign.space.sm,
-    maxWidth: 560,
+    maxWidth: 610,
   },
   input: {
     backgroundColor: '#F7FBFF',
@@ -244,7 +366,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     color: MiraDesign.color.showcaseNavy,
     fontSize: 15,
-    minHeight: 48,
+    minHeight: 46,
     paddingHorizontal: MiraDesign.space.md,
   },
   label: {
@@ -262,7 +384,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: MiraDesign.radius.sm,
     flex: 1,
-    minHeight: 42,
+    minHeight: 40,
     justifyContent: 'center',
   },
   modeButtonActive: {
@@ -286,13 +408,19 @@ const styles = StyleSheet.create({
   sessionBox: {
     backgroundColor: MiraDesign.color.showcaseBlueSoft,
     borderRadius: MiraDesign.radius.sm,
-    gap: 4,
+    gap: 5,
     padding: MiraDesign.space.md,
   },
   sessionEmail: {
     color: MiraDesign.color.showcaseNavy,
     fontSize: 16,
     fontWeight: '900',
+  },
+  sessionHint: {
+    color: MiraDesign.color.showcaseNavySoft,
+    fontSize: 12,
+    fontWeight: '700',
+    lineHeight: 17,
   },
   sessionLabel: {
     color: MiraDesign.color.showcaseNavySoft,
@@ -303,7 +431,7 @@ const styles = StyleSheet.create({
   shell: {
     gap: MiraDesign.space.xl,
     justifyContent: 'center',
-    minHeight: 560,
+    minHeight: 600,
   },
   subtitle: {
     color: MiraDesign.color.showcaseNavySoft,

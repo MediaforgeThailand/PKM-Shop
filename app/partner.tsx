@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link } from 'expo-router';
 import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 
 import { BranchOptionRow } from '@/components/chat/BranchOptionRow';
@@ -6,7 +7,7 @@ import { OrderPanel } from '@/components/chat/OrderPanel';
 import { Pill } from '@/components/MiraUI';
 import { MiraDesign, softShadow } from '@/constants/Design';
 import { invokeFunction } from '@/lib/api/client';
-import { useAuthSession } from '@/lib/auth/useAuthSession';
+import { useAuthSession, useSignOut } from '@/lib/auth/useAuthSession';
 import {
   defaultTenantSlug,
   type BranchSummary,
@@ -93,6 +94,7 @@ function buyerAgeError(value: string) {
 
 export default function PartnerScreen() {
   const auth = useAuthSession();
+  const signOut = useSignOut();
   const { width } = useWindowDimensions();
   const [tenant, setTenant] = useState<TenantInfo | null>(null);
   const [referrer, setReferrer] = useState<ReferrerRow | null>(null);
@@ -219,6 +221,16 @@ export default function PartnerScreen() {
       isMounted = false;
     };
   }, [auth.session, isDemoMode, loadPartnerData]);
+
+  async function handleSignOut() {
+    try {
+      setError(null);
+      setMessage(null);
+      await signOut();
+    } catch (signOutError) {
+      setError(signOutError instanceof Error ? signOutError.message : 'ออกจากระบบไม่สำเร็จ');
+    }
+  }
 
   useEffect(() => {
     let isMounted = true;
@@ -367,6 +379,17 @@ export default function PartnerScreen() {
             <Text selectable style={styles.shareValue}>
               /r/{referrer?.ref_code ?? 'CODE'}
             </Text>
+            {auth.session ? (
+              <Pressable onPress={() => void handleSignOut()} style={styles.portalAuthButton}>
+                <Text style={styles.portalAuthButtonText}>ออกจากระบบ Referral</Text>
+              </Pressable>
+            ) : (
+              <Link href={{ pathname: '/login', params: { mode: 'referral', redirect: '/partner' } }} asChild>
+                <Pressable style={styles.portalAuthButton}>
+                  <Text style={styles.portalAuthButtonText}>เข้าสู่ระบบ Referral</Text>
+                </Pressable>
+              </Link>
+            )}
           </View>
         </View>
 
@@ -634,6 +657,20 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '900',
     marginTop: 4,
+  },
+  portalAuthButton: {
+    alignItems: 'center',
+    backgroundColor: MiraDesign.color.showcaseBlue,
+    borderRadius: 8,
+    justifyContent: 'center',
+    marginTop: 10,
+    minHeight: 36,
+    paddingHorizontal: 12,
+  },
+  portalAuthButtonText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '900',
   },
   notice: {
     backgroundColor: '#FFFFFF',

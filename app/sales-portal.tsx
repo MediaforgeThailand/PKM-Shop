@@ -267,7 +267,7 @@ export default function SalesPortalScreen() {
         <AccessCard
           body="เข้าสู่ระบบด้วยบัญชีหมอหรือพนักงานก่อนเปิดสินค้า ลิงก์แนะนำ และแดชบอร์ดค่าคอมมิชชัน"
           cta="เข้าสู่ระบบทีมขาย"
-          href={{ pathname: '/', params: { redirect: '/sales-portal' } }}
+          href={{ pathname: '/login', params: { mode: 'referral', redirect: '/sales-portal' } }}
           title="พอร์ทัลทีมขายหน้างาน"
         />
       </PageShell>
