@@ -2,6 +2,7 @@ import { Link } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { AdminShell } from '@/components/admin/AdminShell';
 import { ActionButton, BrandHeader, Card, Pill, Screen, SectionHeader, StatTile } from '@/components/MiraUI';
 import { MiraDesign } from '@/constants/Design';
 import { useAuthSession } from '@/lib/auth/useAuthSession';
@@ -156,6 +157,7 @@ export default function AdminPanelScreen() {
   }, [auth.user]);
 
   return (
+    <AdminShell>
     <Screen>
       <BrandHeader
         compact
@@ -251,6 +253,7 @@ export default function AdminPanelScreen() {
         )}
       </View>
     </Screen>
+    </AdminShell>
   );
 }
 

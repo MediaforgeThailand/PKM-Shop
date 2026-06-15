@@ -78,11 +78,7 @@ function RootLayoutNav() {
             <Stack.Screen name="order-status" options={{ headerShown: false }} />
             <Stack.Screen name="partner" options={{ headerShown: false }} />
             <Stack.Screen name="admin-panel" options={{ headerShown: false }} />
-            <Stack.Screen name="admin/branches" options={{ headerShown: false }} />
-            <Stack.Screen name="admin/catalog" options={{ headerShown: false }} />
-            <Stack.Screen name="admin/dashboard" options={{ headerShown: false }} />
-            <Stack.Screen name="admin/orders" options={{ headerShown: false }} />
-            <Stack.Screen name="admin/referrers" options={{ headerShown: false }} />
+            <Stack.Screen name="admin" options={{ headerShown: false }} />
             <Stack.Screen name="sales-portal" options={{ headerShown: false }} />
             <Stack.Screen name="staff-referral" options={{ headerShown: false }} />
             <Stack.Screen name="user-profile" options={{ headerShown: false }} />

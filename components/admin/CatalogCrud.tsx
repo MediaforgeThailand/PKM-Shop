@@ -1,4 +1,6 @@
 import { Link } from 'expo-router';
+import { SymbolView } from 'expo-symbols';
+import type { ComponentProps, ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 
@@ -46,13 +48,27 @@ const emptyDraft: HospitalProductDraft = {
   title: '',
 };
 
-const statusFilters = ['all', 'active', 'archived'] as const;
+type SymbolName = ComponentProps<typeof SymbolView>['name'];
+
+const statusFilters = ['all', 'active', 'draft', 'pending_review', 'rejected', 'archived'] as const;
 
 type StatusFilter = (typeof statusFilters)[number];
 
 function statusFilterLabel(status: StatusFilter) {
   if (status === 'active') {
     return 'เปิดขาย';
+  }
+
+  if (status === 'draft') {
+    return 'Draft';
+  }
+
+  if (status === 'pending_review') {
+    return 'รอตรวจ';
+  }
+
+  if (status === 'rejected') {
+    return 'ไม่ผ่าน';
   }
 
   if (status === 'archived') {
@@ -63,7 +79,23 @@ function statusFilterLabel(status: StatusFilter) {
 }
 
 function productStatusLabel(status: HospitalProductStatus) {
-  return status === 'active' ? 'เปิดขาย' : 'เก็บถาวร';
+  if (status === 'active') {
+    return 'active';
+  }
+
+  if (status === 'draft') {
+    return 'draft';
+  }
+
+  if (status === 'pending_review') {
+    return 'pending review';
+  }
+
+  if (status === 'rejected') {
+    return 'rejected';
+  }
+
+  return 'archived';
 }
 
 export function CatalogCrud({ title = 'จัดการแค็ตตาล็อก' }: { title?: string }) {
@@ -71,6 +103,7 @@ export function CatalogCrud({ title = 'จัดการแค็ตตาล�
   const { width } = useWindowDimensions();
   const [draft, setDraft] = useState<HospitalProductDraft>(emptyDraft);
   const [editingProduct, setEditingProduct] = useState<HospitalProduct | null>(null);
+  const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [branches, setBranches] = useState<BranchSummary[]>([]);
   const [categories, setCategories] = useState<ProductCategoryOption[]>([]);
   const [categoryDraft, setCategoryDraft] = useState<ProductCategoryDraft>({
@@ -144,6 +177,8 @@ export function CatalogCrud({ title = 'จัดการแค็ตตาล�
     () => ({
       active: products.filter((product) => product.status === 'active').length,
       archived: products.filter((product) => product.status === 'archived').length,
+      draft: products.filter((product) => product.status === 'draft' || product.status === 'pending_review' || product.status === 'rejected').length,
+      ragLive: products.filter((product) => product.status === 'active' && product.ragEmbeddingStatus === 'embedded').length,
       stripeMissing: products.filter((product) => product.status === 'active' && !hasStripeCatalogMapping(product)).length,
       total: products.length,
     }),
@@ -477,13 +512,23 @@ export function CatalogCrud({ title = 'จัดการแค็ตตาล�
 
   function editProduct(product: HospitalProduct) {
     setEditingProduct(product);
+    setIsEditorOpen(true);
     setDraft(draftFromProduct(product));
+    setMessage(null);
+    setError(null);
+  }
+
+  function openNewProduct() {
+    setEditingProduct(null);
+    setIsEditorOpen(true);
+    setDraft(emptyDraft);
     setMessage(null);
     setError(null);
   }
 
   function resetForm() {
     setEditingProduct(null);
+    setIsEditorOpen(true);
     setDraft(emptyDraft);
     setMessage(null);
     setError(null);
@@ -494,16 +539,15 @@ export function CatalogCrud({ title = 'จัดการแค็ตตาล�
       <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
         <View style={[styles.topBar, !isWide ? styles.topBarStack : null]}>
           <View style={styles.titleGroup}>
-            <Text style={styles.eyebrow}>หลังบ้านโรงพยาบาล</Text>
-            <Text style={styles.title}>{title}</Text>
+            <Text style={styles.title}>จัดการสินค้าโรงพยาบาล</Text>
             <Text style={styles.subtitle}>
-              Tenant: {tenantContext?.display_name ?? defaultTenantSlug}
-              {tenantContext ? ` (${tenantContext.role})` : ''}
+              ค้นหา เปิด/ปิดสินค้า และสร้าง referral code ราย product สำหรับพาร์ทเนอร์ hospital portal
             </Text>
           </View>
           <View style={styles.topActions}>
             <Pressable disabled={isLoading} onPress={refreshProducts} style={[styles.secondaryButton, isLoading ? styles.disabled : null]}>
-              <Text style={styles.secondaryButtonText}>{isLoading ? 'กำลังรีเฟรช' : 'รีเฟรช'}</Text>
+              <SymbolView name={{ android: 'refresh', ios: 'arrow.clockwise', web: 'refresh' }} size={18} tintColor={MiraDesign.color.showcaseBlue} />
+              <Text style={styles.secondaryButtonText}>{isLoading ? 'กำลังรีเฟรช' : 'Refresh'}</Text>
             </Pressable>
             {canEditCatalog ? (
               <Pressable
@@ -516,16 +560,10 @@ export function CatalogCrud({ title = 'จัดการแค็ตตาล�
                 </Text>
               </Pressable>
             ) : null}
-            <Link href="/admin/branches" asChild>
-              <Pressable style={styles.secondaryButton}>
-                <Text style={styles.secondaryButtonText}>สาขา</Text>
-              </Pressable>
-            </Link>
-            <Link href="/" asChild>
-              <Pressable style={styles.primaryButton}>
-                <Text style={styles.primaryButtonText}>หน้าโมดูล</Text>
-              </Pressable>
-            </Link>
+            <Pressable onPress={openNewProduct} style={styles.primaryButton}>
+              <SymbolView name={{ android: 'add', ios: 'plus', web: 'add' }} size={20} tintColor="#FFFFFF" />
+              <Text style={styles.primaryButtonText}>Add product</Text>
+            </Pressable>
           </View>
         </View>
 
@@ -550,8 +588,73 @@ export function CatalogCrud({ title = 'จัดการแค็ตตาล�
           </View>
         ) : null}
 
+        <View style={styles.statsGrid}>
+          <StatCard
+            detail="รายการทั้งหมด"
+            icon={{ android: 'deployed_code', ios: 'cube', web: 'deployed_code' }}
+            label="TOTAL PRODUCTS"
+            tone="blue"
+            value={`${summary.total}`}
+          />
+          <StatCard
+            detail="กำลังใช้งาน"
+            icon={{ android: 'check_circle', ios: 'checkmark.circle', web: 'check_circle' }}
+            label="ACTIVE PRODUCTS"
+            tone="mint"
+            value={`${summary.active}`}
+          />
+          <StatCard
+            detail="ถูกเก็บถาวร"
+            icon={{ android: 'inventory_2', ios: 'archivebox', web: 'inventory_2' }}
+            label="ARCHIVED"
+            tone="violet"
+            value={`${summary.archived}`}
+          />
+          <StatCard
+            action={
+              <Link href={{ pathname: '/package-detail', params: { tour: 'admin' } }} asChild>
+                <Pressable style={styles.statAction}>
+                  <SymbolView name={{ android: 'phone_iphone', ios: 'iphone', web: 'phone_iphone' }} size={17} tintColor={MiraDesign.color.showcaseBlue} />
+                  <Text style={styles.statActionText}>Open mobile catalog</Text>
+                </Pressable>
+              </Link>
+            }
+            detail="กำลังเชื่อมต่อ"
+            icon={{ android: 'sensors', ios: 'dot.radiowaves.left.and.right', web: 'sensors' }}
+            label="RAG LIVE"
+            tone="orange"
+            value={`${summary.ragLive}`}
+          />
+        </View>
+
         <View style={[styles.workspace, !isWide ? styles.workspaceStack : null]}>
-          <View style={styles.formPane}>
+          <View style={styles.sidePane}>
+            <View style={styles.filterPanel}>
+              <Text style={styles.sideTitle}>ค้นหาสินค้า</Text>
+              <View style={styles.searchBox}>
+                <SymbolView name={{ android: 'search', ios: 'magnifyingglass', web: 'search' }} size={19} tintColor={MiraDesign.color.showcaseNavySoft} />
+                <TextInput
+                  onChangeText={setQuery}
+                  placeholder="ชื่อสินค้า โรงพยาบาล หมวดหมู่ หรือ tag"
+                  placeholderTextColor={MiraDesign.color.showcaseNavySoft}
+                  style={styles.searchInput}
+                  value={query}
+                />
+              </View>
+            </View>
+
+            <View style={styles.filterPanel}>
+              <FilterChips
+                activeCategory={categoryFilter}
+                activeStatus={statusFilter}
+                categories={categoryOptions}
+                onCategoryChange={setCategoryFilter}
+                onStatusChange={setStatusFilter}
+              />
+            </View>
+
+            {isEditorOpen || editingProduct ? (
+              <View style={styles.editorPanel}>
             <View style={styles.panelHeader}>
               <View>
                 <Text style={styles.panelTitle}>{editingProduct ? 'แก้ไขสินค้า' : 'เพิ่มสินค้า'}</Text>
@@ -716,38 +819,34 @@ export function CatalogCrud({ title = 'จัดการแค็ตตาล�
             <Pressable disabled={!canSave || isSaving} onPress={saveDraft} style={[styles.saveButton, !canSave || isSaving ? styles.disabled : null]}>
               <Text style={styles.saveButtonText}>{isSaving ? 'กำลังบันทึก' : editingProduct ? 'บันทึกสินค้า' : 'สร้างสินค้า'}</Text>
             </Pressable>
+              </View>
+            ) : (
+              <ReferralWorkspaceCard tenantName={tenantContext?.display_name ?? defaultTenantSlug} />
+            )}
           </View>
 
           <View style={styles.listPane}>
-            <View style={styles.panelHeader}>
+            <View style={[styles.inventoryHeader, !isWide ? styles.inventoryHeaderStack : null]}>
               <View>
-                <Text style={styles.panelTitle}>สินค้า</Text>
-                <Text style={styles.panelMeta}>{isLoading ? 'กำลังโหลด' : `แสดง ${filteredProducts.length} รายการ`}</Text>
+                <Text style={styles.inventoryTitle}>Product inventory</Text>
+                <Text style={styles.inventoryMeta}>{isLoading ? 'กำลังโหลดสินค้า' : `${filteredProducts.length} demo products`}</Text>
               </View>
-              <View style={styles.summaryRow}>
-                <Metric label="ทั้งหมด" value={`${summary.total}`} />
-                <Metric label="เปิดขาย" value={`${summary.active}`} />
-                <Metric label="เก็บถาวร" value={`${summary.archived}`} />
-                <Metric label="ยังไม่ซิงก์ Stripe" value={`${summary.stripeMissing}`} />
+              <View style={styles.inventoryActions}>
+                <Link href="/admin/referrers" asChild>
+                  <Pressable style={styles.secondaryButton}>
+                    <SymbolView name={{ android: 'person_add', ios: 'person.badge.plus', web: 'person_add' }} size={18} tintColor={MiraDesign.color.showcaseBlue} />
+                    <Text style={styles.secondaryButtonText}>Referral</Text>
+                  </Pressable>
+                </Link>
+                <Pressable onPress={refreshProducts} style={styles.secondaryButton}>
+                  <SymbolView name={{ android: 'database', ios: 'cylinder.split.1x2', web: 'database' }} size={18} tintColor={MiraDesign.color.showcaseNavySoft} />
+                  <Text style={styles.secondaryButtonText}>Mock data</Text>
+                </Pressable>
               </View>
             </View>
 
-            <View style={styles.filterBar}>
-              <TextInput
-                onChangeText={setQuery}
-                placeholder="ค้นหาชื่อสินค้า รหัส รายละเอียด หรือสาขา"
-                placeholderTextColor={MiraDesign.color.showcaseNavySoft}
-                style={styles.searchInput}
-                value={query}
-              />
-              <FilterChips
-                activeCategory={categoryFilter}
-                activeStatus={statusFilter}
-                categories={categoryOptions}
-                onCategoryChange={setCategoryFilter}
-                onStatusChange={setStatusFilter}
-              />
-            </View>
+            {error ? <Text style={styles.errorText}>{error}</Text> : null}
+            {message ? <Text style={styles.successText}>{message}</Text> : null}
 
             {filteredProducts.length === 0 ? (
               <View style={styles.emptyState}>
@@ -773,6 +872,70 @@ export function CatalogCrud({ title = 'จัดการแค็ตตาล�
           </View>
         </View>
       </ScrollView>
+    </View>
+  );
+}
+
+function StatCard({
+  action,
+  detail,
+  icon,
+  label,
+  tone,
+  value,
+}: {
+  action?: ReactNode;
+  detail: string;
+  icon: SymbolName;
+  label: string;
+  tone: 'blue' | 'mint' | 'orange' | 'violet';
+  value: string;
+}) {
+  const toneStyle = {
+    blue: styles.statIconBlue,
+    mint: styles.statIconMint,
+    orange: styles.statIconOrange,
+    violet: styles.statIconViolet,
+  }[tone];
+  const iconColor = {
+    blue: MiraDesign.color.showcaseBlue,
+    mint: '#0F9F72',
+    orange: '#F97316',
+    violet: '#6D28D9',
+  }[tone];
+
+  return (
+    <View style={styles.statCard}>
+      <View style={[styles.statIcon, toneStyle]}>
+        <SymbolView name={icon} size={34} tintColor={iconColor} />
+      </View>
+      <View style={styles.statCopy}>
+        <Text style={styles.statLabel}>{label}</Text>
+        <Text style={styles.statValue}>{value}</Text>
+        <Text style={styles.statDetail}>{detail}</Text>
+      </View>
+      {action ? <View style={styles.statCardAction}>{action}</View> : null}
+    </View>
+  );
+}
+
+function ReferralWorkspaceCard({ tenantName }: { tenantName: string }) {
+  return (
+    <View style={styles.referralPanel}>
+      <View style={styles.referralHeader}>
+        <View>
+          <Text style={styles.referralTitle}>REFERRAL WORKSPACE</Text>
+          <Text style={styles.referralLink}>staff portal mockup</Text>
+        </View>
+        <Text style={styles.waitingBadge}>Waiting</Text>
+      </View>
+      <View style={styles.referralCallout}>
+        <SymbolView name={{ android: 'person_add', ios: 'person.badge.plus', web: 'person_add' }} size={26} tintColor={MiraDesign.color.showcaseBlue} />
+        <View style={styles.referralCopy}>
+          <Text style={styles.referralCalloutTitle}>เลือก product จาก inventory</Text>
+          <Text style={styles.referralBody}>นำไปเลือกใช้กับหน้า product จะเป็น code ที่ผูกกับ {tenantName} และพาร์ทเนอร์รายนั้นๆ</Text>
+        </View>
+      </View>
     </View>
   );
 }
@@ -810,6 +973,7 @@ function FilterChips({
 
   return (
     <View style={styles.chipGroup}>
+      <Text style={styles.fieldLabel}>สถานะ</Text>
       <View style={styles.chipRow}>
         {statusFilters.map((status) => (
           <Pressable
@@ -821,6 +985,7 @@ function FilterChips({
           </Pressable>
         ))}
       </View>
+      <Text style={styles.fieldLabel}>หมวดหมู่</Text>
       <View style={styles.chipRow}>
         <Pressable
           onPress={() => onCategoryChange('all')}
@@ -869,57 +1034,85 @@ function ProductRow({
   const isActive = product.status === 'active';
   const branchNames = product.branches.map((branch) => branch.name).join(', ');
   const stripeStatus = getStripeStatus(product);
+  const ragStatus = getRagStatus(product);
+  const tags = (product.tags.length > 0 ? product.tags : product.includes).slice(0, 3);
 
   return (
     <View style={[styles.productRow, selected ? styles.productRowSelected : null]}>
-      <View style={styles.productHead}>
-        <View style={styles.productTitleGroup}>
-          <Text style={styles.productTitle}>{product.title}</Text>
-          <Text style={styles.productKey}>{product.catalogKey}</Text>
-        </View>
-        <View style={styles.rowPills}>
-          <Pill label={productStatusLabel(product.status)} tone={isActive ? 'mint' : 'amber'} />
-          <Pill label={productCategoryLabel} tone="blue" />
-        </View>
-      </View>
-      <Text numberOfLines={2} style={styles.productDescription}>
-        {product.description}
-      </Text>
-      <View style={styles.productMetaGrid}>
-        <Meta label="ราคา" value={`${product.priceAmount.toLocaleString('th-TH')} THB`} />
-        <Meta label="การจอง" value={product.requiresAppointment ? 'ต้องนัดหมาย' : 'Walk-in ได้'} />
-        <Meta label="สาขา" value={branchNames || 'ยังไม่ผูกสาขา'} />
-        <Meta label="Stripe" value={stripeStatus.label} />
-      </View>
-      <View style={styles.stripePanel}>
-        <Pill label={stripeStatus.label} tone={stripeStatus.tone} />
-        <Text numberOfLines={1} style={styles.stripeId}>
-          Product: {product.stripeProductId ?? 'ยังไม่ซิงก์'}
-        </Text>
-        <Text numberOfLines={1} style={styles.stripeId}>
-          Price: {product.stripePriceId ?? 'ยังไม่ซิงก์'}
-        </Text>
-      </View>
-      {product.hospitalAddress ? <Text style={styles.helperText}>branch_info เดิม: {product.hospitalAddress}</Text> : null}
-      <View style={styles.productFooter}>
-        <Pressable onPress={onEdit} style={styles.editButton}>
-          <Text style={styles.editButtonText}>แก้ไข</Text>
-        </Pressable>
-        <Pressable disabled={disabled} onPress={onSyncStripe} style={[styles.stripeButton, disabled ? styles.disabled : null]}>
-          <Text style={styles.stripeButtonText}>
-            {isBusy ? 'กำลังซิงก์' : product.stripeProductId && product.stripePriceId ? 'ซิงก์ Stripe อีกครั้ง' : 'ซิงก์ Stripe'}
+      <View style={styles.productHero}>
+        <ProductVisual product={product} />
+        <View style={styles.productMain}>
+          <View style={styles.productHead}>
+            <View style={styles.productTitleGroup}>
+              <Text style={styles.productTitle}>{product.title}</Text>
+              <Text style={styles.productKey}>{product.hospitalName || 'Mira Partner Hospital'}</Text>
+            </View>
+            <View style={styles.rowPills}>
+              <Pill label="demo" tone="blue" />
+              <Pill label={productStatusLabel(product.status)} tone={isActive ? 'mint' : 'amber'} />
+              <Pill label={ragStatus.label} tone={ragStatus.tone} />
+            </View>
+          </View>
+          <Text numberOfLines={2} style={styles.productDescription}>
+            {product.description}
           </Text>
-        </Pressable>
-        {isActive ? (
-          <Pressable disabled={disabled} onPress={onArchive} style={[styles.dangerButton, disabled ? styles.disabled : null]}>
-            <Text style={styles.dangerButtonText}>{isBusy ? 'กำลังเก็บ' : 'เก็บถาวร'}</Text>
-          </Pressable>
-        ) : (
-          <Pressable disabled={disabled} onPress={onRestore} style={[styles.restoreButton, disabled ? styles.disabled : null]}>
-            <Text style={styles.restoreButtonText}>{isBusy ? 'กำลังกู้คืน' : 'กู้คืน'}</Text>
-          </Pressable>
-        )}
+          {tags.length > 0 ? (
+            <View style={styles.tagRow}>
+              {tags.map((tag) => (
+                <Text key={tag} numberOfLines={1} style={styles.tagPill}>
+                  {tag}
+                </Text>
+              ))}
+            </View>
+          ) : null}
+        </View>
       </View>
+      <View style={styles.productMetaGrid}>
+        <Meta icon={{ android: 'category', ios: 'tag', web: 'category' }} label="CATEGORY" value={productCategoryLabel} />
+        <Meta icon={{ android: 'sell', ios: 'tag', web: 'sell' }} label="PRICE" value={`${product.priceAmount.toLocaleString('th-TH')} THB`} />
+        <Meta icon={{ android: 'percent', ios: 'percent', web: 'percent' }} label="COMMISSION" value={`${Math.round(product.commissionRate * 100)}%`} />
+        <Meta icon={{ android: 'calendar_month', ios: 'calendar', web: 'calendar_month' }} label="CREATED" value={formatShortDate(product.createdAt)} />
+        <Meta icon={{ android: 'deployed_code', ios: 'cube', web: 'deployed_code' }} label="RAG CHUNK" value={product.ragChunkId ?? 'not published'} />
+        <Meta icon={{ android: 'database', ios: 'cylinder.split.1x2', web: 'database' }} label="EMBEDDING" value={product.ragEmbeddingModel ?? stripeStatus.label} />
+      </View>
+      <View style={styles.productBottom}>
+        <Text numberOfLines={1} style={styles.productLocation}>
+          {branchNames || product.hospitalAddress || 'ยังไม่ผูกสาขา'}
+        </Text>
+        <View style={styles.productFooter}>
+          <Pressable onPress={onEdit} style={styles.editButton}>
+            <SymbolView name={{ android: 'edit', ios: 'pencil', web: 'edit' }} size={17} tintColor={MiraDesign.color.showcaseBlue} />
+            <Text style={styles.editButtonText}>แก้ไข</Text>
+          </Pressable>
+          <Pressable disabled={disabled} onPress={onSyncStripe} style={[styles.stripeButton, disabled ? styles.disabled : null]}>
+            <SymbolView name={{ android: 'database', ios: 'cylinder.split.1x2', web: 'database' }} size={17} tintColor={MiraDesign.color.showcaseNavySoft} />
+            <Text style={styles.stripeButtonText}>
+              {isBusy ? 'กำลังซิงก์' : product.stripeProductId && product.stripePriceId ? 'Mock data' : 'ซิงก์ Stripe'}
+            </Text>
+          </Pressable>
+          {isActive ? (
+            <Pressable disabled={disabled} onPress={onArchive} style={[styles.dangerButton, disabled ? styles.disabled : null]}>
+              <Text style={styles.dangerButtonText}>{isBusy ? 'กำลังเก็บ' : 'เก็บถาวร'}</Text>
+            </Pressable>
+          ) : (
+            <Pressable disabled={disabled} onPress={onRestore} style={[styles.restoreButton, disabled ? styles.disabled : null]}>
+              <Text style={styles.restoreButtonText}>{isBusy ? 'กำลังกู้คืน' : 'กู้คืน'}</Text>
+            </Pressable>
+          )}
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function ProductVisual({ product }: { product: HospitalProduct }) {
+  if (product.imageUrl) {
+    return <Image source={{ uri: product.imageUrl }} resizeMode="cover" style={styles.productImage} />;
+  }
+
+  return (
+    <View style={styles.productIconBox}>
+      <SymbolView name={categoryIcon(product.category)} size={58} tintColor={MiraDesign.color.showcaseBlue} />
     </View>
   );
 }
@@ -943,6 +1136,52 @@ function getStripeStatus(product: HospitalProduct): { label: string; tone: 'ambe
     label: 'ยังไม่ซิงก์',
     tone: 'amber',
   };
+}
+
+function getRagStatus(product: HospitalProduct): { label: string; tone: 'amber' | 'blue' | 'danger' | 'mint' } {
+  if (product.ragEmbeddingStatus === 'embedded' && product.ragStatus === 'published') {
+    return { label: 'RAG embedded', tone: 'mint' };
+  }
+
+  if (product.ragEmbeddingStatus === 'error' || product.ragStatus === 'error') {
+    return { label: 'RAG error', tone: 'danger' };
+  }
+
+  if (product.ragEmbeddingStatus === 'pending' || product.ragStatus === 'pending_review') {
+    return { label: 'RAG pending', tone: 'amber' };
+  }
+
+  return { label: 'No RAG', tone: 'amber' };
+}
+
+function formatShortDate(value: string) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return '-';
+  }
+
+  return new Intl.DateTimeFormat('th-TH', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  }).format(date);
+}
+
+function categoryIcon(category: ProductCategory): SymbolName {
+  if (category === 'vaccine') {
+    return { android: 'vaccines', ios: 'syringe', web: 'vaccines' };
+  }
+
+  if (category === 'imaging') {
+    return { android: 'monitor_heart', ios: 'waveform.path.ecg', web: 'monitor_heart' };
+  }
+
+  if (category === 'consult') {
+    return { android: 'stethoscope', ios: 'stethoscope', web: 'stethoscope' };
+  }
+
+  return { android: 'water_drop', ios: 'drop', web: 'water_drop' };
 }
 
 function Field({
@@ -980,29 +1219,32 @@ function Metric({ label, value }: { label: string; value: string }) {
   );
 }
 
-function Meta({ label, value }: { label: string; value: string }) {
+function Meta({ icon, label, value }: { icon: SymbolName; label: string; value: string }) {
   return (
     <View style={styles.metaCell}>
-      <Text style={styles.metaLabel}>{label}</Text>
-      <Text numberOfLines={1} style={styles.metaValue}>
-        {value}
-      </Text>
+      <SymbolView name={icon} size={23} tintColor={MiraDesign.color.showcaseBlue} />
+      <View style={styles.metaCopy}>
+        <Text style={styles.metaLabel}>{label}</Text>
+        <Text numberOfLines={1} style={styles.metaValue}>
+          {value}
+        </Text>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   screen: {
-    backgroundColor: '#F5F8F7',
+    backgroundColor: '#F6FAFF',
     flex: 1,
   },
   container: {
-    gap: 18,
-    padding: 22,
-    paddingBottom: 48,
+    gap: 16,
+    padding: 30,
+    paddingBottom: 56,
   },
   topBar: {
-    alignItems: 'flex-start',
+    alignItems: 'center',
     flexDirection: 'row',
     gap: 18,
     justifyContent: 'space-between',
@@ -1012,19 +1254,13 @@ const styles = StyleSheet.create({
   },
   titleGroup: {
     flex: 1,
-    gap: 7,
-  },
-  eyebrow: {
-    color: MiraDesign.color.showcaseBlueDeep,
-    fontSize: 13,
-    fontWeight: '900',
-    textTransform: 'uppercase',
+    gap: 6,
   },
   title: {
     color: MiraDesign.color.showcaseNavy,
-    fontSize: 30,
+    fontSize: 28,
     fontWeight: '900',
-    lineHeight: 36,
+    lineHeight: 34,
   },
   subtitle: {
     color: MiraDesign.color.showcaseNavySoft,
@@ -1033,6 +1269,7 @@ const styles = StyleSheet.create({
     maxWidth: 760,
   },
   topActions: {
+    alignItems: 'center',
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
@@ -1041,9 +1278,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: MiraDesign.color.showcaseBlue,
     borderRadius: 8,
+    flexDirection: 'row',
+    gap: 8,
     justifyContent: 'center',
-    minHeight: 44,
-    paddingHorizontal: 16,
+    minHeight: 52,
+    paddingHorizontal: 20,
   },
   primaryButtonText: {
     color: '#FFFFFF',
@@ -1056,8 +1295,10 @@ const styles = StyleSheet.create({
     borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 8,
     borderWidth: 1,
+    flexDirection: 'row',
+    gap: 8,
     justifyContent: 'center',
-    minHeight: 44,
+    minHeight: 52,
     paddingHorizontal: 16,
   },
   secondaryButtonText: {
@@ -1097,13 +1338,188 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '900',
   },
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 14,
+  },
+  statCard: {
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderColor: MiraDesign.color.showcaseLine,
+    borderRadius: 8,
+    borderWidth: 1,
+    flex: 1,
+    flexDirection: 'row',
+    gap: 18,
+    minHeight: 124,
+    minWidth: 230,
+    padding: 20,
+    ...softShadow,
+  },
+  statIcon: {
+    alignItems: 'center',
+    borderRadius: 999,
+    height: 86,
+    justifyContent: 'center',
+    width: 86,
+  },
+  statIconBlue: {
+    backgroundColor: '#EAF2FF',
+  },
+  statIconMint: {
+    backgroundColor: '#E7F8F2',
+  },
+  statIconOrange: {
+    backgroundColor: '#FFF1E4',
+  },
+  statIconViolet: {
+    backgroundColor: '#F0EAFE',
+  },
+  statCopy: {
+    flex: 1,
+    gap: 4,
+    minWidth: 0,
+  },
+  statLabel: {
+    color: MiraDesign.color.showcaseNavySoft,
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  statValue: {
+    color: MiraDesign.color.showcaseNavy,
+    fontSize: 30,
+    fontWeight: '900',
+    lineHeight: 34,
+  },
+  statDetail: {
+    color: MiraDesign.color.showcaseNavySoft,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  statCardAction: {
+    alignSelf: 'flex-start',
+  },
+  statAction: {
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderColor: MiraDesign.color.showcaseLine,
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 8,
+    minHeight: 42,
+    paddingHorizontal: 12,
+  },
+  statActionText: {
+    color: MiraDesign.color.showcaseBlue,
+    fontSize: 12,
+    fontWeight: '900',
+  },
   workspace: {
     alignItems: 'flex-start',
     flexDirection: 'row',
-    gap: 18,
+    gap: 10,
   },
   workspaceStack: {
     flexDirection: 'column',
+  },
+  sidePane: {
+    gap: 12,
+    maxWidth: '100%',
+    width: 376,
+  },
+  filterPanel: {
+    backgroundColor: '#FFFFFF',
+    borderColor: MiraDesign.color.showcaseLine,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 14,
+    padding: 16,
+    ...softShadow,
+  },
+  sideTitle: {
+    color: MiraDesign.color.showcaseNavy,
+    fontSize: 16,
+    fontWeight: '900',
+  },
+  searchBox: {
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderColor: MiraDesign.color.showcaseLine,
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 10,
+    minHeight: 48,
+    paddingHorizontal: 12,
+  },
+  editorPanel: {
+    backgroundColor: '#FFFFFF',
+    borderColor: MiraDesign.color.showcaseLine,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 14,
+    padding: 16,
+    ...softShadow,
+  },
+  referralPanel: {
+    backgroundColor: '#FFFFFF',
+    borderColor: MiraDesign.color.showcaseLine,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 14,
+    padding: 18,
+    ...softShadow,
+  },
+  referralHeader: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: 10,
+    justifyContent: 'space-between',
+  },
+  referralTitle: {
+    color: MiraDesign.color.showcaseNavy,
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  referralLink: {
+    color: MiraDesign.color.showcaseBlue,
+    fontSize: 13,
+    fontWeight: '900',
+    marginTop: 8,
+  },
+  waitingBadge: {
+    backgroundColor: '#FFF2D8',
+    borderRadius: 8,
+    color: '#B7791F',
+    fontSize: 12,
+    fontWeight: '900',
+    overflow: 'hidden',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  referralCallout: {
+    alignItems: 'flex-start',
+    backgroundColor: MiraDesign.color.showcaseBlueSoft,
+    borderRadius: 8,
+    flexDirection: 'row',
+    gap: 12,
+    padding: 16,
+  },
+  referralCopy: {
+    flex: 1,
+    gap: 8,
+  },
+  referralCalloutTitle: {
+    color: MiraDesign.color.showcaseNavy,
+    fontSize: 15,
+    fontWeight: '900',
+  },
+  referralBody: {
+    color: MiraDesign.color.showcaseNavySoft,
+    fontSize: 13,
+    lineHeight: 20,
   },
   formPane: {
     backgroundColor: MiraDesign.color.showcaseSurface,
@@ -1121,10 +1537,11 @@ const styles = StyleSheet.create({
     borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 8,
     borderWidth: 1,
-    flex: 1.2,
+    flex: 1,
     gap: 14,
-    padding: 18,
+    padding: 14,
     width: '100%',
+    ...softShadow,
   },
   panelHeader: {
     alignItems: 'center',
@@ -1142,6 +1559,37 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '900',
     marginTop: 3,
+  },
+  inventoryHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 16,
+    justifyContent: 'space-between',
+    paddingHorizontal: 4,
+    paddingTop: 2,
+  },
+  inventoryHeaderStack: {
+    alignItems: 'stretch',
+    flexDirection: 'column',
+  },
+  inventoryTitle: {
+    color: MiraDesign.color.showcaseNavy,
+    fontSize: 20,
+    fontWeight: '900',
+    lineHeight: 25,
+  },
+  inventoryMeta: {
+    color: MiraDesign.color.showcaseBlue,
+    fontSize: 13,
+    fontWeight: '900',
+    marginTop: 6,
+  },
+  inventoryActions: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    justifyContent: 'flex-end',
   },
   textButton: {
     backgroundColor: MiraDesign.color.showcaseBlueSoft,
@@ -1427,17 +1875,16 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   searchInput: {
-    backgroundColor: '#F7FBFA',
-    borderColor: MiraDesign.color.showcaseLine,
-    borderRadius: 8,
-    borderWidth: 1,
     color: MiraDesign.color.showcaseNavy,
+    flex: 1,
     fontSize: 14,
+    fontWeight: '800',
     minHeight: 44,
-    paddingHorizontal: 12,
+    minWidth: 0,
+    paddingHorizontal: 0,
   },
   chipGroup: {
-    gap: 8,
+    gap: 11,
   },
   chipRow: {
     flexDirection: 'row',
@@ -1487,8 +1934,9 @@ const styles = StyleSheet.create({
     borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 8,
     borderWidth: 1,
-    gap: 12,
-    padding: 14,
+    gap: 16,
+    padding: 18,
+    ...softShadow,
   },
   productRowSelected: {
     borderColor: MiraDesign.color.showcaseBlue,
@@ -1499,15 +1947,40 @@ const styles = StyleSheet.create({
     gap: 12,
     justifyContent: 'space-between',
   },
+  productHero: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: 20,
+  },
+  productMain: {
+    flex: 1,
+    gap: 8,
+    minWidth: 0,
+  },
+  productImage: {
+    backgroundColor: MiraDesign.color.showcaseBlueSoft,
+    borderRadius: 8,
+    height: 104,
+    width: 104,
+  },
+  productIconBox: {
+    alignItems: 'center',
+    backgroundColor: MiraDesign.color.showcaseBlueSoft,
+    borderRadius: 8,
+    height: 104,
+    justifyContent: 'center',
+    width: 104,
+  },
   productTitleGroup: {
     flex: 1,
     gap: 4,
+    minWidth: 0,
   },
   productTitle: {
     color: MiraDesign.color.showcaseNavy,
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '900',
-    lineHeight: 21,
+    lineHeight: 22,
   },
   productKey: {
     color: MiraDesign.color.showcaseBlueDeep,
@@ -1526,19 +1999,43 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 19,
   },
+  tagRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  tagPill: {
+    backgroundColor: MiraDesign.color.showcaseBlueSoft,
+    borderRadius: 8,
+    color: MiraDesign.color.showcaseBlue,
+    fontSize: 11,
+    fontWeight: '900',
+    maxWidth: 150,
+    overflow: 'hidden',
+    paddingHorizontal: 11,
+    paddingVertical: 5,
+  },
   productMetaGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
+    gap: 8,
   },
   metaCell: {
-    backgroundColor: '#F7FBFA',
-    borderColor: '#E5EFEE',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 8,
     borderWidth: 1,
+    flexDirection: 'row',
     flexGrow: 1,
-    minWidth: 130,
+    gap: 10,
+    minHeight: 58,
+    minWidth: 184,
     padding: 10,
+  },
+  metaCopy: {
+    flex: 1,
+    minWidth: 0,
   },
   metaLabel: {
     color: MiraDesign.color.showcaseNavySoft,
@@ -1557,6 +2054,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 10,
     justifyContent: 'flex-end',
+    flexWrap: 'wrap',
+  },
+  productBottom: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    justifyContent: 'space-between',
+  },
+  productLocation: {
+    color: MiraDesign.color.showcaseNavySoft,
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '800',
+    minWidth: 220,
   },
   stripePanel: {
     backgroundColor: '#F7FBFA',
@@ -1573,10 +2085,12 @@ const styles = StyleSheet.create({
   },
   stripeButton: {
     alignItems: 'center',
-    backgroundColor: '#EAF3F2',
+    backgroundColor: '#FFFFFF',
     borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 8,
     borderWidth: 1,
+    flexDirection: 'row',
+    gap: 8,
     justifyContent: 'center',
     minHeight: 38,
     minWidth: 122,
@@ -1589,8 +2103,12 @@ const styles = StyleSheet.create({
   },
   editButton: {
     alignItems: 'center',
-    backgroundColor: MiraDesign.color.showcaseBlueSoft,
+    backgroundColor: '#FFFFFF',
+    borderColor: MiraDesign.color.showcaseLine,
     borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 8,
     justifyContent: 'center',
     minHeight: 38,
     minWidth: 88,
