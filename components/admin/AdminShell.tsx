@@ -1,4 +1,4 @@
-import { Link, type Href, usePathname } from 'expo-router';
+import { Link, type Href, useGlobalSearchParams, usePathname } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import type { ComponentProps, ReactNode } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
@@ -82,14 +82,27 @@ function isActiveItem(pathname: string, item: AdminNavItem) {
 
 export function AdminShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const params = useGlobalSearchParams<{ tour?: string }>();
   const { width } = useWindowDimensions();
   const isCompact = width < 880;
+  const tour = params.tour === 'admin' ? 'admin' : null;
+
+  function withTour(href: Href): Href {
+    if (!tour || typeof href !== 'string') {
+      return href;
+    }
+
+    return {
+      params: { tour },
+      pathname: href,
+    } as Href;
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={[styles.shell, isCompact ? styles.shellCompact : null]}>
         <View style={[styles.sidebar, isCompact ? styles.sidebarCompact : null]}>
-          <Link href="/admin-panel" asChild>
+          <Link href={withTour('/admin-panel')} asChild>
             <Pressable style={styles.brandLink}>
               <Image resizeMode="contain" source={brandLogo} style={styles.logo} />
             </Pressable>
@@ -107,7 +120,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
               const navLabelStyle = StyleSheet.flatten([styles.navLabel, isActive ? styles.navLabelActive : null]);
 
               return (
-                <Link key={item.key} href={item.href} asChild>
+                <Link key={item.key} href={withTour(item.href)} asChild>
                   <Pressable style={navItemStyle}>
                     <SymbolView
                       name={item.icon}

@@ -1,4 +1,4 @@
-import { Link } from 'expo-router';
+import { Link, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
@@ -172,9 +172,10 @@ function orderStatusTone(status: OrderRow['status']): 'amber' | 'blue' | 'danger
 
 export default function AdminDashboardScreen() {
   const auth = useAuthSession();
+  const { tour } = useLocalSearchParams<{ tour?: string }>();
   const { width } = useWindowDimensions();
   const isWide = width >= 1080;
-  const isDemoMode = !auth.session || !supabaseConfigStatus.isConfigured;
+  const isTourMode = tour === 'admin';
   const [branches, setBranches] = useState<BranchSummary[]>([]);
   const [commissions, setCommissions] = useState<CommissionEntryRow[]>([]);
   const [orders, setOrders] = useState<DashboardOrder[]>([]);
@@ -182,32 +183,36 @@ export default function AdminDashboardScreen() {
   const [referrers, setReferrers] = useState<ReferrerRow[]>([]);
   const [tenantContext, setTenantContext] = useState<TenantMemberContext | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [demoFallbackReason, setDemoFallbackReason] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const isBaseDemoMode = isTourMode || !auth.session || !supabaseConfigStatus.isConfigured;
+  const isDemoMode = isBaseDemoMode || Boolean(demoFallbackReason);
+
+  const loadDemoDashboard = useCallback((reason: string | null = null) => {
+    setDemoFallbackReason(reason);
+    setTenantContext(showcaseDemoTenantContext);
+    setProducts(showcaseDemoProducts);
+    setBranches(showcaseDemoBranches);
+    setOrders(showcaseDemoAdminOrders);
+    setReferrers(showcaseDemoReferrers);
+    setCommissions(showcaseDemoCommissions);
+  }, []);
 
   const loadDashboard = useCallback(async () => {
-    if (isDemoMode) {
-      setTenantContext(showcaseDemoTenantContext);
-      setProducts(showcaseDemoProducts);
-      setBranches(showcaseDemoBranches);
-      setOrders(showcaseDemoAdminOrders);
-      setReferrers(showcaseDemoReferrers);
-      setCommissions(showcaseDemoCommissions);
-      return;
+    if (isBaseDemoMode) {
+      loadDemoDashboard(null);
+      return true;
     }
 
     const context = await loadTenantMemberContext();
 
     if (!context) {
-      setTenantContext(null);
-      setProducts([]);
-      setBranches([]);
-      setOrders([]);
-      setReferrers([]);
-      setCommissions([]);
-      throw new Error('บัญชีนี้ยังไม่ได้เป็นสมาชิก tenant สำหรับ admin dashboard');
+      loadDemoDashboard(`บัญชีนี้ยังไม่ได้เชื่อมกับ tenant "${defaultTenantSlug}"`);
+      return true;
     }
 
+    setDemoFallbackReason(null);
     setTenantContext(context);
 
     const [productRows, branchRows, orderResult, referrerResult, commissionResult] = await Promise.all([
@@ -269,15 +274,18 @@ export default function AdminDashboardScreen() {
     ]);
 
     if (orderResult.error) {
-      throw new Error(orderResult.error.message);
+      loadDemoDashboard(orderResult.error.message);
+      return true;
     }
 
     if (referrerResult.error) {
-      throw new Error(referrerResult.error.message);
+      loadDemoDashboard(referrerResult.error.message);
+      return true;
     }
 
     if (commissionResult.error) {
-      throw new Error(commissionResult.error.message);
+      loadDemoDashboard(commissionResult.error.message);
+      return true;
     }
 
     setProducts(productRows);
@@ -285,7 +293,8 @@ export default function AdminDashboardScreen() {
     setOrders((orderResult.data ?? []) as unknown as DashboardOrder[]);
     setReferrers((referrerResult.data ?? []) as unknown as ReferrerRow[]);
     setCommissions((commissionResult.data ?? []) as unknown as CommissionEntryRow[]);
-  }, [isDemoMode]);
+    return false;
+  }, [isBaseDemoMode, loadDemoDashboard]);
 
   useEffect(() => {
     let isMounted = true;
@@ -297,7 +306,8 @@ export default function AdminDashboardScreen() {
         await loadDashboard();
       } catch (loadError) {
         if (isMounted) {
-          setError(loadError instanceof Error ? loadError.message : 'โหลด dashboard ไม่สำเร็จ');
+          const reason = loadError instanceof Error ? loadError.message : 'โหลด dashboard จาก backend ไม่สำเร็จ';
+          loadDemoDashboard(reason);
         }
       } finally {
         if (isMounted) {
@@ -318,10 +328,12 @@ export default function AdminDashboardScreen() {
       setIsLoading(true);
       setError(null);
       setMessage(null);
-      await loadDashboard();
-      setMessage(isDemoMode ? 'กำลังแสดงข้อมูลตัวอย่าง' : 'รีเฟรชข้อมูลหลังบ้านแล้ว');
+      const usedDemo = await loadDashboard();
+      setMessage(usedDemo ? 'กำลังแสดงข้อมูลตัวอย่าง' : 'รีเฟรชข้อมูลหลังบ้านแล้ว');
     } catch (refreshError) {
-      setError(refreshError instanceof Error ? refreshError.message : 'รีเฟรช dashboard ไม่สำเร็จ');
+      const reason = refreshError instanceof Error ? refreshError.message : 'รีเฟรช dashboard ไม่สำเร็จ';
+      loadDemoDashboard(reason);
+      setMessage('กำลังแสดงข้อมูลตัวอย่าง');
     } finally {
       setIsLoading(false);
     }
@@ -378,7 +390,11 @@ export default function AdminDashboardScreen() {
         {isDemoMode ? (
           <View style={styles.notice}>
             <Text style={styles.noticeTitle}>โหมดตัวอย่าง</Text>
-            <Text style={styles.noticeBody}>หน้านี้จะแสดงข้อมูลจริงทันทีเมื่อ login ด้วยบัญชี tenant admin/staff ที่มีสิทธิ์อ่าน backend</Text>
+            <Text style={styles.noticeBody}>
+              {demoFallbackReason
+                ? `กำลังแสดงข้อมูลตัวอย่าง เพราะ ${demoFallbackReason}`
+                : 'หน้านี้จะแสดงข้อมูลจริงทันทีเมื่อ login ด้วยบัญชี tenant admin/staff ที่มีสิทธิ์อ่าน backend'}
+            </Text>
           </View>
         ) : null}
         {error ? <Banner tone="error" text={error} /> : null}

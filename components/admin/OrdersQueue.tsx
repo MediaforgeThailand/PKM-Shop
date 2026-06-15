@@ -1,4 +1,4 @@
-import { Link } from 'expo-router';
+import { Link, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 
@@ -373,6 +373,7 @@ function canAct(order: OrderQueueRow, action: OrderMutationAction) {
 
 export function OrdersQueue({ title = 'คิวคำสั่งซื้อ' }: { title?: string }) {
   const auth = useAuthSession();
+  const { tour } = useLocalSearchParams<{ tour?: string }>();
   const { width } = useWindowDimensions();
   const [tenant, setTenant] = useState<TenantContext | null>(null);
   const [orders, setOrders] = useState<OrderQueueRow[]>([]);
@@ -387,10 +388,13 @@ export function OrdersQueue({ title = 'คิวคำสั่งซื้อ' 
   const [isLoading, setIsLoading] = useState(true);
   const [busyAction, setBusyAction] = useState<OrderMutationAction | null>(null);
   const [isSavingNote, setIsSavingNote] = useState(false);
+  const [demoFallbackReason, setDemoFallbackReason] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const isWide = width >= 1080;
-  const isDemoMode = !auth.session || !supabaseConfigStatus.isConfigured;
+  const isTourMode = tour === 'admin';
+  const isBaseDemoMode = isTourMode || !auth.session || !supabaseConfigStatus.isConfigured;
+  const isDemoMode = isBaseDemoMode || Boolean(demoFallbackReason);
 
   const selectedOrder = useMemo(() => orders.find((order) => order.id === selectedId) ?? orders[0] ?? null, [orders, selectedId]);
 
@@ -471,8 +475,22 @@ export function OrdersQueue({ title = 'คิวคำสั่งซื้อ' 
     };
   }, [auth.user]);
 
+  const loadDemoOrders = useCallback((reason: string | null = null) => {
+    setDemoFallbackReason(reason);
+    setTenant({ ...showcaseDemoTenant, role: 'demo' });
+    setOrders(showcaseDemoAdminOrders);
+    setSignedSlipUrls({});
+    setSelectedId((current) => (showcaseDemoAdminOrders.some((order) => order.id === current) ? current : showcaseDemoAdminOrders[0]?.id ?? null));
+  }, []);
+
   const refreshOrders = useCallback(
     async (tenantId = tenant?.id) => {
+      if (isDemoMode) {
+        loadDemoOrders(demoFallbackReason);
+        setMessage('กำลังแสดงข้อมูลตัวอย่างอยู่');
+        return;
+      }
+
       if (!tenantId) {
         return;
       }
@@ -554,17 +572,15 @@ export function OrdersQueue({ title = 'คิวคำสั่งซื้อ' 
       setSignedSlipUrls(nextSignedUrls);
       setOrders(rows);
     },
-    [tenant?.id],
+    [demoFallbackReason, isDemoMode, loadDemoOrders, tenant?.id],
   );
 
   useEffect(() => {
     let isMounted = true;
 
     async function boot() {
-      if (isDemoMode) {
-        setTenant({ ...showcaseDemoTenant, role: 'demo' });
-        setOrders(showcaseDemoAdminOrders);
-        setSelectedId((current) => current ?? showcaseDemoAdminOrders[0]?.id ?? null);
+      if (isBaseDemoMode) {
+        loadDemoOrders(null);
         setIsLoading(false);
         return;
       }
@@ -578,10 +594,12 @@ export function OrdersQueue({ title = 'คิวคำสั่งซื้อ' 
         }
 
         setTenant(tenantContext);
+        setDemoFallbackReason(null);
         await refreshOrders(tenantContext.id);
       } catch (loadError) {
         if (isMounted) {
-          setError(loadError instanceof Error ? loadError.message : 'Unable to load order queue.');
+          const reason = loadError instanceof Error ? loadError.message : 'โหลดคิวออเดอร์จาก backend ไม่สำเร็จ';
+          loadDemoOrders(reason);
         }
       } finally {
         if (isMounted) {
@@ -595,7 +613,7 @@ export function OrdersQueue({ title = 'คิวคำสั่งซื้อ' 
     return () => {
       isMounted = false;
     };
-  }, [auth.session, isDemoMode, loadTenantContext, refreshOrders]);
+  }, [auth.session, isBaseDemoMode, loadDemoOrders, loadTenantContext]);
 
   useEffect(() => {
     if (!tenant || isDemoMode) {
@@ -767,7 +785,16 @@ export function OrdersQueue({ title = 'คิวคำสั่งซื้อ' 
 
         {error ? <Banner tone="error" text={error} /> : null}
         {message ? <Banner tone="success" text={message} /> : null}
-        {isDemoMode ? <Banner tone="success" text="โหมดตัวอย่าง: เปิดดูคิวออเดอร์ได้โดยไม่ต้องล็อกอิน และปุ่ม action จะไม่ส่งข้อมูลจริง" /> : null}
+        {isDemoMode ? (
+          <Banner
+            tone="success"
+            text={
+              demoFallbackReason
+                ? `โหมดตัวอย่าง: ${demoFallbackReason} ปุ่ม action จะไม่ส่งข้อมูลจริง`
+                : 'โหมดตัวอย่าง: เปิดดูคิวออเดอร์ได้โดยไม่ต้องล็อกอิน และปุ่ม action จะไม่ส่งข้อมูลจริง'
+            }
+          />
+        ) : null}
 
         <View style={styles.metrics}>
           <Metric label="ทั้งหมด" value={`${summary.total}`} />

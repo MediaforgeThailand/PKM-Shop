@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 
@@ -6,6 +7,7 @@ import { Pill } from '@/components/MiraUI';
 import { MiraDesign, softShadow } from '@/constants/Design';
 import { invokeFunction } from '@/lib/api/client';
 import { useAuthSession } from '@/lib/auth/useAuthSession';
+import { showcaseDemoTranscript } from '@/lib/showcase/demoFixtures';
 import { supabase, supabaseConfigStatus } from '@/lib/supabase';
 
 type CustomerJoin = { line_user_id: string | null; nickname: string | null };
@@ -44,6 +46,7 @@ function customerLabel(row: SessionListRow) {
 
 export function ConversationsConsole() {
   const { session: authSession } = useAuthSession();
+  const { tour } = useLocalSearchParams<{ tour?: string }>();
   const queryClient = useQueryClient();
   const { width } = useWindowDimensions();
   const isCompact = width < 880;
@@ -51,7 +54,29 @@ export function ConversationsConsole() {
   const [draft, setDraft] = useState('');
   const [errorText, setErrorText] = useState<string | null>(null);
 
-  const ready = supabaseConfigStatus.isConfigured && Boolean(authSession);
+  const isTourMode = tour === 'admin';
+  const ready = supabaseConfigStatus.isConfigured && Boolean(authSession) && !isTourMode;
+  const demoSessions = useMemo<SessionListRow[]>(
+    () => [
+      {
+        agent_mode: 'ai',
+        customers: { line_user_id: 'demo-line-user', nickname: 'บอส' },
+        id: 'demo-session',
+        last_message_at: showcaseDemoTranscript[showcaseDemoTranscript.length - 1]?.created_at ?? null,
+      },
+    ],
+    [],
+  );
+  const demoMessages = useMemo<MessageRow[]>(
+    () =>
+      showcaseDemoTranscript.map((message) => ({
+        content: message.content,
+        created_at: message.created_at,
+        id: message.id,
+        role: message.role,
+      })),
+    [],
+  );
 
   const sessionsQuery = useQuery({
     enabled: ready,
@@ -93,9 +118,13 @@ export function ConversationsConsole() {
     refetchInterval: 4000,
   });
 
+  const isDemoMode = !ready || sessionsQuery.isError || transcriptQuery.isError;
+  const visibleSessions = isDemoMode ? demoSessions : sessionsQuery.data ?? [];
+  const activeSelectedId = isDemoMode ? selectedId ?? visibleSessions[0]?.id ?? null : selectedId;
+  const visibleMessages = isDemoMode && activeSelectedId ? demoMessages : transcriptQuery.data ?? [];
   const selectedSession = useMemo(
-    () => sessionsQuery.data?.find((row) => row.id === selectedId) ?? null,
-    [sessionsQuery.data, selectedId],
+    () => visibleSessions.find((row) => row.id === activeSelectedId) ?? null,
+    [activeSelectedId, visibleSessions],
   );
 
   const replyMutation = useMutation({
@@ -120,27 +149,18 @@ export function ConversationsConsole() {
     },
   });
 
-  if (!ready) {
-    return (
-      <View style={styles.center}>
-        <Text style={styles.muted}>
-          {supabaseConfigStatus.isConfigured ? 'กรุณาเข้าสู่ระบบเพื่อดูแชต' : 'ยังไม่ได้ตั้งค่า Supabase'}
-        </Text>
-      </View>
-    );
-  }
-
-  const isHuman = selectedSession?.agent_mode === 'human';
+  const isHuman = !isDemoMode && selectedSession?.agent_mode === 'human';
 
   return (
     <View style={[styles.shell, isCompact ? styles.shellCompact : null]}>
       {/* Inbox */}
       <View style={[styles.inbox, isCompact ? styles.inboxCompact : null]}>
         <Text style={styles.inboxTitle}>แชต LINE</Text>
-        {sessionsQuery.isLoading ? <ActivityIndicator color={MiraDesign.color.showcaseBlue} /> : null}
+        {sessionsQuery.isLoading && !isDemoMode ? <ActivityIndicator color={MiraDesign.color.showcaseBlue} /> : null}
+        {isDemoMode ? <Text style={styles.demoNote}>โหมดตัวอย่าง: แสดง transcript ตัวอย่างแบบอ่านอย่างเดียว</Text> : null}
         <ScrollView contentContainerStyle={styles.inboxList}>
-          {(sessionsQuery.data ?? []).map((row) => {
-            const active = row.id === selectedId;
+          {visibleSessions.map((row) => {
+            const active = row.id === activeSelectedId;
 
             return (
               <Pressable
@@ -156,7 +176,7 @@ export function ConversationsConsole() {
               </Pressable>
             );
           })}
-          {sessionsQuery.data?.length === 0 ? <Text style={styles.muted}>ยังไม่มีแชต</Text> : null}
+          {visibleSessions.length === 0 ? <Text style={styles.muted}>ยังไม่มีแชต</Text> : null}
         </ScrollView>
       </View>
 
@@ -171,7 +191,7 @@ export function ConversationsConsole() {
             <View style={styles.threadHeader}>
               <Text style={styles.threadTitle}>{customerLabel(selectedSession)}</Text>
               <Pressable
-                disabled={modeMutation.isPending}
+                disabled={isDemoMode || modeMutation.isPending}
                 onPress={() => modeMutation.mutate(isHuman ? 'ai' : 'human')}
                 style={[styles.modeBtn, isHuman ? styles.modeBtnReturn : styles.modeBtnTakeover]}
               >
@@ -180,7 +200,7 @@ export function ConversationsConsole() {
             </View>
 
             <ScrollView contentContainerStyle={styles.messages}>
-              {(transcriptQuery.data ?? []).map((message) => {
+              {visibleMessages.map((message) => {
                 const fromCustomer = message.role === 'user';
 
                 return (
@@ -195,7 +215,7 @@ export function ConversationsConsole() {
                   </View>
                 );
               })}
-              {transcriptQuery.data?.length === 0 ? <Text style={styles.muted}>ยังไม่มีข้อความ</Text> : null}
+              {visibleMessages.length === 0 ? <Text style={styles.muted}>ยังไม่มีข้อความ</Text> : null}
             </ScrollView>
 
             {errorText ? <Text style={styles.error}>{errorText}</Text> : null}
@@ -211,7 +231,7 @@ export function ConversationsConsole() {
                 value={draft}
               />
               <Pressable
-                disabled={!isHuman || !draft.trim() || replyMutation.isPending}
+                disabled={isDemoMode || !isHuman || !draft.trim() || replyMutation.isPending}
                 onPress={() => replyMutation.mutate(draft.trim())}
                 style={[styles.sendBtn, !isHuman || !draft.trim() ? styles.sendBtnDisabled : null]}
               >
@@ -232,6 +252,7 @@ const styles = StyleSheet.create({
   inboxCompact: { maxHeight: 220, width: '100%' },
   inboxTitle: { color: MiraDesign.color.showcaseNavy, fontSize: 16, fontWeight: '900' },
   inboxList: { gap: 8 },
+  demoNote: { backgroundColor: MiraDesign.color.showcaseBlueSoft, borderRadius: MiraDesign.radius.sm, color: MiraDesign.color.showcaseNavy, fontSize: 12, fontWeight: '800', padding: 10 },
   inboxRow: { borderColor: MiraDesign.color.showcaseLine, borderRadius: MiraDesign.radius.sm, borderWidth: 1, gap: 4, padding: 12 },
   inboxRowActive: { backgroundColor: MiraDesign.color.showcaseBlueSoft, borderColor: MiraDesign.color.showcaseBlue },
   inboxRowTop: { alignItems: 'center', flexDirection: 'row', gap: 8, justifyContent: 'space-between' },

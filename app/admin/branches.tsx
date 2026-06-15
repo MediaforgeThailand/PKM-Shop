@@ -1,4 +1,4 @@
-import { Link } from 'expo-router';
+import { Link, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 
@@ -15,6 +15,7 @@ import {
   type TenantMemberContext,
 } from '@/lib/marketplace/hospitalProducts';
 import { showcaseDemoBranches, showcaseDemoTenantContext } from '@/lib/showcase/demoFixtures';
+import { supabaseConfigStatus } from '@/lib/supabase';
 
 const emptyDraft: BranchDraft = {
   active: true,
@@ -29,6 +30,7 @@ const emptyDraft: BranchDraft = {
 
 export default function AdminBranchesScreen() {
   const auth = useAuthSession();
+  const { tour } = useLocalSearchParams<{ tour?: string }>();
   const { width } = useWindowDimensions();
   const [branches, setBranches] = useState<BranchSummary[]>([]);
   const [draft, setDraft] = useState<BranchDraft>(emptyDraft);
@@ -37,11 +39,14 @@ export default function AdminBranchesScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [busyBranchId, setBusyBranchId] = useState<string | null>(null);
+  const [demoFallbackReason, setDemoFallbackReason] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const isWide = width >= 980;
-  const isDemoMode = !auth.session;
-  const canEditBranches = Boolean(auth.session) && canWriteTenantCatalog(tenantContext);
+  const isTourMode = tour === 'admin';
+  const isBaseDemoMode = isTourMode || !auth.session || !supabaseConfigStatus.isConfigured;
+  const isDemoMode = isBaseDemoMode || Boolean(demoFallbackReason);
+  const canEditBranches = !isDemoMode && Boolean(auth.session) && canWriteTenantCatalog(tenantContext);
   const canSave = canEditBranches && draft.name.trim().length > 1;
 
   const summary = useMemo(
@@ -52,6 +57,12 @@ export default function AdminBranchesScreen() {
     }),
     [branches],
   );
+
+  function loadDemoBranches(reason: string | null = null) {
+    setDemoFallbackReason(reason);
+    setTenantContext(showcaseDemoTenantContext);
+    setBranches(showcaseDemoBranches);
+  }
 
   useEffect(() => {
     let isMounted = true;
@@ -65,31 +76,30 @@ export default function AdminBranchesScreen() {
     return () => {
       isMounted = false;
     };
-  }, [auth.user]);
+  }, [auth.user, isBaseDemoMode]);
 
   async function loadBranchAdmin() {
     try {
       setError(null);
 
-      if (!auth.user) {
-        setTenantContext(showcaseDemoTenantContext);
-        setBranches(showcaseDemoBranches);
+      if (isBaseDemoMode || !auth.user) {
+        loadDemoBranches(null);
         return;
       }
 
+      setDemoFallbackReason(null);
       const context = await loadTenantMemberContext();
       setTenantContext(context);
 
       if (!context) {
-        setBranches([]);
+        loadDemoBranches(`บัญชีนี้ยังไม่ได้เชื่อมกับ tenant "${defaultTenantSlug}"`);
         return;
       }
 
       setBranches(await loadBranches());
     } catch (loadError) {
-      setTenantContext(null);
-      setBranches([]);
-      setError(loadError instanceof Error ? loadError.message : 'Unable to load branches.');
+      const reason = loadError instanceof Error ? loadError.message : 'โหลดข้อมูลสาขาจาก backend ไม่สำเร็จ';
+      loadDemoBranches(reason);
     }
   }
 
@@ -115,13 +125,15 @@ export default function AdminBranchesScreen() {
     try {
       setError(null);
       if (isDemoMode) {
-        setBranches(showcaseDemoBranches);
+        loadDemoBranches(demoFallbackReason);
         setMessage('กำลังแสดงข้อมูลตัวอย่างอยู่');
         return;
       }
       setBranches(await loadBranches());
     } catch (refreshError) {
-      setError(refreshError instanceof Error ? refreshError.message : 'Unable to refresh branches.');
+      const reason = refreshError instanceof Error ? refreshError.message : 'รีเฟรชข้อมูลสาขาไม่สำเร็จ';
+      loadDemoBranches(reason);
+      setMessage('กำลังแสดงข้อมูลตัวอย่างอยู่');
     }
   }
 
@@ -196,11 +208,15 @@ export default function AdminBranchesScreen() {
         {isDemoMode ? (
           <View style={styles.notice}>
             <Text style={styles.noticeTitle}>โหมดตัวอย่าง</Text>
-            <Text style={styles.noticeBody}>เปิดดูโครงสร้างสาขาได้ทันทีโดยไม่ต้องล็อกอิน ปุ่มบันทึกข้อมูลจริงจะถูกปิดไว้</Text>
+            <Text style={styles.noticeBody}>
+              {demoFallbackReason
+                ? `กำลังแสดงข้อมูลตัวอย่าง เพราะ ${demoFallbackReason} ปุ่มบันทึกข้อมูลจริงจะถูกปิดไว้`
+                : 'เปิดดูโครงสร้างสาขาได้ทันทีโดยไม่ต้องล็อกอิน ปุ่มบันทึกข้อมูลจริงจะถูกปิดไว้'}
+            </Text>
           </View>
         ) : null}
 
-        {tenantContext && !canEditBranches ? (
+        {tenantContext && !isDemoMode && !canEditBranches ? (
           <View style={styles.notice}>
               <Text style={styles.noticeTitle}>สิทธิ์อ่านอย่างเดียว</Text>
               <Text style={styles.noticeBody}>เฉพาะ tenant_admin หรือ superadmin เท่านั้นที่สร้างหรือแก้ไขสาขาได้</Text>
