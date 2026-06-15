@@ -39,6 +39,7 @@ const productionFiles = [
   'components/chat/ProductGrid.tsx',
   'lib/ai/miraChat.ts',
   'lib/api/client.ts',
+  'lib/auth/useAuthSession.ts',
   'lib/health/labConfirm.ts',
   'lib/health/v2HealthDashboard.ts',
   'lib/marketplace/hospitalProducts.ts',
@@ -375,6 +376,21 @@ const requiredSnippets = [
     relativePath: 'components/admin/ReferrersAdmin.tsx',
     snippet: ".update(payload).eq('id', editingId).eq('tenant_id', tenant.id)",
     message: 'referrer updates must be tenant-scoped and must not include ref_code in the editable payload',
+  },
+  {
+    relativePath: 'lib/auth/useAuthSession.ts',
+    snippet: 'async function hasReferrerAccount(userId: string, tenantSlug?: string)',
+    message: 'referral login must support tenant-scoped referrer account checks',
+  },
+  {
+    relativePath: 'lib/auth/useAuthSession.ts',
+    snippet: "query.eq('tenant_id', tenantId)",
+    message: 'referral login must not accept active referrer rows from another tenant',
+  },
+  {
+    relativePath: 'lib/auth/useAuthSession.ts',
+    snippet: 'await hasReferrerAccount(user.id, tenantSlug)',
+    message: 'ensureReferrerAccount must validate the current tenant slug when no ref code is supplied',
   },
 ];
 

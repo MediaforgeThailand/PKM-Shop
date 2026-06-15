@@ -170,13 +170,39 @@ async function hasStaffMembership(userId: string) {
   return Boolean(data?.length);
 }
 
-async function hasReferrerAccount(userId: string) {
+async function visibleTenantId(tenantSlug: string) {
   const { data, error } = await supabase
+    .from('tenants')
+    .select('id')
+    .eq('slug', tenantSlug)
+    .maybeSingle();
+
+  if (error || !data) {
+    return null;
+  }
+
+  return (data as { id: string }).id;
+}
+
+async function hasReferrerAccount(userId: string, tenantSlug?: string) {
+  const tenantId = tenantSlug ? await visibleTenantId(tenantSlug) : null;
+
+  if (tenantSlug && !tenantId) {
+    return false;
+  }
+
+  const query = supabase
     .from('referrers')
     .select('id')
     .eq('auth_user_id', userId)
     .eq('active', true)
     .limit(1);
+
+  if (tenantId) {
+    query.eq('tenant_id', tenantId);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     return false;
@@ -236,21 +262,25 @@ async function ensureStaffAccount(user: User, options: AuthAccessOptions) {
 
 async function ensureReferrerAccount(user: User, options: AuthAccessOptions) {
   const refCode = options.refCode?.trim();
+  const tenantSlug = options.tenantSlug ?? defaultTenantSlug;
+  let claimedCurrentTenantReferrer = false;
 
   if (refCode) {
     const { error } = await supabase.rpc('miracare_claim_referrer_account', {
       p_name: options.displayName?.trim() || user.user_metadata?.display_name || user.email || null,
       p_phone: options.phone?.trim() || null,
       p_ref_code: refCode,
-      p_tenant_slug: options.tenantSlug ?? defaultTenantSlug,
+      p_tenant_slug: tenantSlug,
     });
 
     if (error) {
       throw new Error(friendlyAuthError(error, 'claim ref code ไม่สำเร็จ'));
     }
+
+    claimedCurrentTenantReferrer = true;
   }
 
-  const isReferrer = await hasReferrerAccount(user.id);
+  const isReferrer = claimedCurrentTenantReferrer || (await hasReferrerAccount(user.id, tenantSlug));
 
   if (!isReferrer) {
     throw new Error('บัญชีนี้ยังไม่มีโปรไฟล์ Referral ที่ผูกกับ ref code ของระบบ');
