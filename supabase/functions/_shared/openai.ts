@@ -256,11 +256,14 @@ export async function callOrderFieldExtractor(message: string) {
       buyer_phone: {
         type: ['string', 'null'],
       },
+      confirmed: {
+        type: 'boolean',
+      },
       preferred_date: {
         type: ['string', 'null'],
       },
     },
-    required: ['buyer_age', 'buyer_name', 'buyer_phone', 'preferred_date'],
+    required: ['buyer_age', 'buyer_name', 'buyer_phone', 'confirmed', 'preferred_date'],
     type: 'object',
   };
   const payload = await postResponses(
@@ -268,7 +271,7 @@ export async function callOrderFieldExtractor(message: string) {
       input: [
         {
           content:
-            'Extract only explicitly stated order form fields from the Thai user message. Do not infer. buyer_age must be a numeric age in years when explicit, otherwise null. preferred_date must be ISO YYYY-MM-DD when explicit enough, otherwise null.',
+            'Extract only explicitly stated order form fields from the Thai user message. Do not infer. buyer_age must be a numeric age in years when explicit, otherwise null. preferred_date must be ISO YYYY-MM-DD when explicit enough, otherwise null. Set confirmed to true ONLY when the message simply approves or agrees that previously provided booking details are correct (e.g. "ใช่", "ถูกต้อง", "ยืนยัน", "โอเค") and provides no new details; otherwise false.',
           role: 'system',
         },
         {
@@ -306,6 +309,7 @@ export async function callOrderFieldExtractor(message: string) {
       buyer_age: buyerAge,
       buyer_name: typeof parsed.buyer_name === 'string' && parsed.buyer_name.trim() ? parsed.buyer_name.trim() : undefined,
       buyer_phone: /^0[689]\d{8}$/.test(normalizedPhone) ? normalizedPhone : undefined,
+      confirmed: parsed.confirmed === true,
       preferred_date:
         typeof parsed.preferred_date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(parsed.preferred_date)
           ? parsed.preferred_date

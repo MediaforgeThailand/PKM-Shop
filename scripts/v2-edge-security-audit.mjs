@@ -4,6 +4,7 @@ import path from 'node:path';
 const repoRoot = process.cwd();
 
 const files = {
+  adminLineReply: 'supabase/functions/admin-line-reply/index.ts',
   adminOrderAction: 'supabase/functions/admin-order-action/index.ts',
   chatOrchestrator: 'supabase/functions/chat-orchestrator/index.ts',
   db: 'supabase/functions/_shared/db.ts',
@@ -30,6 +31,7 @@ const files = {
 };
 
 const v2EdgeFunctions = {
+  adminLineReply: files.adminLineReply,
   adminOrderAction: files.adminOrderAction,
   chatOrchestrator: files.chatOrchestrator,
   factExtractor: files.factExtractor,

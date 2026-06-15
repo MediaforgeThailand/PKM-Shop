@@ -397,6 +397,7 @@ export type CustomerRow = {
 };
 
 export type ChatSessionRow = {
+  agent_mode?: 'ai' | 'human';
   channel: ChatChannel;
   created_at: string;
   customer_id: string;

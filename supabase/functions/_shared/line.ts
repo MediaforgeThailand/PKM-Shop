@@ -1,5 +1,5 @@
 import { HttpError } from './http.ts';
-import type { ChatAction, ChatProduct, OrderPanelState } from './types.ts';
+import type { ChatAction, ChatCategory, ChatProduct, OrderPanelState } from './types.ts';
 
 declare const Deno: {
   env: {
@@ -41,6 +41,14 @@ const SELECT_PRODUCT_MESSAGE =
 const SELECT_BRANCH_LABEL = '\u0e40\u0e25\u0e37\u0e2d\u0e01\u0e2a\u0e32\u0e02\u0e32\u0e19\u0e35\u0e49';
 // "\u0e40\u0e25\u0e37\u0e2d\u0e01\u0e2a\u0e32\u0e02\u0e32" (choose a branch)
 const SELECT_BRANCH_ALT = '\u0e40\u0e25\u0e37\u0e2d\u0e01\u0e2a\u0e32\u0e02\u0e32';
+// "\u0e14\u0e39\u0e41\u0e1e\u0e47\u0e01\u0e40\u0e01\u0e08" (view packages)
+const CATEGORY_VIEW_LABEL = '\u0e14\u0e39\u0e41\u0e1e\u0e47\u0e01\u0e40\u0e01\u0e08';
+// "\u0e40\u0e25\u0e37\u0e2d\u0e01\u0e2b\u0e21\u0e27\u0e14\u0e17\u0e35\u0e48\u0e2a\u0e19\u0e43\u0e08" (choose a category)
+const CATEGORY_LIST_ALT = '\u0e40\u0e25\u0e37\u0e2d\u0e01\u0e2b\u0e21\u0e27\u0e14\u0e17\u0e35\u0e48\u0e2a\u0e19\u0e43\u0e08';
+// "\u0e02\u0e2d\u0e14\u0e39\u0e41\u0e1e\u0e47\u0e01\u0e40\u0e01\u0e08\u0e43\u0e19\u0e2b\u0e21\u0e27\u0e14\u0e19\u0e35\u0e49" (browse this category)
+const BROWSE_CATEGORY_MESSAGE = '\u0e02\u0e2d\u0e14\u0e39\u0e41\u0e1e\u0e47\u0e01\u0e40\u0e01\u0e08\u0e43\u0e19\u0e2b\u0e21\u0e27\u0e14\u0e19\u0e35\u0e49';
+// "\u0e41\u0e1e\u0e47\u0e01\u0e40\u0e01\u0e08" (packages, unit suffix)
+const PACKAGE_UNIT_LABEL = '\u0e41\u0e1e\u0e47\u0e01\u0e40\u0e01\u0e08';
 
 function requireEnv(key: string) {
   const value = Deno.env.get(key)?.trim();
@@ -159,6 +167,26 @@ export async function pushLineMessages(tenantSlug: string, lineUserId: string, m
   }
 }
 
+export async function startLineLoading(tenantSlug: string, lineUserId: string, seconds = 20) {
+  const token = requireLineChannelToken(tenantSlug);
+  const response = await fetch('https://api.line.me/v2/bot/chat/loading/start', {
+    body: JSON.stringify({
+      chatId: lineUserId,
+      loadingSeconds: seconds,
+    }),
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    method: 'POST',
+  });
+
+  // The loading animation is best-effort UX — never fail the turn over it.
+  if (!response.ok) {
+    console.warn('line_loading_failed', response.status);
+  }
+}
+
 export function textLineMessage(text: string): LineTextMessage {
   return {
     text: text.slice(0, 4500),
@@ -212,6 +240,20 @@ export function linePostbackToAction(data: string | undefined): { action: ChatAc
           message: SELECT_BRANCH_LABEL,
         };
       }
+    }
+  }
+
+  if (data.startsWith('browse_category:')) {
+    const category = data.slice('browse_category:'.length).trim();
+
+    if (category) {
+      return {
+        action: {
+          category,
+          type: 'browse_category',
+        },
+        message: BROWSE_CATEGORY_MESSAGE,
+      };
     }
   }
 
@@ -284,6 +326,59 @@ export function productLineFlexMessage(products: ChatProduct[]): LineFlexMessage
               url: product.image_url,
             }
           : undefined,
+        type: 'bubble',
+      })),
+      type: 'carousel',
+    },
+    type: 'flex',
+  };
+}
+
+export function categoryLineFlexMessage(categories: ChatCategory[]): LineFlexMessage | null {
+  if (categories.length === 0) {
+    return null;
+  }
+
+  return {
+    altText: CATEGORY_LIST_ALT,
+    contents: {
+      contents: categories.slice(0, 10).map((category) => ({
+        body: {
+          contents: [
+            {
+              size: 'md',
+              text: category.icon ? `${category.icon} ${category.label_th}` : category.label_th,
+              type: 'text',
+              weight: 'bold',
+              wrap: true,
+            },
+            {
+              color: '#4E5F59',
+              margin: 'sm',
+              size: 'sm',
+              text: `${category.product_count} ${PACKAGE_UNIT_LABEL}`,
+              type: 'text',
+            },
+          ],
+          layout: 'vertical',
+          type: 'box',
+        },
+        footer: {
+          contents: [
+            {
+              action: {
+                data: `browse_category:${category.key}`,
+                label: CATEGORY_VIEW_LABEL,
+                type: 'postback',
+              },
+              color: '#163F34',
+              style: 'primary',
+              type: 'button',
+            },
+          ],
+          layout: 'vertical',
+          type: 'box',
+        },
         type: 'bubble',
       })),
       type: 'carousel',

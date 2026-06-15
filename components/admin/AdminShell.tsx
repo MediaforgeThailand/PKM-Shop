@@ -41,6 +41,13 @@ const adminNavItems: AdminNavItem[] = [
     match: ['/admin/orders'],
   },
   {
+    href: '/admin/conversations',
+    icon: { android: 'chat', ios: 'message', web: 'chat' },
+    key: 'conversations',
+    label: 'แชต LINE',
+    match: ['/admin/conversations'],
+  },
+  {
     href: '/admin/branches',
     icon: { android: 'database', ios: 'building.2', web: 'database' },
     key: 'branches',

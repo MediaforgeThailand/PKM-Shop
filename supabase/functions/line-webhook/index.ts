@@ -4,11 +4,13 @@ import { assertTenant, insertRow, rest } from '../_shared/db.ts';
 import { HttpError, handleOptions, json, toErrorResponse } from '../_shared/http.ts';
 import {
   branchSelectionLineFlexMessage,
+  categoryLineFlexMessage,
   linePostbackToAction,
   orderPaymentLineFlexMessage,
   orderQrLineImageMessage,
   productLineFlexMessage,
   replyLineMessages,
+  startLineLoading,
   textLineMessage,
   verifyLineSignature,
   type LineMessage,
@@ -25,6 +27,9 @@ declare const Deno: {
 };
 
 type LineEvent = {
+  deliveryContext?: {
+    isRedelivery?: boolean;
+  };
   message?: {
     id?: string;
     text?: string;
@@ -101,15 +106,39 @@ async function toLineMessages(response: ChatOrchestratorResponse) {
     }
   }
 
+  for (const card of response.cards) {
+    if (card.type === 'category_grid') {
+      const categories = categoryLineFlexMessage(card.categories);
+
+      if (categories) {
+        messages.push(categories);
+      }
+    }
+  }
+
   return messages.slice(0, 5);
 }
 
 async function handleEvent(event: LineEvent, tenantSlug: string) {
+  // Idempotency (V3-5): LINE re-delivers events when the webhook is slow to ack.
+  // Reprocessing a redelivered postback creates duplicate orders, so skip them.
+  if (event.deliveryContext?.isRedelivery) {
+    return;
+  }
+
   const replyToken = event.replyToken;
   const lineUserId = event.source?.userId;
 
   if (!replyToken || !lineUserId) {
     return;
+  }
+
+  // Show the LINE typing/loading animation right away so button taps feel
+  // responsive while the model runs (best-effort — must not block the turn).
+  try {
+    await startLineLoading(tenantSlug, lineUserId);
+  } catch (error) {
+    console.warn('line_loading_failed', error);
   }
 
   if (event.type === 'message' && event.message?.type === 'text' && event.message.text) {
@@ -120,6 +149,10 @@ async function handleEvent(event: LineEvent, tenantSlug: string) {
       message: event.message.text,
       tenant_slug: tenantSlug,
     });
+
+    if (!response) {
+      return;
+    }
 
     await replyLineMessages(replyToken, await toLineMessages(response), tenantSlug);
     return;
@@ -135,6 +168,10 @@ async function handleEvent(event: LineEvent, tenantSlug: string) {
       tenant_slug: tenantSlug,
     });
 
+    if (!response) {
+      return;
+    }
+
     await replyLineMessages(replyToken, await toLineMessages(response), tenantSlug);
     return;
   }
@@ -147,6 +184,10 @@ async function handleEvent(event: LineEvent, tenantSlug: string) {
       message: 'สวัสดี',
       tenant_slug: tenantSlug,
     });
+
+    if (!response) {
+      return;
+    }
 
     await replyLineMessages(replyToken, await toLineMessages(response), tenantSlug);
   }

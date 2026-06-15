@@ -8,6 +8,7 @@ const expectedFunctions = [
   'chat-orchestrator',
   'fact-extractor',
   'admin-order-action',
+  'admin-line-reply',
   'admin-stripe-product-sync',
   'referrer-order',
   'line-webhook',

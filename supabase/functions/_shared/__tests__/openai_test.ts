@@ -71,3 +71,27 @@ Deno.test('callOrderFieldExtractor leaves buyer_age undefined when null', async 
     },
   );
 });
+
+Deno.test('callOrderFieldExtractor reports confirmation', async () => {
+  await withStubbedExtraction(
+    JSON.stringify({ buyer_age: null, buyer_name: null, buyer_phone: null, confirmed: true, preferred_date: null }),
+    async () => {
+      const extracted = await callOrderFieldExtractor('ใช่ ถูกต้อง');
+
+      assertEquals(extracted.confirmed, true);
+      assertEquals(extracted.buyer_name, undefined);
+    },
+  );
+});
+
+Deno.test('callOrderFieldExtractor confirmed defaults false', async () => {
+  await withStubbedExtraction(
+    JSON.stringify({ buyer_age: null, buyer_name: 'Somchai', buyer_phone: null, preferred_date: null }),
+    async () => {
+      const extracted = await callOrderFieldExtractor('ชื่อ Somchai');
+
+      assertEquals(extracted.confirmed, false);
+      assertEquals(extracted.buyer_name, 'Somchai');
+    },
+  );
+});
