@@ -123,33 +123,47 @@ export function inferIntentCategory(message: string): 'checkup' | 'vaccine' | nu
   return null;
 }
 
+const CATALOG_DESCRIPTION_MAX = 200;
+
+function clipCatalogDescription(description: string | null) {
+  const text = (description ?? '').trim();
+
+  return text.length > CATALOG_DESCRIPTION_MAX ? `${text.slice(0, CATALOG_DESCRIPTION_MAX).trimEnd()}…` : text;
+}
+
+// Only the fields the model needs to choose and talk about products. The app
+// renders product cards (image + full description) from the DB by id (see
+// orchestrate.ts), so image URLs and long marketing copy in the model context
+// are pure input-token waste sent on every turn.
+export function formatCatalogEntries(
+  rows: Array<{ catalog_key: string; category: string; description: string | null; name: string; price_baht: number }>,
+) {
+  return rows.map((row) => ({
+    category: row.category,
+    description: clipCatalogDescription(row.description),
+    id: row.catalog_key,
+    name: row.name,
+    price: row.price_baht,
+  }));
+}
+
 export async function buildCatalogJson(tenantId: string, intentCategory?: 'checkup' | 'vaccine' | null) {
   const rows = await selectMany<{
     catalog_key: string;
     category: string;
     description: string;
-    image_url: string | null;
     name: string;
     price_baht: number;
   }>('products', {
     active: 'eq.true',
     limit: '80',
     order: 'created_at.desc',
-    select: 'catalog_key,name,description,price_baht,image_url,category,created_at',
+    select: 'catalog_key,name,description,price_baht,category,created_at',
     tenant_id: `eq.${tenantId}`,
   });
   const filtered = rows.length > 50 && intentCategory
     ? rows.filter((row) => (row as { category?: string }).category === intentCategory).slice(0, 50)
     : rows.slice(0, 50);
 
-  return JSON.stringify(
-    filtered.map((row) => ({
-      category: row.category,
-      description: row.description,
-      id: row.catalog_key,
-      image: row.image_url,
-      name: row.name,
-      price: row.price_baht,
-    })),
-  );
+  return JSON.stringify(formatCatalogEntries(filtered));
 }
