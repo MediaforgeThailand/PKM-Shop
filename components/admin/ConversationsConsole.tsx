@@ -138,18 +138,21 @@ export function ConversationsConsole() {
   const transcriptQuery = useQuery({
     enabled: ready && Boolean(selectedId),
     queryFn: async (): Promise<MessageRow[]> => {
+      // Fetch the NEWEST 200 messages (descending), then flip to chronological order
+      // for display. Ordering ascending + limit would pin the view to the oldest 200
+      // and never show recent turns once a chat passes 200 messages.
       const { data, error } = await supabase
         .from('chat_messages')
         .select('id,role,content,created_at')
         .eq('session_id', selectedId)
-        .order('created_at', { ascending: true })
+        .order('created_at', { ascending: false })
         .limit(200);
 
       if (error) {
         throw new Error(error.message);
       }
 
-      return (data ?? []) as MessageRow[];
+      return ((data ?? []) as MessageRow[]).reverse();
     },
     queryKey: ['console-transcript', selectedId],
     refetchInterval: 4000,
