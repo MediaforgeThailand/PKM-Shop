@@ -71,6 +71,8 @@ const adminNavItems: AdminNavItem[] = [
   },
 ];
 
+const adminCompactBreakpoint = 640;
+
 function normalizePath(pathname: string) {
   return pathname.replace(/^\/showcase/, '') || '/';
 }
@@ -87,7 +89,9 @@ export function AdminShell({ children }: { children: ReactNode }) {
   const params = useGlobalSearchParams<{ tour?: string }>();
   const signOut = useSignOut();
   const { width } = useWindowDimensions();
-  const isCompact = width < 880;
+  const webViewportWidth = typeof window !== 'undefined' ? window.innerWidth : 0;
+  const viewportWidth = width > 0 ? width : webViewportWidth;
+  const isCompact = viewportWidth > 0 && viewportWidth < adminCompactBreakpoint;
   const tour = params.tour === 'admin' ? 'admin' : null;
   const adminPath = normalizePath(pathname);
   const loginRedirect = adminPath.startsWith('/admin') || adminPath === '/admin-panel' ? adminPath : '/admin-panel';
@@ -204,8 +208,8 @@ const styles = StyleSheet.create({
     borderRightWidth: 1,
     gap: 18,
     justifyContent: 'space-between',
-    padding: 24,
-    width: 250,
+    padding: 20,
+    width: 232,
   },
   sidebarCompact: {
     borderBottomWidth: 1,

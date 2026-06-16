@@ -90,6 +90,7 @@ function RootLayoutNav() {
             <Stack.Screen name="health-check-results" options={{ headerShown: false }} />
             <Stack.Screen name="health/lab-upload" options={{ headerShown: false }} />
             <Stack.Screen name="showcase/line-preview" options={{ headerShown: false }} />
+            <Stack.Screen name="showcase/admin/orders" options={{ headerShown: false }} />
           </Stack>
           <TourPill />
         </ThemeProvider>

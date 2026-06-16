@@ -107,6 +107,7 @@ export type HospitalProduct = {
   tags: string[];
   tenantId: string;
   title: string;
+  updatedAt?: string | null;
 };
 
 export type HospitalProductStatus = HospitalProduct['status'];
@@ -218,15 +219,15 @@ export const defaultTenantSlug = process.env.EXPO_PUBLIC_MIRA_TENANT_SLUG?.trim(
 
 const categoryLabels: Record<string, string> = {
   checkup: 'ตรวจสุขภาพ',
-  general: 'General',
+  general: 'ทั่วไป',
   health_checkup: 'ตรวจสุขภาพ',
   imaging: 'เอกซเรย์/ภาพวินิจฉัย',
   lab_test: 'ตรวจแล็บ/ตรวจเลือด',
   other: 'อื่นๆ',
   procedure: 'หัตถการ',
   specialty_consult: 'ปรึกษาแพทย์',
-  vaccine: 'Vaccine',
-  wellness: 'Wellness',
+  vaccine: 'วัคซีน',
+  wellness: 'สุขภาพและไลฟ์สไตล์',
 };
 
 const productCategories = Object.keys(categoryLabels);
@@ -320,7 +321,7 @@ function deriveIncludes(description: string) {
 
 function toHospitalProduct(row: ProductRow): HospitalProduct {
   const category = asCategory(row.category);
-  const tags = unique([categoryLabels[category] ?? category, row.requires_appointment ? 'Appointment' : 'Walk-in']);
+  const tags = unique([categoryLabels[category] ?? category, row.requires_appointment ? 'ต้องนัดหมาย' : 'Walk-in']);
 
   return {
     bookingNote: row.requires_appointment ? 'Requires appointment' : 'Walk-in allowed',
@@ -367,6 +368,7 @@ function toHospitalProduct(row: ProductRow): HospitalProduct {
     tags,
     tenantId: row.tenant_id,
     title: row.name,
+    updatedAt: row.updated_at,
   };
 }
 

@@ -21,6 +21,7 @@ const EXCLUDED_ROUTES = new Map([
   ['/staff-referral', 'legacy staff entry redirect to /sales-portal'],
   ['/r/[ref_code]', 'customer referral landing opened only from real sales-portal links'],
   ['/admin/conversations', 'live agent console (staff-only, no public demo fixture)'],
+  ['/showcase/admin/orders', 'showcase URL alias for the canonical admin orders route'],
 ]);
 
 function normalizePath(value) {

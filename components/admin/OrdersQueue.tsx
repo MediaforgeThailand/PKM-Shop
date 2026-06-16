@@ -1275,14 +1275,14 @@ function OrdersHeader({
           </Pressable>
           <Link href="/admin/catalog" asChild>
             <Pressable accessibilityLabel="เปิดแค็ตตาล็อก" accessibilityRole="link" style={styles.secondaryButton}>
-              <SymbolView name={{ android: 'inventory_2', ios: 'cube', web: 'inventory_2' }} size={18} tintColor={MiraDesign.color.showcaseBlueDeep} />
+              <SymbolView name={{ android: 'inventory_2', ios: 'cube', web: 'inventory_2' }} size={18} tintColor={MiraDesign.color.primaryDeep} />
               <Text style={styles.secondaryButtonText}>แค็ตตาล็อก</Text>
             </Pressable>
           </Link>
         </View>
       </View>
       <View style={styles.statusPillRow}>
-        <StatusBadge label={isDemoMode ? 'demo mode' : 'live mode'} tone={isDemoMode ? 'amber' : 'success'} />
+        <StatusBadge label={isDemoMode ? 'โหมดตัวอย่าง' : 'โหมดใช้งานจริง'} tone={isDemoMode ? 'amber' : 'success'} />
         <StatusBadge label={modeDetail} tone={isDemoMode ? 'blue' : 'success'} />
         <StatusBadge label={`รีเฟรชล่าสุด ${formatShortTime(lastRefreshedAt)}`} tone="muted" />
       </View>
@@ -1313,7 +1313,7 @@ function OrdersKpiStrip({
       <View style={[styles.kpiAccent, styles[`${item.tone}Accent`]]} />
       <Text style={styles.kpiLabel}>{item.label}</Text>
       <Text style={styles.kpiValue}>{item.value}</Text>
-      <Text numberOfLines={2} style={styles.kpiDetail}>
+      <Text numberOfLines={1} style={styles.kpiDetail}>
         {item.detail}
       </Text>
     </Pressable>
@@ -1367,12 +1367,12 @@ function OrdersToolbar({
     <View style={styles.toolbar}>
       <View style={styles.toolbarTop}>
         <View style={styles.searchBox}>
-          <SymbolView name={{ android: 'search', ios: 'magnifyingglass', web: 'search' }} size={18} tintColor={MiraDesign.color.showcaseNavySoft} />
+          <SymbolView name={{ android: 'search', ios: 'magnifyingglass', web: 'search' }} size={18} tintColor={MiraDesign.color.inkSoft} />
           <TextInput
             accessibilityLabel="ค้นหาคิวคำสั่งซื้อ"
             onChangeText={setQuery}
             placeholder="ค้นหาเลขออเดอร์ ชื่อลูกค้า เบอร์โทร หรือแพ็กเกจ"
-            placeholderTextColor={MiraDesign.color.showcaseNavySoft}
+            placeholderTextColor={MiraDesign.color.inkSoft}
             style={styles.searchInput}
             value={query}
           />
@@ -1469,8 +1469,8 @@ function OrdersQueueContent({
     <View style={styles.queueStack}>
       <View style={styles.queueHeader}>
         <View>
-          <Text style={styles.panelTitle}>Order Operations Queue</Text>
-          <Text style={styles.panelSubtitle}>สแกนรายการที่ต้องตามต่อก่อน แล้วเลือกเพื่อเปิด inspector</Text>
+          <Text style={styles.panelTitle}>คิวปฏิบัติการคำสั่งซื้อ</Text>
+          <Text style={styles.panelSubtitle}>สแกนรายการที่ต้องตามต่อก่อน แล้วเลือกเพื่อเปิดแผงรายละเอียด</Text>
         </View>
       </View>
       {orders.map((order) => (
@@ -1491,7 +1491,7 @@ function Banner({ text, tone }: { text: string; tone: 'error' | 'success' }) {
 function DemoModeBanner({ reason }: { reason: string | null }) {
   return (
     <View style={styles.demoBanner}>
-      <SymbolView name={{ android: 'visibility', ios: 'eye', web: 'visibility' }} size={18} tintColor={MiraDesign.color.showcaseBlueDeep} />
+      <SymbolView name={{ android: 'visibility', ios: 'eye', web: 'visibility' }} size={18} tintColor={MiraDesign.color.primaryDeep} />
       <View style={styles.demoBannerCopy}>
         <Text style={styles.demoBannerTitle}>โหมดตัวอย่าง</Text>
         <Text style={styles.demoBannerText}>
@@ -1519,12 +1519,13 @@ function OrderRowCard({ onSelect, order, selected }: { onSelect: () => void; ord
       onPress={onSelect}
       style={[styles.orderRow, selected ? styles.orderRowSelected : null]}
     >
+      {selected ? <View style={styles.orderSelectedAccent} /> : null}
       <View style={styles.orderRowTop}>
         <View style={styles.productMedia}>
           {product?.image_url ? (
             <Image source={{ uri: product.image_url }} style={styles.productImage} />
           ) : (
-            <SymbolView name={{ android: 'medical_services', ios: 'cross.case', web: 'medical_services' }} size={24} tintColor={MiraDesign.color.showcaseBlue} />
+            <SymbolView name={{ android: 'medical_services', ios: 'cross.case', web: 'medical_services' }} size={24} tintColor={MiraDesign.color.blue} />
           )}
         </View>
         <View style={styles.orderMain}>
@@ -1555,11 +1556,11 @@ function OrderRowCard({ onSelect, order, selected }: { onSelect: () => void; ord
         <InfoPill label={bookingStatusLabel(order)} tone={bookingTone(order)} />
       </View>
 
-      <View style={styles.orderMetaGrid}>
-        <Meta label="ชำระเงิน" value={formatPayment(order)} />
-        <Meta label="สาขา" value={orderBranchName(order)} />
-        <Meta label="อัปเดต" value={formatDateTime(order.updated_at)} />
-        <Meta label="ผู้แนะนำ" value={referrer ? `${referrer.name} (${referrer.ref_code})` : '-'} />
+      <View style={styles.queueFactsLine}>
+        <Text numberOfLines={1} style={styles.queueFactText}>ชำระเงิน: {formatPayment(order)}</Text>
+        <Text numberOfLines={1} style={styles.queueFactText}>สาขา: {orderBranchName(order)}</Text>
+        <Text numberOfLines={1} style={styles.queueFactText}>อัปเดต: {formatDateTime(order.updated_at)}</Text>
+        {referrer ? <Text numberOfLines={1} style={styles.queueFactText}>ผู้แนะนำ: {referrer.name}</Text> : null}
       </View>
 
       <View style={styles.nextActionRow}>
@@ -1622,11 +1623,16 @@ function OrderDetail({
           <Text style={styles.detailEyebrow}>ออเดอร์ #{compactOrderId(order.id)}</Text>
           <Text style={styles.detailTitle}>{orderProductName(order)}</Text>
           <Text style={styles.detailSubtitle}>{nextAction.detail}</Text>
+          <View style={styles.detailBadgeRow}>
+            <InfoPill label={orderBuyerName(order)} />
+            <InfoPill label={formatMoney(order.amount_baht)} tone="success" />
+            <InfoPill label={formatPayment(order)} tone={isPaidOrder(order) ? 'success' : 'amber'} />
+          </View>
         </View>
         <StatusBadge label={statusLabel(order.status)} tone={statusTone(order.status)} />
       </View>
 
-      <SectionCard title="Summary">
+      <SectionCard title="สรุปคำสั่งซื้อ">
         <View style={styles.detailGrid}>
           <Meta label="ผู้ซื้อ" value={orderBuyerName(order)} />
           <Meta label="ชำระเงิน" value={formatPayment(order)} />
@@ -1637,11 +1643,11 @@ function OrderDetail({
         </View>
       </SectionCard>
 
-      <SectionCard title="Timeline">
+      <SectionCard title="ไทม์ไลน์">
         <OrderTimeline order={order} />
       </SectionCard>
 
-      <SectionCard title="Customer & Package">
+      <SectionCard title="ผู้ซื้อและแพ็กเกจ">
         <View style={styles.detailGrid}>
           <Meta label="ชื่อ" value={orderBuyerName(order)} />
           <Meta label="อายุ" value={order.buyer_age ? `${order.buyer_age}` : '-'} />
@@ -1657,7 +1663,7 @@ function OrderDetail({
       </SectionCard>
 
       {order.slip_url ? (
-        <SectionCard title="Payment Evidence">
+        <SectionCard title="หลักฐานชำระเงิน">
           <View style={styles.slipRow}>
             {slipImageUrl ? <Image source={{ uri: slipImageUrl }} style={styles.slipImage} /> : null}
             <View style={styles.slipCopy}>
@@ -1678,7 +1684,7 @@ function OrderDetail({
             </Pressable>
           </Link>
         }
-        title="Conversation Context"
+        title="บริบทบทสนทนา"
       >
         <View style={styles.transcript}>
           {transcript.length === 0 ? (
@@ -1694,7 +1700,7 @@ function OrderDetail({
         </View>
       </SectionCard>
 
-      <SectionCard title="Staff Actions">
+      <SectionCard title="งานของทีม">
         {isDemoMode ? <Text style={styles.demoActionNotice}>โหมดตัวอย่าง: ปุ่ม action จะไม่ส่งข้อมูลจริง</Text> : null}
         <View style={styles.formBlock}>
           <Text style={styles.formLabel}>นัดหมาย</Text>
@@ -1708,7 +1714,7 @@ function OrderDetail({
             multiline
             onChangeText={onNoteChange}
             placeholder="โน้ตภายใน"
-            placeholderTextColor={MiraDesign.color.showcaseNavySoft}
+            placeholderTextColor={MiraDesign.color.inkSoft}
             style={[styles.input, styles.noteInput, isDemoMode ? styles.disabledInput : null]}
             value={note}
           />
@@ -1745,7 +1751,7 @@ function OrderDetail({
         </View>
       </SectionCard>
 
-      <SectionCard title="Audit & Metadata">
+      <SectionCard title="ข้อมูลระบบ">
         <View style={styles.detailGrid}>
           <Meta label="Tenant" value={tenant?.display_name ?? order.tenant_id} />
           <Meta label="Tenant ID" value={order.tenant_id} />
@@ -1773,7 +1779,7 @@ function OrderDetail({
       )}
       <View style={styles.detailStickyBar}>
         <View style={styles.stickyCopy}>
-          <Text style={styles.stickyLabel}>Next action</Text>
+          <Text style={styles.stickyLabel}>ขั้นถัดไป</Text>
           <Text numberOfLines={1} style={styles.stickyTitle}>
             {nextAction.label}
           </Text>
@@ -1798,7 +1804,7 @@ function OrderTimeline({ order }: { order: OrderQueueRow }) {
   const paid = isPaidOrder(order);
   const steps: Array<{ detail: string; key: string; label: string; state: 'complete' | 'current' | 'pending'; time: string | null }> = [
     {
-      detail: 'order row ถูกสร้างจาก checkout/chat flow',
+      detail: 'สร้างจาก checkout ในแชท',
       key: 'created',
       label: 'สร้างออเดอร์',
       state: 'complete',
@@ -2076,7 +2082,7 @@ function StatusBadge({ label, tone = 'blue' }: { label: string; tone?: BadgeTone
 function InfoPill({ icon, label, tone = 'muted' }: { icon?: SymbolName; label: string; tone?: BadgeTone }) {
   return (
     <View style={[styles.infoPill, styles[`${tone}InfoPill`]]}>
-      {icon ? <SymbolView name={icon} size={14} tintColor={tone === 'muted' ? MiraDesign.color.showcaseNavySoft : MiraDesign.color.showcaseBlueDeep} /> : null}
+      {icon ? <SymbolView name={icon} size={14} tintColor={tone === 'muted' ? MiraDesign.color.inkSoft : MiraDesign.color.primaryDeep} /> : null}
       <Text numberOfLines={1} style={styles.infoPillText}>
         {label}
       </Text>
@@ -2117,14 +2123,14 @@ function NoSelectionState() {
   return (
     <View style={styles.noSelection}>
       <View style={styles.emptyIcon}>
-        <SymbolView name={{ android: 'receipt_long', ios: 'list.bullet.rectangle', web: 'receipt_long' }} size={30} tintColor={MiraDesign.color.showcaseBlue} />
+        <SymbolView name={{ android: 'receipt_long', ios: 'list.bullet.rectangle', web: 'receipt_long' }} size={30} tintColor={MiraDesign.color.blue} />
       </View>
       <Text style={styles.emptyTitle}>เลือกคำสั่งซื้อ</Text>
-      <Text style={styles.emptyBody}>เปิดรายการเพื่อดูข้อมูลผู้ซื้อ สถานะชำระเงิน บทสนทนา และ next action ของทีมงาน</Text>
+      <Text style={styles.emptyBody}>เปิดรายการเพื่อดูข้อมูลผู้ซื้อ สถานะชำระเงิน บทสนทนา และขั้นถัดไปของทีมงาน</Text>
       <View style={styles.hintList}>
         <Text style={styles.hintText}>ข้อมูลผู้ซื้อ</Text>
         <Text style={styles.hintText}>สถานะชำระเงิน</Text>
-        <Text style={styles.hintText}>บทสนทนาและ next action</Text>
+        <Text style={styles.hintText}>บทสนทนาและขั้นถัดไป</Text>
       </View>
     </View>
   );
@@ -2134,7 +2140,7 @@ function QueueEmptyState() {
   return (
     <View style={styles.emptyQueue}>
       <View style={styles.emptyIcon}>
-        <SymbolView name={{ android: 'inbox', ios: 'tray', web: 'inbox' }} size={30} tintColor={MiraDesign.color.showcaseBlue} />
+        <SymbolView name={{ android: 'inbox', ios: 'tray', web: 'inbox' }} size={30} tintColor={MiraDesign.color.blue} />
       </View>
       <Text style={styles.emptyTitle}>ยังไม่มีคำสั่งซื้อในคิว</Text>
       <Text style={styles.emptyBody}>คำสั่งซื้อจาก chat checkout จะแสดงที่นี่เมื่อมีข้อมูลเข้าระบบ</Text>
@@ -2187,59 +2193,59 @@ function OrdersSkeleton() {
 
 const styles = StyleSheet.create({
   screen: {
-    backgroundColor: MiraDesign.color.showcaseCanvas,
+    backgroundColor: MiraDesign.color.canvas,
     flex: 1,
   },
   mobileScrollContent: {
     flexGrow: 1,
   },
   container: {
-    gap: 14,
-    padding: 16,
-    paddingBottom: 36,
+    gap: 8,
+    padding: 12,
+    paddingBottom: 28,
   },
   containerDesktop: {
     flex: 1,
-    padding: 22,
+    padding: 16,
   },
   headerCard: {
-    backgroundColor: MiraDesign.color.showcaseSurface,
-    borderColor: MiraDesign.color.showcaseLine,
+    backgroundColor: MiraDesign.color.surface,
+    borderColor: MiraDesign.color.line,
     borderRadius: 8,
     borderWidth: 1,
-    gap: 14,
-    padding: 18,
+    gap: 8,
+    padding: 11,
     ...softShadow,
   },
   headerMain: {
     alignItems: 'flex-start',
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 18,
+    gap: 12,
     justifyContent: 'space-between',
   },
   titleGroup: {
     flex: 1,
-    gap: 7,
+    gap: 5,
     minWidth: 260,
   },
   eyebrow: {
-    color: MiraDesign.color.showcaseBlueDeep,
+    color: MiraDesign.color.primaryDeep,
     fontSize: 12,
-    fontWeight: '900',
+    fontWeight: '800',
     textTransform: 'uppercase',
   },
   title: {
-    color: MiraDesign.color.showcaseNavy,
-    fontSize: 30,
+    color: MiraDesign.color.ink,
+    fontSize: 22,
     fontWeight: '900',
-    lineHeight: 36,
+    lineHeight: 26,
   },
   subtitle: {
-    color: MiraDesign.color.showcaseNavySoft,
-    fontSize: 14,
-    lineHeight: 21,
-    maxWidth: 820,
+    color: MiraDesign.color.inkSoft,
+    fontSize: 13,
+    lineHeight: 18,
+    maxWidth: 760,
   },
   headerActions: {
     alignItems: 'center',
@@ -2255,31 +2261,31 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     justifyContent: 'center',
-    minHeight: 44,
-    paddingHorizontal: 15,
+    minHeight: 38,
+    paddingHorizontal: 13,
   },
   primaryButtonText: {
     color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '900',
+    fontSize: 12,
+    fontWeight: '800',
   },
   secondaryButton: {
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderColor: MiraDesign.color.showcaseLine,
+    borderColor: MiraDesign.color.line,
     borderRadius: 8,
     borderWidth: 1,
     cursor: 'pointer',
     flexDirection: 'row',
     gap: 8,
     justifyContent: 'center',
-    minHeight: 44,
-    paddingHorizontal: 15,
+    minHeight: 38,
+    paddingHorizontal: 13,
   },
   secondaryButtonText: {
-    color: MiraDesign.color.showcaseBlueDeep,
-    fontSize: 13,
-    fontWeight: '900',
+    color: MiraDesign.color.primaryDeep,
+    fontSize: 12,
+    fontWeight: '800',
   },
   statusPillRow: {
     flexDirection: 'row',
@@ -2289,7 +2295,7 @@ const styles = StyleSheet.create({
   banner: {
     borderRadius: 8,
     borderWidth: 1,
-    padding: 12,
+    padding: 9,
   },
   errorBanner: {
     backgroundColor: '#FDECEC',
@@ -2300,9 +2306,9 @@ const styles = StyleSheet.create({
     borderColor: '#B8DCCB',
   },
   bannerText: {
-    fontSize: 13,
-    fontWeight: '800',
-    lineHeight: 19,
+    fontSize: 12,
+    fontWeight: '700',
+    lineHeight: 17,
   },
   errorBannerText: {
     color: '#8F2424',
@@ -2312,78 +2318,78 @@ const styles = StyleSheet.create({
   },
   demoBanner: {
     alignItems: 'flex-start',
-    backgroundColor: '#F6FBFF',
-    borderColor: MiraDesign.color.showcaseLine,
+    backgroundColor: '#FBFDFE',
+    borderColor: MiraDesign.color.line,
     borderRadius: 8,
     borderWidth: 1,
     flexDirection: 'row',
-    gap: 10,
-    padding: 12,
+    gap: 8,
+    padding: 8,
   },
   demoBannerCopy: {
     flex: 1,
     gap: 2,
   },
   demoBannerTitle: {
-    color: MiraDesign.color.showcaseNavy,
-    fontSize: 13,
-    fontWeight: '900',
+    color: MiraDesign.color.ink,
+    fontSize: 12,
+    fontWeight: '800',
   },
   demoBannerText: {
-    color: MiraDesign.color.showcaseNavySoft,
+    color: MiraDesign.color.inkSoft,
     fontSize: 12,
-    lineHeight: 18,
+    lineHeight: 17,
   },
   kpiScroll: {
     marginHorizontal: -16,
   },
   kpiScrollContent: {
-    gap: 10,
+    gap: 8,
     paddingHorizontal: 16,
   },
   kpiGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
+    gap: 8,
   },
   kpiCard: {
     backgroundColor: '#FFFFFF',
-    borderColor: MiraDesign.color.showcaseLine,
+    borderColor: MiraDesign.color.line,
     borderRadius: 8,
     borderWidth: 1,
     cursor: 'pointer',
-    gap: 5,
-    minHeight: 116,
-    minWidth: 152,
+    gap: 3,
+    minHeight: 72,
+    minWidth: 132,
     overflow: 'hidden',
-    padding: 13,
-    width: 166,
+    padding: 8,
+    width: 140,
   },
   kpiCardActive: {
-    borderColor: MiraDesign.color.showcaseBlue,
-    borderWidth: 2,
+    backgroundColor: '#F7FBFF',
+    borderColor: MiraDesign.color.blue,
   },
   kpiAccent: {
     borderRadius: 8,
-    height: 4,
-    marginBottom: 2,
-    width: 44,
+    height: 3,
+    marginBottom: 1,
+    width: 34,
   },
   kpiLabel: {
-    color: MiraDesign.color.showcaseNavySoft,
-    fontSize: 12,
-    fontWeight: '900',
+    color: MiraDesign.color.inkSoft,
+    fontSize: 11,
+    fontWeight: '800',
   },
   kpiValue: {
-    color: MiraDesign.color.showcaseNavy,
-    fontSize: 28,
+    color: MiraDesign.color.ink,
+    fontSize: 21,
     fontWeight: '900',
-    lineHeight: 32,
+    lineHeight: 24,
   },
   kpiDetail: {
-    color: MiraDesign.color.showcaseNavySoft,
+    color: MiraDesign.color.inkSoft,
     fontSize: 11,
-    lineHeight: 16,
+    lineHeight: 15,
   },
   blueAccent: {
     backgroundColor: MiraDesign.color.showcaseBlue,
@@ -2398,63 +2404,63 @@ const styles = StyleSheet.create({
     backgroundColor: MiraDesign.color.danger,
   },
   mutedAccent: {
-    backgroundColor: MiraDesign.color.showcaseLine,
+    backgroundColor: MiraDesign.color.line,
   },
   toolbar: {
-    backgroundColor: MiraDesign.color.showcaseSurface,
-    borderColor: MiraDesign.color.showcaseLine,
+    backgroundColor: MiraDesign.color.surface,
+    borderColor: MiraDesign.color.line,
     borderRadius: 8,
     borderWidth: 1,
-    gap: 14,
-    padding: 14,
+    gap: 7,
+    padding: 9,
     ...softShadow,
   },
   toolbarTop: {
     alignItems: 'center',
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
+    gap: 8,
   },
   searchBox: {
     alignItems: 'center',
-    backgroundColor: '#F8FCFF',
-    borderColor: MiraDesign.color.showcaseLine,
+    backgroundColor: '#FBFDFE',
+    borderColor: MiraDesign.color.line,
     borderRadius: 8,
     borderWidth: 1,
     flex: 1,
     flexDirection: 'row',
-    gap: 9,
-    minHeight: 46,
+    gap: 8,
+    minHeight: 38,
     minWidth: 240,
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
   },
   searchInput: {
-    color: MiraDesign.color.showcaseNavy,
+    color: MiraDesign.color.ink,
     flex: 1,
-    fontSize: 14,
-    fontWeight: '800',
-    minHeight: 44,
+    fontSize: 13,
+    fontWeight: '700',
+    minHeight: 36,
     minWidth: 0,
     paddingHorizontal: 0,
   },
   toggleButton: {
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderColor: MiraDesign.color.showcaseLine,
+    borderColor: MiraDesign.color.line,
     borderRadius: 8,
     borderWidth: 1,
     cursor: 'pointer',
     flexDirection: 'row',
     gap: 8,
-    minHeight: 44,
-    paddingHorizontal: 12,
+    minHeight: 38,
+    paddingHorizontal: 10,
   },
   toggleButtonActive: {
-    backgroundColor: MiraDesign.color.showcaseBlueSoft,
-    borderColor: MiraDesign.color.showcaseBlue,
+    backgroundColor: MiraDesign.color.blueSoft,
+    borderColor: MiraDesign.color.blue,
   },
   toggleDot: {
-    backgroundColor: MiraDesign.color.showcaseLine,
+    backgroundColor: MiraDesign.color.line,
     borderRadius: 7,
     height: 14,
     width: 14,
@@ -2463,15 +2469,15 @@ const styles = StyleSheet.create({
     backgroundColor: MiraDesign.color.showcaseBlue,
   },
   toggleText: {
-    color: MiraDesign.color.showcaseNavySoft,
+    color: MiraDesign.color.inkSoft,
     fontSize: 12,
-    fontWeight: '900',
+    fontWeight: '800',
   },
   toggleTextActive: {
-    color: MiraDesign.color.showcaseBlueDeep,
+    color: MiraDesign.color.primaryDeep,
   },
   toolbarSection: {
-    gap: 8,
+    gap: 5,
   },
   toolbarSectionHeader: {
     alignItems: 'center',
@@ -2479,22 +2485,22 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   toolbarLabel: {
-    color: MiraDesign.color.showcaseNavy,
-    fontSize: 13,
-    fontWeight: '900',
+    color: MiraDesign.color.ink,
+    fontSize: 11,
+    fontWeight: '800',
   },
   toolbarMeta: {
-    color: MiraDesign.color.showcaseBlue,
+    color: MiraDesign.color.primaryDeep,
     fontSize: 12,
-    fontWeight: '900',
+    fontWeight: '800',
   },
   segmentRow: {
-    backgroundColor: '#EAF3FF',
+    backgroundColor: '#F0F5F6',
     borderRadius: 8,
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 5,
-    padding: 5,
+    gap: 3,
+    padding: 3,
   },
   segment: {
     alignItems: 'center',
@@ -2502,69 +2508,72 @@ const styles = StyleSheet.create({
     cursor: 'pointer',
     flexGrow: 1,
     justifyContent: 'center',
-    minHeight: 36,
-    minWidth: 120,
-    paddingHorizontal: 10,
+    minHeight: 28,
+    minWidth: 98,
+    paddingHorizontal: 7,
   },
   segmentActive: {
     backgroundColor: '#FFFFFF',
-    borderColor: MiraDesign.color.showcaseLine,
+    borderColor: MiraDesign.color.line,
     borderWidth: 1,
   },
   segmentText: {
-    color: MiraDesign.color.showcaseNavySoft,
-    fontSize: 12,
-    fontWeight: '900',
+    color: MiraDesign.color.inkSoft,
+    fontSize: 11,
+    fontWeight: '800',
   },
   segmentTextActive: {
-    color: MiraDesign.color.showcaseBlueDeep,
+    color: MiraDesign.color.primaryDeep,
   },
   toolbarGrid: {
+    alignItems: 'center',
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
+    gap: 8,
   },
   filterGroup: {
-    gap: 7,
-    minWidth: 220,
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 6,
+    minWidth: 0,
   },
   filterLabel: {
-    color: MiraDesign.color.showcaseNavySoft,
-    fontSize: 11,
-    fontWeight: '900',
+    color: MiraDesign.color.inkSoft,
+    fontSize: 10,
+    fontWeight: '800',
     textTransform: 'uppercase',
   },
   filterChipRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 7,
+    gap: 5,
   },
   chipButton: {
-    backgroundColor: '#F8FCFF',
-    borderColor: MiraDesign.color.showcaseLine,
+    backgroundColor: '#FFFFFF',
+    borderColor: MiraDesign.color.line,
     borderRadius: 8,
     borderWidth: 1,
     cursor: 'pointer',
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
   },
   chipButtonActive: {
-    backgroundColor: MiraDesign.color.showcaseBlue,
-    borderColor: MiraDesign.color.showcaseBlue,
+    backgroundColor: MiraDesign.color.blueSoft,
+    borderColor: MiraDesign.color.blue,
   },
   chipButtonText: {
-    color: MiraDesign.color.showcaseNavySoft,
-    fontSize: 12,
-    fontWeight: '900',
+    color: MiraDesign.color.inkSoft,
+    fontSize: 11,
+    fontWeight: '800',
   },
   chipButtonTextActive: {
-    color: '#FFFFFF',
+    color: MiraDesign.color.primaryDeep,
   },
   workspace: {
     alignItems: 'stretch',
     flex: 1,
     flexDirection: 'row',
-    gap: 14,
+    gap: 10,
     minHeight: 0,
   },
   workspaceStack: {
@@ -2578,22 +2587,22 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   queueScrollContent: {
-    gap: 10,
-    paddingBottom: 20,
+    gap: 8,
+    paddingBottom: 16,
   },
   detailPane: {
     backgroundColor: '#FFFFFF',
-    borderColor: MiraDesign.color.showcaseLine,
+    borderColor: MiraDesign.color.line,
     borderRadius: 8,
     borderWidth: 1,
     flex: 0.92,
-    minHeight: 420,
+    minHeight: 380,
     minWidth: 360,
     overflow: 'hidden',
     ...softShadow,
   },
   queueStack: {
-    gap: 10,
+    gap: 8,
   },
   queueHeader: {
     alignItems: 'flex-start',
@@ -2601,51 +2610,60 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   panelTitle: {
-    color: MiraDesign.color.showcaseNavy,
-    fontSize: 18,
+    color: MiraDesign.color.ink,
+    fontSize: 16,
     fontWeight: '900',
   },
   panelSubtitle: {
-    color: MiraDesign.color.showcaseNavySoft,
+    color: MiraDesign.color.inkSoft,
     fontSize: 12,
-    fontWeight: '800',
-    marginTop: 3,
+    fontWeight: '700',
+    marginTop: 2,
   },
   orderRow: {
     backgroundColor: '#FFFFFF',
-    borderColor: MiraDesign.color.showcaseLine,
+    borderColor: MiraDesign.color.line,
     borderRadius: 8,
     borderWidth: 1,
     cursor: 'pointer',
-    gap: 12,
-    padding: 14,
+    gap: 9,
+    overflow: 'hidden',
+    padding: 12,
+    position: 'relative',
   },
   orderRowSelected: {
     backgroundColor: '#F7FBFF',
-    borderColor: MiraDesign.color.showcaseBlue,
-    borderWidth: 2,
+    borderColor: '#B8D4F3',
+  },
+  orderSelectedAccent: {
+    backgroundColor: MiraDesign.color.blue,
+    bottom: 0,
+    left: 0,
+    position: 'absolute',
+    top: 0,
+    width: 3,
   },
   orderRowTop: {
     alignItems: 'flex-start',
     flexDirection: 'row',
-    gap: 12,
+    gap: 10,
   },
   productMedia: {
     alignItems: 'center',
-    backgroundColor: MiraDesign.color.showcaseBlueSoft,
+    backgroundColor: MiraDesign.color.blueSoft,
     borderRadius: 8,
-    height: 52,
+    height: 44,
     justifyContent: 'center',
-    width: 52,
+    width: 44,
   },
   productImage: {
     borderRadius: 8,
-    height: 52,
-    width: 52,
+    height: 44,
+    width: 44,
   },
   orderMain: {
     flex: 1,
-    gap: 5,
+    gap: 4,
     minWidth: 0,
   },
   orderTitleRow: {
@@ -2656,15 +2674,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   orderId: {
-    color: MiraDesign.color.showcaseBlueDeep,
+    color: MiraDesign.color.primaryDeep,
     fontSize: 12,
-    fontWeight: '900',
+    fontWeight: '800',
   },
   orderTitle: {
-    color: MiraDesign.color.showcaseNavy,
-    fontSize: 16,
+    color: MiraDesign.color.ink,
+    fontSize: 15,
     fontWeight: '900',
-    lineHeight: 21,
+    lineHeight: 20,
   },
   orderPersonRow: {
     alignItems: 'center',
@@ -2672,26 +2690,26 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   customerName: {
-    color: MiraDesign.color.showcaseNavy,
+    color: MiraDesign.color.ink,
     flexShrink: 1,
     fontSize: 13,
-    fontWeight: '900',
-  },
-  customerMeta: {
-    color: MiraDesign.color.showcaseNavySoft,
-    flexShrink: 1,
-    fontSize: 12,
     fontWeight: '800',
   },
+  customerMeta: {
+    color: MiraDesign.color.inkSoft,
+    flexShrink: 1,
+    fontSize: 12,
+    fontWeight: '700',
+  },
   dotSeparator: {
-    color: MiraDesign.color.showcaseNavySoft,
+    color: MiraDesign.color.inkSoft,
     fontSize: 12,
     fontWeight: '900',
   },
   orderSignalRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 7,
+    gap: 6,
   },
   infoPill: {
     alignItems: 'center',
@@ -2699,14 +2717,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 5,
     maxWidth: '100%',
-    paddingHorizontal: 9,
-    paddingVertical: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
   },
   mutedInfoPill: {
-    backgroundColor: '#F2F7FC',
+    backgroundColor: '#F2F6F7',
   },
   blueInfoPill: {
-    backgroundColor: MiraDesign.color.showcaseBlueSoft,
+    backgroundColor: MiraDesign.color.blueSoft,
   },
   amberInfoPill: {
     backgroundColor: '#FFF2C8',
@@ -2718,31 +2736,42 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFE2E2',
   },
   infoPillText: {
-    color: MiraDesign.color.showcaseNavy,
+    color: MiraDesign.color.ink,
     fontSize: 11,
-    fontWeight: '900',
+    fontWeight: '800',
   },
   orderMetaGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
   },
+  queueFactsLine: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  queueFactText: {
+    color: MiraDesign.color.inkSoft,
+    fontSize: 11,
+    fontWeight: '700',
+    lineHeight: 16,
+  },
   nextActionRow: {
     alignItems: 'center',
-    backgroundColor: '#F8FCFF',
-    borderColor: MiraDesign.color.showcaseLineSoft,
+    backgroundColor: '#FAFCFD',
+    borderColor: MiraDesign.color.line,
     borderRadius: 8,
     borderWidth: 1,
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
-    padding: 10,
+    padding: 8,
   },
   nextActionText: {
-    color: MiraDesign.color.showcaseNavySoft,
+    color: MiraDesign.color.inkSoft,
     flex: 1,
     fontSize: 12,
-    fontWeight: '800',
+    fontWeight: '700',
     lineHeight: 17,
     minWidth: 180,
   },
@@ -2754,16 +2783,16 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   detailScrollContent: {
-    paddingBottom: 12,
+    paddingBottom: 8,
   },
   detailBody: {
-    gap: 12,
-    padding: 14,
+    gap: 10,
+    padding: 12,
   },
   detailHead: {
     alignItems: 'flex-start',
     flexDirection: 'row',
-    gap: 12,
+    gap: 10,
     justifyContent: 'space-between',
   },
   detailTitleBlock: {
@@ -2772,30 +2801,36 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   detailEyebrow: {
-    color: MiraDesign.color.showcaseBlue,
+    color: MiraDesign.color.primaryDeep,
     fontSize: 12,
-    fontWeight: '900',
+    fontWeight: '800',
     textTransform: 'uppercase',
   },
   detailTitle: {
-    color: MiraDesign.color.showcaseNavy,
-    fontSize: 20,
+    color: MiraDesign.color.ink,
+    fontSize: 18,
     fontWeight: '900',
-    lineHeight: 25,
+    lineHeight: 23,
   },
   detailSubtitle: {
-    color: MiraDesign.color.showcaseNavySoft,
-    fontSize: 13,
-    fontWeight: '800',
-    lineHeight: 18,
+    color: MiraDesign.color.inkSoft,
+    fontSize: 12,
+    fontWeight: '700',
+    lineHeight: 17,
+  },
+  detailBadgeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 3,
   },
   sectionCard: {
     backgroundColor: '#FFFFFF',
-    borderColor: MiraDesign.color.showcaseLine,
+    borderColor: MiraDesign.color.line,
     borderRadius: 8,
     borderWidth: 1,
-    gap: 12,
-    padding: 12,
+    gap: 10,
+    padding: 11,
   },
   sectionHeader: {
     alignItems: 'center',
@@ -2804,17 +2839,17 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   sectionTitle: {
-    color: MiraDesign.color.showcaseNavy,
+    color: MiraDesign.color.ink,
     fontSize: 14,
-    fontWeight: '900',
+    fontWeight: '800',
   },
   sectionBodyStrong: {
-    color: MiraDesign.color.showcaseNavy,
+    color: MiraDesign.color.ink,
     fontSize: 13,
-    fontWeight: '900',
+    fontWeight: '800',
   },
   helperText: {
-    color: MiraDesign.color.showcaseNavySoft,
+    color: MiraDesign.color.inkSoft,
     fontSize: 13,
     lineHeight: 19,
   },
@@ -2824,31 +2859,31 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   metaCell: {
-    backgroundColor: '#F8FCFF',
-    borderColor: MiraDesign.color.showcaseLineSoft,
-    borderRadius: 8,
-    borderWidth: 1,
+    backgroundColor: 'transparent',
+    borderBottomColor: '#E7EEF0',
+    borderBottomWidth: 1,
     flexGrow: 1,
-    minWidth: 136,
-    padding: 9,
+    minWidth: 132,
+    paddingHorizontal: 0,
+    paddingVertical: 7,
   },
   metaLabel: {
-    color: MiraDesign.color.showcaseNavySoft,
+    color: MiraDesign.color.inkSoft,
     fontSize: 10,
-    fontWeight: '900',
+    fontWeight: '800',
     textTransform: 'uppercase',
   },
   metaValue: {
-    color: MiraDesign.color.showcaseNavy,
+    color: MiraDesign.color.ink,
     fontSize: 12,
-    fontWeight: '900',
+    fontWeight: '800',
     lineHeight: 17,
-    marginTop: 4,
+    marginTop: 3,
   },
   slipRow: {
     alignItems: 'center',
-    backgroundColor: '#F7FBFF',
-    borderColor: MiraDesign.color.showcaseLine,
+    backgroundColor: '#FAFCFD',
+    borderColor: MiraDesign.color.line,
     borderRadius: 8,
     borderWidth: 1,
     flexDirection: 'row',
@@ -2856,7 +2891,7 @@ const styles = StyleSheet.create({
     padding: 10,
   },
   slipImage: {
-    backgroundColor: MiraDesign.color.showcaseBlueSoft,
+    backgroundColor: MiraDesign.color.blueSoft,
     borderRadius: 8,
     height: 72,
     width: 72,
@@ -2878,7 +2913,7 @@ const styles = StyleSheet.create({
     width: 20,
   },
   timelineDot: {
-    backgroundColor: '#DCE8F4',
+    backgroundColor: '#E1E9EB',
     borderColor: '#FFFFFF',
     borderRadius: 8,
     borderWidth: 2,
@@ -2892,18 +2927,18 @@ const styles = StyleSheet.create({
     backgroundColor: MiraDesign.color.amber,
   },
   timelineLine: {
-    backgroundColor: '#DCE8F4',
+    backgroundColor: '#E1E9EB',
     flex: 1,
     minHeight: 28,
     width: 2,
   },
   timelineLineComplete: {
-    backgroundColor: '#A8DCCA',
+    backgroundColor: '#B9DDD2',
   },
   timelineCopy: {
     flex: 1,
     gap: 3,
-    paddingBottom: 13,
+    paddingBottom: 10,
   },
   timelineCopyPending: {
     opacity: 0.6,
@@ -2915,62 +2950,62 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   timelineTitle: {
-    color: MiraDesign.color.showcaseNavy,
+    color: MiraDesign.color.ink,
     fontSize: 13,
-    fontWeight: '900',
+    fontWeight: '800',
   },
   timelineTime: {
-    color: MiraDesign.color.showcaseBlue,
+    color: MiraDesign.color.primaryDeep,
     fontSize: 11,
-    fontWeight: '900',
+    fontWeight: '800',
   },
   timelineDetail: {
-    color: MiraDesign.color.showcaseNavySoft,
+    color: MiraDesign.color.inkSoft,
     fontSize: 12,
     lineHeight: 17,
   },
   inlineLinkButton: {
-    backgroundColor: MiraDesign.color.showcaseBlueSoft,
+    backgroundColor: MiraDesign.color.blueSoft,
     borderRadius: 8,
     cursor: 'pointer',
     paddingHorizontal: 10,
     paddingVertical: 7,
   },
   inlineLinkText: {
-    color: MiraDesign.color.showcaseBlueDeep,
+    color: MiraDesign.color.primaryDeep,
     fontSize: 11,
-    fontWeight: '900',
+    fontWeight: '800',
   },
   transcript: {
     gap: 8,
   },
   transcriptItem: {
-    backgroundColor: '#F7FBFF',
-    borderColor: MiraDesign.color.showcaseLineSoft,
+    backgroundColor: '#FAFCFD',
+    borderColor: MiraDesign.color.line,
     borderRadius: 8,
     borderWidth: 1,
     gap: 4,
     padding: 9,
   },
   transcriptRole: {
-    color: MiraDesign.color.showcaseBlue,
+    color: MiraDesign.color.primaryDeep,
     fontSize: 10,
-    fontWeight: '900',
+    fontWeight: '800',
     textTransform: 'uppercase',
   },
   transcriptText: {
-    color: MiraDesign.color.showcaseNavy,
+    color: MiraDesign.color.ink,
     fontSize: 13,
     lineHeight: 19,
   },
   demoActionNotice: {
-    backgroundColor: '#F6FBFF',
-    borderColor: MiraDesign.color.showcaseLine,
+    backgroundColor: '#FBFDFE',
+    borderColor: MiraDesign.color.line,
     borderRadius: 8,
     borderWidth: 1,
-    color: MiraDesign.color.showcaseBlueDeep,
+    color: MiraDesign.color.primaryDeep,
     fontSize: 12,
-    fontWeight: '900',
+    fontWeight: '800',
     lineHeight: 18,
     padding: 10,
   },
@@ -2994,21 +3029,21 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   formLabel: {
-    color: MiraDesign.color.showcaseNavySoft,
+    color: MiraDesign.color.inkSoft,
     fontSize: 11,
-    fontWeight: '900',
+    fontWeight: '800',
     textTransform: 'uppercase',
   },
   selectedPickerValue: {
-    color: MiraDesign.color.showcaseBlue,
+    color: MiraDesign.color.primaryDeep,
     flexShrink: 1,
     fontSize: 12,
-    fontWeight: '900',
+    fontWeight: '800',
     textAlign: 'right',
   },
   calendarPanel: {
-    backgroundColor: '#F7FBFF',
-    borderColor: MiraDesign.color.showcaseLine,
+    backgroundColor: '#FAFCFD',
+    borderColor: MiraDesign.color.line,
     borderRadius: 8,
     borderWidth: 1,
     overflow: 'hidden',
@@ -3016,7 +3051,7 @@ const styles = StyleSheet.create({
   calendarHeader: {
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderBottomColor: MiraDesign.color.showcaseLine,
+    borderBottomColor: MiraDesign.color.line,
     borderBottomWidth: 1,
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -3024,7 +3059,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   calendarMonthTitle: {
-    color: MiraDesign.color.showcaseNavy,
+    color: MiraDesign.color.ink,
     flex: 1,
     fontSize: 13,
     fontWeight: '900',
@@ -3032,7 +3067,7 @@ const styles = StyleSheet.create({
   },
   calendarNavButton: {
     alignItems: 'center',
-    borderColor: MiraDesign.color.showcaseLine,
+    borderColor: MiraDesign.color.line,
     borderRadius: 8,
     borderWidth: 1,
     cursor: 'pointer',
@@ -3042,7 +3077,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   calendarNavText: {
-    color: MiraDesign.color.showcaseBlueDeep,
+    color: MiraDesign.color.primaryDeep,
     fontSize: 11,
     fontWeight: '900',
   },
@@ -3053,7 +3088,7 @@ const styles = StyleSheet.create({
     paddingTop: 8,
   },
   calendarWeekday: {
-    color: MiraDesign.color.showcaseNavySoft,
+    color: MiraDesign.color.inkSoft,
     fontSize: 11,
     fontWeight: '900',
     textAlign: 'center',
@@ -3078,32 +3113,32 @@ const styles = StyleSheet.create({
     opacity: 0.55,
   },
   calendarCellToday: {
-    borderColor: MiraDesign.color.showcaseBlue,
+    borderColor: MiraDesign.color.blue,
   },
   calendarCellSelected: {
-    backgroundColor: MiraDesign.color.showcaseBlue,
-    borderColor: MiraDesign.color.showcaseBlue,
+    backgroundColor: MiraDesign.color.blue,
+    borderColor: MiraDesign.color.blue,
   },
   calendarCellDisabled: {
     opacity: 0.28,
   },
   calendarCellText: {
-    color: MiraDesign.color.showcaseNavy,
+    color: MiraDesign.color.ink,
     fontSize: 12,
     fontWeight: '900',
   },
   calendarCellTextMuted: {
-    color: MiraDesign.color.showcaseNavySoft,
+    color: MiraDesign.color.inkSoft,
   },
   calendarCellTextSelected: {
     color: '#FFFFFF',
   },
   calendarCellTextDisabled: {
-    color: MiraDesign.color.showcaseNavySoft,
+    color: MiraDesign.color.inkSoft,
   },
   timePickerPanel: {
-    backgroundColor: '#F7FBFF',
-    borderColor: MiraDesign.color.showcaseLine,
+    backgroundColor: '#FAFCFD',
+    borderColor: MiraDesign.color.line,
     borderRadius: 8,
     borderWidth: 1,
     flexDirection: 'row',
@@ -3115,7 +3150,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   timePickerColumnTitle: {
-    color: MiraDesign.color.showcaseNavySoft,
+    color: MiraDesign.color.inkSoft,
     fontSize: 11,
     fontWeight: '900',
     textTransform: 'uppercase',
@@ -3128,7 +3163,7 @@ const styles = StyleSheet.create({
   timePickerButton: {
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderColor: MiraDesign.color.showcaseLine,
+    borderColor: MiraDesign.color.line,
     borderRadius: 8,
     borderWidth: 1,
     cursor: 'pointer',
@@ -3138,11 +3173,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   timePickerButtonActive: {
-    backgroundColor: MiraDesign.color.showcaseBlue,
-    borderColor: MiraDesign.color.showcaseBlue,
+    backgroundColor: MiraDesign.color.blue,
+    borderColor: MiraDesign.color.blue,
   },
   timePickerButtonText: {
-    color: MiraDesign.color.showcaseNavy,
+    color: MiraDesign.color.ink,
     fontSize: 12,
     fontWeight: '900',
   },
@@ -3150,11 +3185,11 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   input: {
-    backgroundColor: '#F7FBFF',
-    borderColor: MiraDesign.color.showcaseLine,
+    backgroundColor: '#FAFCFD',
+    borderColor: MiraDesign.color.line,
     borderRadius: 8,
     borderWidth: 1,
-    color: MiraDesign.color.showcaseNavy,
+    color: MiraDesign.color.ink,
     fontSize: 14,
     minHeight: 44,
     paddingHorizontal: 12,
@@ -3174,7 +3209,7 @@ const styles = StyleSheet.create({
   },
   notePresetButton: {
     alignItems: 'center',
-    backgroundColor: MiraDesign.color.showcaseBlueSoft,
+    backgroundColor: MiraDesign.color.blueSoft,
     borderRadius: 8,
     cursor: 'pointer',
     justifyContent: 'center',
@@ -3182,13 +3217,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
   },
   notePresetText: {
-    color: MiraDesign.color.showcaseBlueDeep,
+    color: MiraDesign.color.primaryDeep,
     fontSize: 12,
     fontWeight: '900',
   },
   noteSaveButton: {
     alignItems: 'center',
-    backgroundColor: MiraDesign.color.showcaseBlueDeep,
+    backgroundColor: MiraDesign.color.primaryDeep,
     borderRadius: 8,
     cursor: 'pointer',
     justifyContent: 'center',
@@ -3236,25 +3271,25 @@ const styles = StyleSheet.create({
   detailStickyBar: {
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderTopColor: MiraDesign.color.showcaseLine,
+    borderTopColor: MiraDesign.color.line,
     borderTopWidth: 1,
     flexDirection: 'row',
     gap: 12,
     justifyContent: 'space-between',
-    padding: 12,
+    padding: 10,
   },
   stickyCopy: {
     flex: 1,
     minWidth: 0,
   },
   stickyLabel: {
-    color: MiraDesign.color.showcaseNavySoft,
+    color: MiraDesign.color.inkSoft,
     fontSize: 10,
     fontWeight: '900',
     textTransform: 'uppercase',
   },
   stickyTitle: {
-    color: MiraDesign.color.showcaseNavy,
+    color: MiraDesign.color.ink,
     fontSize: 14,
     fontWeight: '900',
     marginTop: 3,
@@ -3263,14 +3298,14 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     borderRadius: 8,
     fontSize: 11,
-    fontWeight: '900',
+    fontWeight: '800',
     overflow: 'hidden',
     paddingHorizontal: 10,
     paddingVertical: 5,
   },
   blueBadge: {
-    backgroundColor: MiraDesign.color.showcaseBlueSoft,
-    color: MiraDesign.color.showcaseBlueDeep,
+    backgroundColor: MiraDesign.color.blueSoft,
+    color: MiraDesign.color.primaryDeep,
   },
   amberBadge: {
     backgroundColor: '#FFF2C8',
@@ -3285,8 +3320,8 @@ const styles = StyleSheet.create({
     color: MiraDesign.color.danger,
   },
   mutedBadge: {
-    backgroundColor: '#F2F7FC',
-    color: MiraDesign.color.showcaseNavySoft,
+    backgroundColor: '#F2F6F7',
+    color: MiraDesign.color.inkSoft,
   },
   noSelection: {
     alignItems: 'center',
@@ -3299,7 +3334,7 @@ const styles = StyleSheet.create({
   emptyQueue: {
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderColor: MiraDesign.color.showcaseLine,
+    borderColor: MiraDesign.color.line,
     borderRadius: 8,
     borderStyle: 'dashed',
     borderWidth: 1,
@@ -3310,7 +3345,7 @@ const styles = StyleSheet.create({
   },
   emptyIcon: {
     alignItems: 'center',
-    backgroundColor: MiraDesign.color.showcaseBlueSoft,
+    backgroundColor: MiraDesign.color.blueSoft,
     borderRadius: 8,
     height: 58,
     justifyContent: 'center',
@@ -3325,13 +3360,13 @@ const styles = StyleSheet.create({
     width: 58,
   },
   emptyTitle: {
-    color: MiraDesign.color.showcaseNavy,
+    color: MiraDesign.color.ink,
     fontSize: 18,
-    fontWeight: '900',
+    fontWeight: '800',
     textAlign: 'center',
   },
   emptyBody: {
-    color: MiraDesign.color.showcaseNavySoft,
+    color: MiraDesign.color.inkSoft,
     fontSize: 13,
     lineHeight: 19,
     maxWidth: 420,
@@ -3346,17 +3381,17 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   hintText: {
-    backgroundColor: '#F2F7FC',
+    backgroundColor: '#F2F6F7',
     borderRadius: 8,
-    color: MiraDesign.color.showcaseNavySoft,
+    color: MiraDesign.color.inkSoft,
     fontSize: 12,
-    fontWeight: '900',
+    fontWeight: '800',
     overflow: 'hidden',
     paddingHorizontal: 10,
     paddingVertical: 7,
   },
   emptyAction: {
-    backgroundColor: MiraDesign.color.showcaseBlue,
+    backgroundColor: MiraDesign.color.blue,
     borderRadius: 8,
     cursor: 'pointer',
     paddingHorizontal: 14,
@@ -3365,11 +3400,11 @@ const styles = StyleSheet.create({
   emptyActionText: {
     color: '#FFFFFF',
     fontSize: 12,
-    fontWeight: '900',
+    fontWeight: '800',
   },
   skeletonCard: {
     backgroundColor: '#FFFFFF',
-    borderColor: MiraDesign.color.showcaseLine,
+    borderColor: MiraDesign.color.line,
     borderRadius: 8,
     borderWidth: 1,
     gap: 14,
