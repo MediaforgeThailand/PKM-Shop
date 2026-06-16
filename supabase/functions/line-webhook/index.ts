@@ -3,6 +3,7 @@ import QRCode from 'qrcode';
 import { assertTenant, insertRow, rest } from '../_shared/db.ts';
 import { HttpError, handleOptions, json, toErrorResponse } from '../_shared/http.ts';
 import {
+  bookingDateLineFlexMessage,
   branchSelectionLineFlexMessage,
   categoryLineFlexMessage,
   linePostbackToAction,
@@ -103,6 +104,17 @@ async function toLineMessages(response: ChatOrchestratorResponse) {
       }
     } else {
       messages.push(...await orderLineMessages(order));
+
+      // During info collection, offer the date-range picker until the customer has
+      // chosen a window (date or "later"). Mirrors the web chat's calendar date step.
+      if (
+        order.step === 'form' &&
+        !order.preferred_date &&
+        !order.preferred_date_end &&
+        !order.preferred_time_window
+      ) {
+        messages.push(bookingDateLineFlexMessage(order));
+      }
     }
   }
 

@@ -50,6 +50,33 @@ const BROWSE_CATEGORY_MESSAGE = '\u0e02\u0e2d\u0e14\u0e39\u0e41\u0e1e\u0e47\u0e0
 // "\u0e41\u0e1e\u0e47\u0e01\u0e40\u0e01\u0e08" (packages, unit suffix)
 const PACKAGE_UNIT_LABEL = '\u0e41\u0e1e\u0e47\u0e01\u0e40\u0e01\u0e08';
 
+// Booking date-range picker (parity with the web chat's calendar date-range step in
+// PrototypeChatPanel). Shown on LINE during collecting_info so the customer can tap a
+// convenient window instead of having to type a date; staff still confirm the exact
+// appointment afterwards.
+const BOOKING_DATE_ALT = '\u0e40\u0e25\u0e37\u0e2d\u0e01\u0e0a\u0e48\u0e27\u0e07\u0e27\u0e31\u0e19\u0e17\u0e35\u0e48\u0e17\u0e35\u0e48\u0e2a\u0e30\u0e14\u0e27\u0e01';
+const BOOKING_DATE_TITLE = '\u0e2a\u0e30\u0e14\u0e27\u0e01\u0e40\u0e02\u0e49\u0e32\u0e23\u0e31\u0e1a\u0e1a\u0e23\u0e34\u0e01\u0e32\u0e23\u0e0a\u0e48\u0e27\u0e07\u0e44\u0e2b\u0e19\u0e04\u0e30';
+const BOOKING_DATE_HINT = '\u0e40\u0e25\u0e37\u0e2d\u0e01\u0e0a\u0e48\u0e27\u0e07\u0e04\u0e23\u0e48\u0e32\u0e27\u0e46 \u0e44\u0e14\u0e49\u0e40\u0e25\u0e22\u0e04\u0e48\u0e30 \u0e40\u0e14\u0e35\u0e4b\u0e22\u0e27\u0e40\u0e08\u0e49\u0e32\u0e2b\u0e19\u0e49\u0e32\u0e17\u0e35\u0e48\u0e22\u0e37\u0e19\u0e22\u0e31\u0e19\u0e27\u0e31\u0e19\u0e19\u0e31\u0e14\u0e17\u0e35\u0e48\u0e41\u0e19\u0e48\u0e19\u0e2d\u0e19\u0e2d\u0e35\u0e01\u0e04\u0e23\u0e31\u0e49\u0e07';
+const BOOKING_DATE_LATER_WINDOW = '\u0e25\u0e39\u0e01\u0e04\u0e49\u0e32\u0e08\u0e30\u0e41\u0e08\u0e49\u0e07\u0e27\u0e31\u0e19\u0e20\u0e32\u0e22\u0e2b\u0e25\u0e31\u0e07';
+const BOOKING_DATE_MESSAGE_PREFIX = '\u0e0a\u0e48\u0e27\u0e07\u0e27\u0e31\u0e19\u0e17\u0e35\u0e48\u0e2a\u0e30\u0e14\u0e27\u0e01: ';
+
+type BookingDateOption = { end?: number; key: string; label: string; start?: number; window?: string };
+
+const BOOKING_DATE_OPTIONS: BookingDateOption[] = [
+  { end: 3, key: 'asap', label: '\u0e40\u0e23\u0e47\u0e27\u0e17\u0e35\u0e48\u0e2a\u0e38\u0e14 (\u0e20\u0e32\u0e22\u0e43\u0e19 3 \u0e27\u0e31\u0e19)', start: 0 },
+  { end: 7, key: 'week', label: '\u0e20\u0e32\u0e22\u0e43\u0e19\u0e2a\u0e31\u0e1b\u0e14\u0e32\u0e2b\u0e4c\u0e19\u0e35\u0e49', start: 0 },
+  { end: 14, key: 'twoweeks', label: '\u0e43\u0e19 1-2 \u0e2a\u0e31\u0e1b\u0e14\u0e32\u0e2b\u0e4c', start: 7 },
+  { end: 30, key: 'month', label: '\u0e20\u0e32\u0e22\u0e43\u0e19\u0e40\u0e14\u0e37\u0e2d\u0e19\u0e19\u0e35\u0e49', start: 14 },
+  { key: 'later', label: '\u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e23\u0e30\u0e1a\u0e38 \u0e41\u0e08\u0e49\u0e07\u0e20\u0e32\u0e22\u0e2b\u0e25\u0e31\u0e07', window: BOOKING_DATE_LATER_WINDOW },
+];
+
+// Resolve a relative day offset to an ISO date in Asia/Bangkok (UTC+7, no DST).
+function bangkokDateOffset(days: number) {
+  const ms = Date.now() + (7 * 60 + days * 24 * 60) * 60 * 1000;
+
+  return new Date(ms).toISOString().slice(0, 10);
+}
+
 function requireEnv(key: string) {
   const value = Deno.env.get(key)?.trim();
 
@@ -287,6 +314,30 @@ export function linePostbackToAction(data: string | undefined): { action: ChatAc
     }
   }
 
+  if (data.startsWith('set_date:')) {
+    const rest = data.slice('set_date:'.length);
+    const separator = rest.indexOf(':');
+
+    if (separator > 0) {
+      const orderId = rest.slice(0, separator);
+      const key = rest.slice(separator + 1);
+      const option = BOOKING_DATE_OPTIONS.find((candidate) => candidate.key === key);
+
+      if (orderId && option) {
+        return {
+          action: {
+            order_id: orderId,
+            preferred_date: typeof option.start === 'number' ? bangkokDateOffset(option.start) : undefined,
+            preferred_date_end: typeof option.end === 'number' ? bangkokDateOffset(option.end) : undefined,
+            preferred_time_window: option.window,
+            type: 'set_booking_window',
+          },
+          message: `${BOOKING_DATE_MESSAGE_PREFIX}${option.label}`,
+        };
+      }
+    }
+  }
+
   return {
     action: null,
     message: data.slice(0, 400) || GREETING_MESSAGE,
@@ -476,6 +527,52 @@ export function branchSelectionLineFlexMessage(order: NonNullOrderPanelState): L
         };
       }),
       type: 'carousel',
+    },
+    type: 'flex',
+  };
+}
+
+export function bookingDateLineFlexMessage(order: NonNullOrderPanelState): LineFlexMessage {
+  return {
+    altText: BOOKING_DATE_ALT,
+    contents: {
+      body: {
+        contents: [
+          {
+            size: 'md',
+            text: BOOKING_DATE_TITLE,
+            type: 'text',
+            weight: 'bold',
+            wrap: true,
+          },
+          {
+            color: '#4E5F59',
+            margin: 'sm',
+            size: 'sm',
+            text: BOOKING_DATE_HINT,
+            type: 'text',
+            wrap: true,
+          },
+        ],
+        layout: 'vertical',
+        type: 'box',
+      },
+      footer: {
+        contents: BOOKING_DATE_OPTIONS.map((option) => ({
+          action: {
+            data: `set_date:${order.id}:${option.key}`,
+            label: option.label,
+            type: 'postback',
+          },
+          color: option.key === 'later' ? undefined : '#163F34',
+          style: option.key === 'later' ? 'secondary' : 'primary',
+          type: 'button',
+        })),
+        layout: 'vertical',
+        spacing: 'sm',
+        type: 'box',
+      },
+      type: 'bubble',
     },
     type: 'flex',
   };

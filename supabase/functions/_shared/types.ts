@@ -166,6 +166,13 @@ export type ChatAction =
     }
   | {
       order_id: string;
+      preferred_date?: string;
+      preferred_date_end?: string;
+      preferred_time_window?: string;
+      type: 'set_booking_window';
+    }
+  | {
+      order_id: string;
       slip_path?: string;
       type: 'payment_done';
     }
