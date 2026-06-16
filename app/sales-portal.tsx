@@ -502,6 +502,7 @@ export default function SalesPortalScreen() {
         branch_name: selectedBranch?.name ?? branchChoices[0]?.name ?? null,
         id: orderId,
         missing_fields: [],
+        payment_due_at: null,
         payment_provider: 'promptpay',
         preferred_date: preferredDate.trim() || null,
         preferred_date_end: preferredDate.trim() || null,

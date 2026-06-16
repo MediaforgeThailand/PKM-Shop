@@ -77,6 +77,22 @@ function bangkokDateOffset(days: number) {
   return new Date(ms).toISOString().slice(0, 10);
 }
 
+// Payment card (bank-style frame): a teal header + amount + a "pay before HH:MM"
+// countdown derived from order.payment_due_at, shown above the PromptPay QR image.
+const PAYMENT_ALT = 'ชำระเงิน';
+const PAYMENT_HEADER = 'ชำระเงิน';
+const PAYMENT_SCAN_HINT = 'สแกน QR ด้านบนด้วยแอปธนาคารใดก็ได้';
+const PAYMENT_DUE_PREFIX = 'กรุณาชำระภายใน ';
+
+function bangkokClock(iso: string) {
+  return new Intl.DateTimeFormat('en-GB', {
+    hour: '2-digit',
+    hourCycle: 'h23',
+    minute: '2-digit',
+    timeZone: 'Asia/Bangkok',
+  }).format(new Date(iso));
+}
+
 function requireEnv(key: string) {
   const value = Deno.env.get(key)?.trim();
 
@@ -587,27 +603,49 @@ export function orderQrLineImageMessage(qrUrl: string): LineImageMessage {
 }
 
 export function orderPaymentLineFlexMessage(order: NonNullOrderPanelState): LineFlexMessage {
+  const bodyContents: Record<string, unknown>[] = [
+    {
+      size: 'md',
+      text: order.product_name,
+      type: 'text',
+      weight: 'bold',
+      wrap: true,
+    },
+    {
+      color: '#0F6E56',
+      margin: 'sm',
+      size: 'xl',
+      text: `฿${order.amount_baht.toLocaleString('th-TH')}`,
+      type: 'text',
+      weight: 'bold',
+    },
+    {
+      color: '#8A8F99',
+      margin: 'sm',
+      size: 'xs',
+      text: PAYMENT_SCAN_HINT,
+      type: 'text',
+      wrap: true,
+    },
+  ];
+
+  if (order.payment_due_at) {
+    bodyContents.push({
+      color: '#C0392B',
+      margin: 'md',
+      size: 'sm',
+      text: `${PAYMENT_DUE_PREFIX}${bangkokClock(order.payment_due_at)} น.`,
+      type: 'text',
+      weight: 'bold',
+      wrap: true,
+    });
+  }
+
   return {
-    altText: 'PromptPay QR',
+    altText: PAYMENT_ALT,
     contents: {
       body: {
-        contents: [
-          {
-            size: 'md',
-            text: order.product_name,
-            type: 'text',
-            weight: 'bold',
-            wrap: true,
-          },
-          {
-            color: '#163F34',
-            margin: 'sm',
-            size: 'sm',
-            text: `${order.amount_baht.toLocaleString('th-TH')} THB`,
-            type: 'text',
-            weight: 'bold',
-          },
-        ],
+        contents: bodyContents,
         layout: 'vertical',
         type: 'box',
       },
@@ -619,12 +657,27 @@ export function orderPaymentLineFlexMessage(order: NonNullOrderPanelState): Line
               label: CUSTOMER_PAID_LABEL,
               type: 'postback',
             },
-            color: '#163F34',
+            color: '#0F6E56',
             style: 'primary',
             type: 'button',
           },
         ],
         layout: 'vertical',
+        type: 'box',
+      },
+      header: {
+        backgroundColor: '#0F6E56',
+        contents: [
+          {
+            color: '#FFFFFF',
+            size: 'md',
+            text: PAYMENT_HEADER,
+            type: 'text',
+            weight: 'bold',
+          },
+        ],
+        layout: 'vertical',
+        paddingAll: '14px',
         type: 'box',
       },
       type: 'bubble',

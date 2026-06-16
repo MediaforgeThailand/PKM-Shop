@@ -120,6 +120,7 @@ export type OrderPanelState = {
   branches?: OrderPanelBranch[];
   id: string;
   missing_fields: string[];
+  payment_due_at: string | null;
   payment_provider: 'promptpay' | 'stripe' | null;
   preferred_date: string | null;
   preferred_date_end: string | null;

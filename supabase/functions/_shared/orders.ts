@@ -250,6 +250,21 @@ function recentOrderStatusText(order: Pick<OrderRow, 'booking_at' | 'status'>) {
   return null;
 }
 
+// How long a PromptPay QR stays payable before the order auto-expires. Derived from
+// when the order entered awaiting_payment (its updated_at — nothing else writes the
+// row while it waits), so no extra column is needed.
+export const PAYMENT_WINDOW_MS = 10 * 60 * 1000;
+
+function paymentDueAt(order: Pick<OrderRow, 'status' | 'updated_at'>) {
+  if (order.status !== 'awaiting_payment') {
+    return null;
+  }
+
+  const issuedAt = new Date(order.updated_at).getTime();
+
+  return Number.isNaN(issuedAt) ? null : new Date(issuedAt + PAYMENT_WINDOW_MS).toISOString();
+}
+
 export function toOrderPanel(
   order: OrderWithProductRow | null,
   tenant: Pick<TenantRow, 'promptpay_id'>,
@@ -270,6 +285,7 @@ export function toOrderPanel(
     ...(step === 'branch' && branches.length > 0 ? { branches } : {}),
     id: order.id,
     missing_fields: missingFields,
+    payment_due_at: paymentDueAt(order),
     payment_provider: order.payment_provider ?? null,
     preferred_date: order.preferred_date ?? null,
     preferred_date_end: order.preferred_date_end ?? null,

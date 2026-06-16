@@ -165,6 +165,7 @@ Deno.test('orderPaymentLineFlexMessage builds payment postback button', () => {
     branch_name: 'Demo Branch',
     id: 'order-123',
     missing_fields: [],
+    payment_due_at: '2026-06-16T03:30:00Z',
     payment_provider: null,
     preferred_date: null,
     preferred_date_end: null,
@@ -177,14 +178,17 @@ Deno.test('orderPaymentLineFlexMessage builds payment postback button', () => {
 
   const message = orderPaymentLineFlexMessage(order);
   assertEquals(message.type, 'flex');
-  assertEquals(message.altText, 'PromptPay QR');
 
   const bubble = message.contents as {
     body: { contents: Array<{ text?: string }> };
     footer: { contents: Array<{ action: { data: string; type: string } }> };
+    header: { contents: Array<{ text?: string }> };
   };
+  assertEquals(bubble.header.contents[0].text, 'ชำระเงิน');
   assertEquals(bubble.body.contents[0].text, 'Advanced Checkup');
-  assertEquals(bubble.body.contents[1].text, '3,499 THB');
+  assertEquals(bubble.body.contents[1].text, '฿3,499');
+  // Countdown derived from payment_due_at, rendered in Asia/Bangkok (10:30).
+  assertEquals(bubble.body.contents[3].text, 'กรุณาชำระภายใน 10:30 น.');
   assertEquals(bubble.footer.contents[0].action.type, 'postback');
   assertEquals(bubble.footer.contents[0].action.data, 'payment_done:order-123');
 });
@@ -271,6 +275,7 @@ Deno.test('bookingDateLineFlexMessage builds a bubble of date-range postbacks', 
     branches: [],
     id: 'order-9',
     missing_fields: [],
+    payment_due_at: null,
     payment_provider: null,
     preferred_date: null,
     preferred_date_end: null,
@@ -305,6 +310,7 @@ Deno.test('branchSelectionLineFlexMessage builds carousel with branch postbacks'
     ],
     id: 'order-9',
     missing_fields: [],
+    payment_due_at: null,
     payment_provider: null,
     preferred_date: null,
     preferred_date_end: null,
@@ -343,6 +349,7 @@ Deno.test('branchSelectionLineFlexMessage returns null when there are no branche
     branches: [],
     id: 'order-9',
     missing_fields: [],
+    payment_due_at: null,
     payment_provider: null,
     preferred_date: null,
     preferred_date_end: null,

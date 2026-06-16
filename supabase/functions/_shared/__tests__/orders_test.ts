@@ -94,6 +94,18 @@ Deno.test('toOrderPanel keeps PromptPay QR for default payment orders', () => {
   assert(Boolean(panel?.qr_payload), 'expected PromptPay payload for default order');
 });
 
+Deno.test('toOrderPanel sets a 10-minute payment_due_at for awaiting_payment orders', () => {
+  const panel = toOrderPanel(panelOrder({ updated_at: '2026-06-13T00:00:00.000Z' }), { promptpay_id: '0812345678' });
+
+  assertSame(panel?.payment_due_at, '2026-06-13T00:10:00.000Z', 'expected due time = entered awaiting_payment + 10 min');
+});
+
+Deno.test('toOrderPanel leaves payment_due_at null when not awaiting payment', () => {
+  const panel = toOrderPanel(panelOrder({ status: 'collecting_info' }), { promptpay_id: '0812345678' });
+
+  assertSame(panel?.payment_due_at ?? null, null, 'expected no due time outside awaiting_payment');
+});
+
 Deno.test('canTransition blocks collecting info without buyer name', () => {
   assert(!canTransition(order('collecting_info', { buyer_name: null }), 'awaiting_payment', 'ai'), 'expected missing buyer name to block');
 });
