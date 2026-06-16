@@ -1,4 +1,4 @@
-import { renderPersonalContextRows, renderRecentChatRows } from '../context.ts';
+import { formatCatalogEntries, renderPersonalContextRows, renderRecentChatRows } from '../context.ts';
 import type { ChatMessageRow, FactKeyRow, UserFactRow } from '../types.ts';
 
 declare const Deno: {
@@ -102,4 +102,14 @@ Deno.test('renderPersonalContextRows renders facts, candidate facts, order, then
   assert(lines[1].includes('Boss'), 'expected candidate facts second');
   assert(lines[2].includes('ORDER_CONTEXT'), 'expected active order context third');
   assert(lines[3] === missingConsentLine, 'expected missing consent line last');
+});
+
+Deno.test('formatCatalogEntries omits image url and clips long descriptions', () => {
+  const [entry] = formatCatalogEntries([
+    { catalog_key: 'chk-basic', category: 'checkup', description: 'x'.repeat(500), name: 'Basic', price_baht: 1990 },
+  ]);
+
+  assert(!Object.keys(entry).includes('image'), 'catalog entry must not include an image url');
+  assert(entry.description.length <= 201, 'long description should be clipped to the catalog budget');
+  assert(entry.id === 'chk-basic', 'id should map from catalog_key');
 });
