@@ -1,8 +1,8 @@
 import { Link } from 'expo-router';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   Image,
-  Modal,
+  Linking,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -18,112 +18,85 @@ import Svg, { Circle, Defs, G, Line, LinearGradient, Path, Stop, Text as SvgText
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { MiraDesign, softShadow } from '@/constants/Design';
+import { invokeFunction } from '@/lib/api/client';
 import { useAuthSession } from '@/lib/auth/useAuthSession';
-import { getProductCategoryLabel, loadActiveHospitalProducts, type HospitalProduct } from '@/lib/marketplace/hospitalProducts';
 import {
-  createAccountReferralLink,
-  createAppReferralDeepLink,
-  createProductReferralCode,
-  createReferralAccountFromUser,
-  formatPercent,
-  type ReferralAccount,
-} from '@/lib/marketplace/referralMock';
-import { healthPackages } from '@/services/mockBackend';
-import type { HealthPackage } from '@/domain/health';
+  defaultTenantSlug,
+  getProductCategoryLabel,
+  loadActiveHospitalProducts,
+  type BranchSummary,
+  type HospitalProduct,
+} from '@/lib/marketplace/hospitalProducts';
+import { createReferralAppLink, createReferralShareLink, formatPercent } from '@/lib/marketplace/referralMock';
+import { showcaseDemoCommissions, showcaseDemoProducts, showcaseDemoReferrers, showcaseDemoTenant } from '@/lib/showcase/demoFixtures';
+import { supabase, supabaseConfigStatus } from '@/lib/supabase';
+import type {
+  CommissionEntryRow,
+  OrderPanelBranch,
+  OrderPanelState,
+  ReferralSelfProvisionRequest,
+  ReferralSelfProvisionResponse,
+  ReferrerOrderBranchesResponse,
+  ReferrerOrderRequest,
+  ReferrerOrderResponse,
+  ReferrerRow,
+} from '@/lib/types/api';
 
-const logoPalette = {
-  blue: MiraDesign.color.showcaseBlue,
-  blueDeep: MiraDesign.color.showcaseBlueDeep,
-  blueMid: MiraDesign.color.showcaseCyan,
-  blueSoft: '#BBD8F8',
-  brandWash: MiraDesign.color.showcaseBlueSoft,
-  canvas: MiraDesign.color.showcaseCanvas,
-  line: MiraDesign.color.showcaseLine,
-  mist: MiraDesign.color.showcaseSurface,
-  muted: MiraDesign.color.showcaseNavySoft,
-  text: MiraDesign.color.showcaseNavy,
+const brand = {
+  blue: MiraDesign.color.blue,
+  blueDeep: MiraDesign.color.primaryDeep,
+  blueMid: MiraDesign.color.primary,
+  blueSoft: MiraDesign.color.blueSoft,
+  canvas: MiraDesign.color.blueSoft,
+  line: MiraDesign.color.line,
+  mist: MiraDesign.color.surface,
+  muted: MiraDesign.color.inkSoft,
+  text: MiraDesign.color.ink,
 } as const;
+
+const tabs = [
+  { id: 'products', label: 'สินค้า' },
+  { id: 'referral', label: 'Referral' },
+  { id: 'dashboard', label: 'Dashboard' },
+] as const;
+
+type SalesTab = (typeof tabs)[number]['id'];
 
 const productPreviewImages = {
   blood: require('@/assets/images/sales-package-blood.png'),
   cancer: require('@/assets/images/sales-package-cancer.png'),
-  heart: require('@/assets/images/sales-package-health.png'),
+  health: require('@/assets/images/sales-package-health.png'),
   longevity: require('@/assets/images/sales-package-longevity.png'),
-} satisfies Record<NonNullable<HealthPackage['previewImageKey']>, ImageSourcePropType>;
+} satisfies Record<string, ImageSourcePropType>;
 
-const fallbackCommissionRateByPreviewKey = {
-  blood: 0.02,
-  cancer: 0.04,
-  heart: 0.03,
-  longevity: 0.05,
-} satisfies Record<NonNullable<HealthPackage['previewImageKey']>, number>;
+const productPreviewOrder = ['longevity', 'health', 'cancer', 'blood'] as const;
 
-const salesTabs = [
-  { id: 'products', label: 'สินค้า' },
-  { id: 'referral', label: 'ลิงก์แนะนำ' },
-  { id: 'dashboard', label: 'ยอดขาย' },
-] as const;
-
-type SalesTab = (typeof salesTabs)[number]['id'];
-
-type SalesProduct = {
-  categoryLabel: string;
-  description: string;
-  hospitalName: string;
+type TenantInfo = {
+  display_name: string;
   id: string;
-  imageUri?: string | null;
-  previewKey: NonNullable<HealthPackage['previewImageKey']>;
-  commissionRate: number;
-  priceAmount: number;
-  source: 'hospital_portal' | 'demo';
-  tags: string[];
-  title: string;
 };
 
-type CustomerForm = {
-  age: string;
-  customerEmail: string;
-  customerPhone: string;
-  emergencyContactName: string;
-  emergencyContactPhone: string;
-  firstName: string;
-  gender: string;
-  lastName: string;
-  medicalNotes: string;
-  nationalId: string;
-  note: string;
+type TenantMemberInfo = {
+  role: string;
 };
 
-type PaymentRequest = {
-  backendStatus: 'ready' | 'sent';
-  customerName: string;
-  id: string;
-  product: SalesProduct;
-  qrValue: string;
-  referralCode: string;
+type CommissionWithOrder = CommissionEntryRow & {
+  orders?: {
+    amount_baht: number;
+    products?: {
+      name: string;
+    } | {
+      name: string;
+    }[] | null;
+  } | {
+    amount_baht: number;
+    products?: {
+      name: string;
+    } | {
+      name: string;
+    }[] | null;
+  }[] | null;
 };
-
-type ModalStep = 'form' | 'qr' | 'complete';
-
-const emptyCustomerForm: CustomerForm = {
-  age: '',
-  customerEmail: '',
-  customerPhone: '',
-  emergencyContactName: '',
-  emergencyContactPhone: '',
-  firstName: '',
-  gender: '',
-  lastName: '',
-  medicalNotes: '',
-  nationalId: '',
-  note: '',
-};
-
-const genderOptions = [
-  { label: 'หญิง', value: 'female' },
-  { label: 'ชาย', value: 'male' },
-  { label: 'อื่นๆ', value: 'other' },
-] as const;
 
 type ChartPoint = {
   label: string;
@@ -132,245 +105,589 @@ type ChartPoint = {
   y: number;
 };
 
+function fromJoin<T>(value: T | T[] | null | undefined) {
+  return Array.isArray(value) ? value[0] ?? null : value ?? null;
+}
+
+function formatMoney(value: number) {
+  return `${value.toLocaleString('th-TH')} THB`;
+}
+
+function toOrderPanelBranch(branch: BranchSummary): OrderPanelBranch {
+  return {
+    address: branch.address,
+    district: branch.district,
+    id: branch.id,
+    name: branch.name,
+  };
+}
+
+function activeProductBranches(product: HospitalProduct | null): OrderPanelBranch[] {
+  return product?.branches.filter((branch) => branch.active).map(toOrderPanelBranch) ?? [];
+}
+
+function buyerAgeError(value: string) {
+  const parsed = Number(value.trim());
+
+  return Number.isInteger(parsed) && parsed >= 1 && parsed <= 120 ? null : 'กรุณากรอกอายุ 1-120 ปี';
+}
+
+function digitsOnly(value: string) {
+  return value.replace(/[^\d]/g, '');
+}
+
+function normalizeQuery(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function productMatches(product: HospitalProduct, query: string) {
+  const normalizedQuery = normalizeQuery(query);
+
+  if (!normalizedQuery) {
+    return true;
+  }
+
+  return [product.title, product.catalogKey, product.description, product.category, ...product.tags]
+    .join(' ')
+    .toLowerCase()
+    .includes(normalizedQuery);
+}
+
+function productPreviewKey(product: HospitalProduct, index: number): (typeof productPreviewOrder)[number] {
+  const text = [product.title, product.catalogKey, product.description, product.category, ...product.tags].join(' ').toLowerCase();
+
+  if (/cancer|มะเร็ง/.test(text)) {
+    return 'cancer';
+  }
+
+  if (/blood|lab|diabetes|เบาหวาน|เลือด/.test(text)) {
+    return 'blood';
+  }
+
+  if (/heart|cardio|vaccine|วัคซีน|หัวใจ/.test(text)) {
+    return 'health';
+  }
+
+  if (/executive|longevity|plus|premium/.test(text)) {
+    return 'longevity';
+  }
+
+  return productPreviewOrder[index % productPreviewOrder.length];
+}
+
+function productImageSource(product: HospitalProduct, index: number): ImageSourcePropType {
+  return product.imageUrl ? { uri: product.imageUrl } : productPreviewImages[productPreviewKey(product, index)];
+}
+
+function schemeValueForProduct(referrer: ReferrerRow | null, product: HospitalProduct | null) {
+  if (!referrer || !product) {
+    return null;
+  }
+
+  const value = referrer.commission_scheme.by_category?.[product.category] ?? referrer.commission_scheme.default;
+
+  return {
+    mode: referrer.commission_scheme.mode,
+    value,
+  };
+}
+
+function commissionLabel(referrer: ReferrerRow | null, product: HospitalProduct | null) {
+  const schemeValue = schemeValueForProduct(referrer, product);
+
+  if (!schemeValue) {
+    return '-';
+  }
+
+  return schemeValue.mode === 'percent' ? formatPercent(schemeValue.value) : formatMoney(schemeValue.value);
+}
+
+function estimatedCommission(referrer: ReferrerRow | null, product: HospitalProduct | null) {
+  const schemeValue = schemeValueForProduct(referrer, product);
+
+  if (!schemeValue || !product) {
+    return 0;
+  }
+
+  if (schemeValue.mode === 'flat_baht') {
+    return Math.max(0, Math.round(schemeValue.value));
+  }
+
+  const fraction = Math.abs(schemeValue.value) > 1 ? schemeValue.value / 100 : schemeValue.value;
+
+  return Math.max(0, Math.round(product.priceAmount * fraction));
+}
+
+function statusTone(status: CommissionEntryRow['status']) {
+  if (status === 'paid') {
+    return styles.statusPaid;
+  }
+
+  if (status === 'approved') {
+    return styles.statusApproved;
+  }
+
+  if (status === 'void') {
+    return styles.statusVoid;
+  }
+
+  return styles.statusPending;
+}
+
+function buildTrendRows(commissions: CommissionWithOrder[]) {
+  const monthFormatter = new Intl.DateTimeFormat('en-US', { month: 'short', timeZone: 'Asia/Bangkok' });
+  const now = new Date();
+  const rows = Array.from({ length: 7 }, (_, index) => {
+    const monthDate = new Date(now.getFullYear(), now.getMonth() - (6 - index), 1);
+    const key = `${monthDate.getFullYear()}-${String(monthDate.getMonth() + 1).padStart(2, '0')}`;
+
+    return {
+      key,
+      label: monthFormatter.format(monthDate),
+      value: 0,
+    };
+  });
+
+  for (const entry of commissions) {
+    if (entry.status === 'void') {
+      continue;
+    }
+
+    const createdAt = new Date(entry.created_at);
+    const key = `${createdAt.getFullYear()}-${String(createdAt.getMonth() + 1).padStart(2, '0')}`;
+    const row = rows.find((item) => item.key === key);
+
+    if (row) {
+      row.value += entry.amount_baht;
+    }
+  }
+
+  return rows;
+}
+
+async function copyText(value: string) {
+  await (globalThis as typeof globalThis & { navigator?: { clipboard?: { writeText: (text: string) => Promise<void> } } }).navigator?.clipboard
+    ?.writeText(value)
+    .catch(() => undefined);
+}
+
 export default function SalesPortalScreen() {
   const auth = useAuthSession();
   const { width } = useWindowDimensions();
   const [activeTab, setActiveTab] = useState<SalesTab>('products');
-  const [products, setProducts] = useState<SalesProduct[]>([]);
-  const [isLoadingProducts, setIsLoadingProducts] = useState(true);
-  const [query, setQuery] = useState('');
+  const [tenant, setTenant] = useState<TenantInfo | null>(null);
+  const [memberRole, setMemberRole] = useState<string | null>(null);
+  const [referrer, setReferrer] = useState<ReferrerRow | null>(null);
+  const [products, setProducts] = useState<HospitalProduct[]>([]);
+  const [commissions, setCommissions] = useState<CommissionWithOrder[]>([]);
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
+  const [buyerName, setBuyerName] = useState('');
+  const [buyerPhone, setBuyerPhone] = useState('');
+  const [buyerAge, setBuyerAge] = useState('');
+  const [ageError, setAgeError] = useState<string | null>(null);
+  const [preferredDate, setPreferredDate] = useState('');
+  const [branchChoices, setBranchChoices] = useState<OrderPanelBranch[]>([]);
+  const [selectedBranchId, setSelectedBranchId] = useState('');
+  const [activeOrder, setActiveOrder] = useState<OrderPanelState>(null);
+  const [query, setQuery] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingBranches, setIsLoadingBranches] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isProvisioning, setIsProvisioning] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [isReferralModalVisible, setReferralModalVisible] = useState(false);
-  const [customerForm, setCustomerForm] = useState<CustomerForm>(emptyCustomerForm);
-  const [modalStep, setModalStep] = useState<ModalStep>('form');
-  const [paymentRequest, setPaymentRequest] = useState<PaymentRequest | null>(null);
-  const referralAccount = useMemo(() => createReferralAccountFromUser(auth.user), [auth.user]);
-  const productSource = products.length ? products : isLoadingProducts ? [] : fallbackProducts;
-  const filteredProducts = useMemo(() => filterProducts(productSource, query), [productSource, query]);
-  const selectedProduct = productSource.find((product) => product.id === selectedProductId) ?? null;
+  const [error, setError] = useState<string | null>(null);
+  const isDemoMode = !auth.session || !supabaseConfigStatus.isConfigured;
+  const filteredProducts = useMemo(() => products.filter((product) => productMatches(product, query)), [products, query]);
+  const selectedProduct = products.find((product) => product.id === selectedProductId) ?? products[0] ?? null;
+  const buyerAgeNumber = Number(buyerAge.trim());
+  const hasValidBuyerAge = Number.isInteger(buyerAgeNumber) && buyerAgeNumber >= 1 && buyerAgeNumber <= 120;
+  const selectedBranch = branchChoices.find((branch) => branch.id === selectedBranchId) ?? null;
+  const requiresBranchChoice = branchChoices.length > 1;
+  const referralLink = referrer ? createReferralShareLink(referrer.ref_code) : null;
+  const appLink = referrer ? createReferralAppLink(referrer.ref_code) : null;
   const isCompact = width < 720;
+  const canSelfProvision = Boolean(auth.session && !isDemoMode && tenant && memberRole && !referrer && !isProvisioning);
+  const canCreateOrder = Boolean(
+    selectedProduct &&
+      referrer &&
+      buyerName.trim().length > 1 &&
+      /^0[689]\d{8}$/.test(buyerPhone.trim()) &&
+      hasValidBuyerAge &&
+      !isLoadingBranches &&
+      (!requiresBranchChoice || selectedBranch) &&
+      !isSubmitting,
+  );
+
+  const totals = useMemo(
+    () => ({
+      approved: commissions.filter((entry) => entry.status === 'approved').reduce((sum, entry) => sum + entry.amount_baht, 0),
+      paid: commissions.filter((entry) => entry.status === 'paid').reduce((sum, entry) => sum + entry.amount_baht, 0),
+      pending: commissions.filter((entry) => entry.status === 'pending').reduce((sum, entry) => sum + entry.amount_baht, 0),
+    }),
+    [commissions],
+  );
+
+  const loadSalesPortalData = useCallback(async () => {
+    if (!supabaseConfigStatus.isConfigured || !auth.user) {
+      return;
+    }
+
+    const { data: tenantRow, error: tenantError } = await supabase
+      .from('tenants')
+      .select('id,display_name')
+      .eq('slug', defaultTenantSlug)
+      .maybeSingle();
+
+    if (tenantError || !tenantRow) {
+      throw new Error(tenantError?.message ?? `Tenant "${defaultTenantSlug}" is not available.`);
+    }
+
+    const { data: memberRow, error: memberError } = await supabase
+      .from('tenant_members')
+      .select('role')
+      .eq('tenant_id', (tenantRow as TenantInfo).id)
+      .eq('auth_user_id', auth.user.id)
+      .maybeSingle();
+
+    if (memberError) {
+      throw new Error(memberError.message);
+    }
+
+    const { data: referrerRow, error: referrerError } = await supabase
+      .from('referrers')
+      .select('id,tenant_id,ref_code,name,type,phone,auth_user_id,commission_scheme,active,created_at')
+      .eq('tenant_id', (tenantRow as TenantInfo).id)
+      .eq('auth_user_id', auth.user.id)
+      .eq('active', true)
+      .maybeSingle();
+
+    if (referrerError) {
+      throw new Error(referrerError.message);
+    }
+
+    setTenant(tenantRow as TenantInfo);
+    setMemberRole(String((memberRow as TenantMemberInfo | null)?.role ?? '') || null);
+    setReferrer((referrerRow as ReferrerRow | null) ?? null);
+    setProducts(await loadActiveHospitalProducts(80));
+
+    if (referrerRow) {
+      const { data: commissionRows, error: commissionError } = await supabase
+        .from('commission_entries')
+        .select('id,tenant_id,referrer_id,order_id,scheme_snapshot,amount_baht,status,created_at,orders(amount_baht,products(name))')
+        .eq('referrer_id', (referrerRow as ReferrerRow).id)
+        .order('created_at', { ascending: false })
+        .limit(80);
+
+      if (commissionError) {
+        throw new Error(commissionError.message);
+      }
+
+      setCommissions((commissionRows ?? []) as unknown as CommissionWithOrder[]);
+    } else {
+      setCommissions([]);
+    }
+  }, [auth.user]);
 
   useEffect(() => {
     let isMounted = true;
 
-    loadActiveHospitalProducts(80)
-      .then((items) => {
+    async function boot() {
+      if (auth.isLoading) {
+        return;
+      }
+
+      if (isDemoMode) {
+        setTenant({ display_name: showcaseDemoTenant.display_name, id: showcaseDemoTenant.id });
+        setMemberRole(null);
+        setReferrer(showcaseDemoReferrers[0] ?? null);
+        setProducts(showcaseDemoProducts);
+        setCommissions(showcaseDemoCommissions as unknown as CommissionWithOrder[]);
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        setError(null);
+        await loadSalesPortalData();
+      } catch (loadError) {
         if (isMounted) {
-          setProducts(items.map(toSalesProduct));
+          setError(loadError instanceof Error ? loadError.message : 'Unable to load sales referral workspace.');
         }
-      })
-      .finally(() => {
+      } finally {
         if (isMounted) {
-          setIsLoadingProducts(false);
+          setIsLoading(false);
         }
-      });
+      }
+    }
+
+    void boot();
 
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [auth.isLoading, auth.session, isDemoMode, loadSalesPortalData]);
 
   useEffect(() => {
-    if (!isReferralModalVisible || modalStep !== 'qr' || !paymentRequest || paymentRequest.backendStatus !== 'ready') {
-      return undefined;
+    if (!selectedProductId && products.length > 0) {
+      setSelectedProductId(products[0].id);
+    }
+  }, [products, selectedProductId]);
+
+  useEffect(() => {
+    let isMounted = true;
+    const localBranches = activeProductBranches(selectedProduct);
+
+    setBranchChoices(localBranches);
+    setSelectedBranchId(localBranches.length > 1 ? localBranches[0]?.id ?? '' : '');
+
+    if (!selectedProduct || isDemoMode || !referrer) {
+      setIsLoadingBranches(false);
+      return () => {
+        isMounted = false;
+      };
     }
 
-    const timer = setTimeout(() => {
-      setPaymentRequest((current) => (current && current.id === paymentRequest.id ? { ...current, backendStatus: 'sent' } : current));
-      setModalStep('complete');
-      setMessage(`ส่งข้อมูล order ${paymentRequest.id} ไปหลังบ้านแล้ว`);
-    }, 3200);
+    async function loadBranchesForProduct() {
+      try {
+        setIsLoadingBranches(true);
+        const result = await invokeFunction<ReferrerOrderRequest, ReferrerOrderBranchesResponse>('referrer-order', {
+          action: 'list_branches',
+          catalog_key: selectedProduct.catalogKey,
+          tenant_slug: defaultTenantSlug,
+        });
 
-    return () => clearTimeout(timer);
-  }, [isReferralModalVisible, modalStep, paymentRequest?.backendStatus, paymentRequest?.id]);
+        if (isMounted) {
+          setBranchChoices(result.branches);
+          setSelectedBranchId(result.branches.length > 1 ? result.branches[0]?.id ?? '' : '');
+        }
+      } catch (branchError) {
+        if (isMounted) {
+          setError(branchError instanceof Error ? branchError.message : 'ไม่สามารถโหลดสาขาสำหรับแพ็กเกจนี้ได้');
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingBranches(false);
+        }
+      }
+    }
 
-  function chooseProduct(product: SalesProduct) {
-    setSelectedProductId(product.id);
-    setMessage(null);
-  }
+    void loadBranchesForProduct();
 
-  function openReferralOrder(product: SalesProduct) {
-    setSelectedProductId(product.id);
-    setCustomerForm(emptyCustomerForm);
-    setPaymentRequest(null);
-    setModalStep('form');
-    setReferralModalVisible(true);
-  }
+    return () => {
+      isMounted = false;
+    };
+  }, [isDemoMode, referrer, selectedProduct]);
 
-  function updateCustomerForm(field: keyof CustomerForm, value: string) {
-    const nextValue =
-      field === 'nationalId'
-        ? digitsOnly(value).slice(0, 13)
-        : field === 'age'
-          ? digitsOnly(value).slice(0, 3)
-          : field === 'customerPhone' || field === 'emergencyContactPhone'
-            ? value.replace(/[^\d+\-\s]/g, '').slice(0, 20)
-            : value;
+  async function createOrder() {
+    if (!selectedProduct || !canCreateOrder) {
+      const nextAgeError = buyerAgeError(buyerAge);
 
-    setCustomerForm((current) => ({ ...current, [field]: nextValue }));
-  }
+      if (nextAgeError) {
+        setAgeError(nextAgeError);
+      }
 
-  function submitReferralOrder() {
-    if (!selectedProduct || !referralAccount) {
+      if (requiresBranchChoice && !selectedBranch) {
+        setError('กรุณาเลือกสาขาก่อนสร้าง QR');
+      }
+
       return;
     }
 
-    const referralCode = createProductReferralCode(selectedProduct, referralAccount);
-    const requestId = `MIRA-${Date.now().toString(36).toUpperCase()}`;
-    const patientName = buildCustomerName(customerForm);
-    const qrValue = JSON.stringify({
-      amount: selectedProduct.priceAmount,
-      patient: {
-        age: Number(customerForm.age),
-        email: customerForm.customerEmail.trim() || null,
-        emergencyContactName: customerForm.emergencyContactName.trim() || null,
-        emergencyContactPhone: customerForm.emergencyContactPhone.trim() || null,
-        firstName: customerForm.firstName.trim(),
-        gender: customerForm.gender || null,
-        lastName: customerForm.lastName.trim(),
-        medicalNotes: customerForm.medicalNotes.trim() || null,
-        nationalId: customerForm.nationalId,
-        note: customerForm.note.trim() || null,
-        phone: customerForm.customerPhone.trim(),
-      },
-      productId: selectedProduct.id,
-      referralCode,
-      requestId,
-      type: 'mira_sale_payment_mock',
-    });
+    if (isDemoMode) {
+      const orderId = `demo-sales-order-${Date.now()}`;
 
-    setPaymentRequest({
-      backendStatus: 'ready',
-      customerName: patientName || 'Walk-in patient',
-      id: requestId,
-      product: selectedProduct,
-      qrValue,
-      referralCode,
-    });
-    setModalStep('qr');
+      setActiveOrder({
+        amount_baht: selectedProduct.priceAmount,
+        booking_at: null,
+        branch_name: selectedBranch?.name ?? branchChoices[0]?.name ?? null,
+        id: orderId,
+        missing_fields: [],
+        payment_provider: 'promptpay',
+        preferred_date: preferredDate.trim() || null,
+        preferred_date_end: preferredDate.trim() || null,
+        preferred_time_window: null,
+        product_name: selectedProduct.title,
+        qr_payload: `demo-promptpay:${orderId}:${selectedProduct.priceAmount}`,
+        step: 'qr',
+        status: 'awaiting_payment',
+      });
+      setMessage(`โหมดตัวอย่าง: สร้างออเดอร์ให้ ${buyerName.trim()} แล้ว`);
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      setError(null);
+      setMessage(null);
+      const result = await invokeFunction<ReferrerOrderRequest, ReferrerOrderResponse>('referrer-order', {
+        action: 'create_order',
+        ...(requiresBranchChoice && selectedBranch ? { branch_id: selectedBranch.id } : {}),
+        buyer_age: buyerAgeNumber,
+        buyer_name: buyerName.trim(),
+        buyer_phone: buyerPhone.trim(),
+        catalog_key: selectedProduct.catalogKey,
+        preferred_date: preferredDate.trim() || undefined,
+        tenant_slug: defaultTenantSlug,
+      });
+      setActiveOrder(result.order);
+      setMessage(`สร้างออเดอร์ให้ ${buyerName.trim()} แล้ว`);
+    } catch (createError) {
+      setError(createError instanceof Error ? createError.message : 'ไม่สามารถสร้างออเดอร์ได้');
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
-  if (auth.isLoading) {
-    return (
-      <PageShell>
-        <ReferralBrandHeader />
-        <CenteredCard title="กำลังตรวจบัญชี" body="กำลังเตรียมพอร์ทัลสำหรับทีมขายสินค้าโรงพยาบาล" />
-      </PageShell>
-    );
+  async function markPaymentDone(orderId: string) {
+    if (isDemoMode && activeOrder) {
+      setActiveOrder({ ...activeOrder, step: 'tracking', status: 'submitted' });
+      setMessage('โหมดตัวอย่าง: ส่งสถานะชำระเงินแล้วให้แอดมินตรวจสอบ');
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      setError(null);
+      setMessage(null);
+      const result = await invokeFunction<ReferrerOrderRequest, ReferrerOrderResponse>('referrer-order', {
+        action: 'payment_done',
+        order_id: orderId,
+        tenant_slug: defaultTenantSlug,
+      });
+      setActiveOrder(result.order);
+      setMessage('ส่งสถานะชำระเงินให้แอดมินตรวจสอบแล้ว');
+      await loadSalesPortalData();
+    } catch (paymentError) {
+      setError(paymentError instanceof Error ? paymentError.message : 'ไม่สามารถส่งสถานะชำระเงินได้');
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
-  if (!auth.session) {
-    return (
-      <PageShell>
-        <ReferralBrandHeader />
-        <AccessCard
-          body="เข้าสู่ระบบด้วยบัญชีหมอหรือพนักงานก่อนเปิดสินค้า ลิงก์แนะนำ และแดชบอร์ดค่าคอมมิชชัน"
-          cta="เข้าสู่ระบบทีมขาย"
-          href={{ pathname: '/login', params: { mode: 'referral', redirect: '/sales-portal' } }}
-          title="พอร์ทัลทีมขายหน้างาน"
-        />
-      </PageShell>
-    );
+  async function provisionReferralCode() {
+    if (!canSelfProvision) {
+      return;
+    }
+
+    try {
+      setIsProvisioning(true);
+      setError(null);
+      setMessage(null);
+      const result = await invokeFunction<ReferralSelfProvisionRequest, ReferralSelfProvisionResponse>('referral-self-provision', {
+        tenant_slug: defaultTenantSlug,
+      });
+
+      setMessage(result.created ? 'สร้าง referral code ของฉันเรียบร้อยแล้ว' : 'พบ referral code เดิมของบัญชีนี้แล้ว');
+      await loadSalesPortalData();
+      setActiveTab('referral');
+    } catch (provisionError) {
+      setError(provisionError instanceof Error ? provisionError.message : 'ไม่สามารถสร้าง referral code ได้');
+    } finally {
+      setIsProvisioning(false);
+    }
   }
 
-  if (!referralAccount) {
-    return (
-      <PageShell>
-        <ReferralBrandHeader />
-        <CenteredCard title="บัญชีนี้ยังไม่มีสิทธิ์" body="หน้านี้เปิดให้เฉพาะบัญชีหมอหรือพนักงานเท่านั้น" />
-      </PageShell>
-    );
+  async function copyReferralCode() {
+    if (!referrer) {
+      return;
+    }
+
+    await copyText(referrer.ref_code);
+    setMessage('คัดลอก referral code แล้ว');
+  }
+
+  async function copyReferralLink() {
+    if (!referralLink) {
+      return;
+    }
+
+    await copyText(referralLink);
+    setMessage('คัดลอกลิงก์ referral แล้ว');
+  }
+
+  async function copyAppLink() {
+    if (!appLink) {
+      return;
+    }
+
+    await copyText(appLink);
+    setMessage('คัดลอก deep link แล้ว');
   }
 
   return (
-    <PageShell
-      activeTab={activeTab}
-      onTabChange={(nextTab) => {
-        setActiveTab(nextTab);
-        setMessage(null);
-      }}
-      showTabs
-    >
-      <ReferralBrandHeader />
+    <PageShell activeTab={activeTab} onTabChange={setActiveTab}>
+      <BrandHeader
+        subtitle={referrer ? `${referrer.name} · ${referrer.ref_code}` : isLoading ? 'กำลังโหลด referrer profile' : 'ยังไม่มี referrer profile ที่ผูกกับบัญชีนี้'}
+      />
 
-      {message ? <Text style={styles.messageText}>{message}</Text> : null}
+      {error ? <Banner tone="error" text={error} /> : null}
+      {message ? <Banner tone="success" text={message} /> : null}
+      {isDemoMode ? <Banner tone="success" text="โหมดตัวอย่าง: เปิดดู flow ได้โดยไม่ต้องล็อกอิน และออเดอร์จะไม่ส่งข้อมูลจริง" /> : null}
 
-      {activeTab === 'products' && selectedProduct ? (
-        <ProductDetail
+      {activeTab === 'products' ? (
+        <ProductsPanel
           isCompact={isCompact}
-          onBack={() => setSelectedProductId(null)}
-          onCreateReferral={() => openReferralOrder(selectedProduct)}
-          product={selectedProduct}
-        />
-      ) : null}
-
-      {activeTab === 'products' && !selectedProduct ? (
-        <ProductCatalog
-          isCompact={isCompact}
-          isLoading={isLoadingProducts}
-          onChooseProduct={chooseProduct}
+          isLoading={isLoading}
+          onProductPress={(product) => {
+            setSelectedProductId(product.id);
+            setActiveOrder(null);
+            setError(null);
+          }}
+          onQueryChange={setQuery}
           products={filteredProducts}
           query={query}
-          selectedProductId={selectedProductId}
-          setQuery={setQuery}
+          referrer={referrer}
+          selectedProduct={selectedProduct}
         />
       ) : null}
 
       {activeTab === 'referral' ? (
-        <ReferralGenerator account={referralAccount} isCompact={isCompact} onCopy={(value) => setMessage(`คัดลอกตัวอย่างแล้ว: ${value}`)} />
+        <ReferralPanel
+          appLink={appLink}
+          canSelfProvision={canSelfProvision}
+          isProvisioning={isProvisioning}
+          onCopyCode={() => void copyReferralCode()}
+          onCopyLink={() => void copyReferralLink()}
+          onCopyAppLink={() => void copyAppLink()}
+          onProvision={() => void provisionReferralCode()}
+          referrer={referrer}
+          referralLink={referralLink}
+        />
       ) : null}
 
-      {activeTab === 'dashboard' ? <CommissionDashboard isCompact={isCompact} selectedProduct={selectedProduct} /> : null}
-
-      <ReferralOrderModal
-        form={customerForm}
-        isCompact={isCompact}
-        modalStep={modalStep}
-        onChangeForm={updateCustomerForm}
-        onClose={() => setReferralModalVisible(false)}
-        onSubmit={submitReferralOrder}
-        paymentRequest={paymentRequest}
-        product={selectedProduct}
-        visible={isReferralModalVisible}
-      />
+      {activeTab === 'dashboard' ? (
+        <DashboardPanel commissions={commissions} referrer={referrer} selectedProduct={selectedProduct} totals={totals} />
+      ) : null}
     </PageShell>
   );
 }
 
-function PageShell({
-  activeTab,
-  children,
-  onTabChange,
-  showTabs = false,
-}: {
-  activeTab?: SalesTab;
-  children: ReactNode;
-  onTabChange?: (tab: SalesTab) => void;
-  showTabs?: boolean;
-}) {
-  const { width } = useWindowDimensions();
-  const isCompact = width < 720;
-
+function PageShell({ activeTab, children, onTabChange }: { activeTab: SalesTab; children: ReactNode; onTabChange: (tab: SalesTab) => void }) {
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView
-        contentContainerStyle={[styles.pageContent, isCompact ? styles.pageContentCompact : null, showTabs ? styles.pageContentWithTabs : null]}
-        keyboardShouldPersistTaps="handled"
-        style={styles.pageScroll}
-      >
+      <ScrollView contentContainerStyle={styles.pageContent} keyboardShouldPersistTaps="handled" style={styles.pageScroll}>
         {children}
       </ScrollView>
-      {showTabs && activeTab && onTabChange ? <BottomTabBar activeTab={activeTab} onTabChange={onTabChange} /> : null}
+      <BottomTabs activeTab={activeTab} onTabChange={onTabChange} />
     </SafeAreaView>
   );
 }
 
-function BottomTabBar({ activeTab, onTabChange }: { activeTab: SalesTab; onTabChange: (tab: SalesTab) => void }) {
+function BrandHeader({ subtitle }: { subtitle: string }) {
+  return (
+    <View style={styles.brandHero}>
+      <Image resizeMode="contain" source={require('@/assets/images/mira-care-logo.png')} style={styles.brandLogo} />
+      <Text style={styles.brandProgramText}>referral program</Text>
+      <Text style={styles.brandSubtitle}>{subtitle}</Text>
+    </View>
+  );
+}
+
+function BottomTabs({ activeTab, onTabChange }: { activeTab: SalesTab; onTabChange: (tab: SalesTab) => void }) {
   return (
     <View style={styles.bottomTabShell}>
       <View style={styles.bottomTabBar}>
-        {salesTabs.map((tab) => {
+        {tabs.map((tab) => {
           const isActive = activeTab === tab.id;
 
           return (
@@ -385,562 +702,259 @@ function BottomTabBar({ activeTab, onTabChange }: { activeTab: SalesTab; onTabCh
   );
 }
 
-function AccessCard({ body, cta, href, title }: { body: string; cta: string; href: Parameters<typeof Link>[0]['href']; title: string }) {
-  return (
-    <View style={styles.accessCard}>
-      <Text style={styles.eyebrow}>จำกัดสิทธิ์</Text>
-      <Text style={styles.accessTitle}>{title}</Text>
-      <Text style={styles.accessBody}>{body}</Text>
-      <Link href={href} asChild>
-        <Pressable style={styles.primaryButton}>
-          <Text style={styles.primaryButtonText}>{cta}</Text>
-        </Pressable>
-      </Link>
-    </View>
-  );
-}
-
-function CenteredCard({ body, title }: { body: string; title: string }) {
-  return (
-    <View style={styles.accessCard}>
-      <Text style={styles.accessTitle}>{title}</Text>
-      <Text style={styles.accessBody}>{body}</Text>
-    </View>
-  );
-}
-
-function ReferralBrandHeader() {
-  return (
-    <View style={styles.brandHero}>
-      <Image resizeMode="contain" source={require('@/assets/images/mira-care-logo.png')} style={styles.brandLogo} />
-      <Text style={styles.brandProgramText}>พอร์ทัลแนะนำลูกค้า</Text>
-    </View>
-  );
-}
-
-function ProductCatalog({
+function ProductsPanel({
   isCompact,
   isLoading,
-  onChooseProduct,
+  onProductPress,
+  onQueryChange,
   products,
   query,
-  selectedProductId,
-  setQuery,
+  referrer,
+  selectedProduct,
 }: {
   isCompact: boolean;
   isLoading: boolean;
-  onChooseProduct: (product: SalesProduct) => void;
-  products: SalesProduct[];
+  onProductPress: (product: HospitalProduct) => void;
+  onQueryChange: (value: string) => void;
+  products: HospitalProduct[];
   query: string;
-  selectedProductId: string | null;
-  setQuery: (value: string) => void;
+  referrer: ReferrerRow | null;
+  selectedProduct: HospitalProduct | null;
 }) {
-  const cardWidth: DimensionValue = isCompact ? '100%' : 220;
+  const cardWidth = (isCompact ? '48%' : 220) as DimensionValue;
 
   return (
     <View style={styles.panel}>
       <View style={styles.searchRow}>
         <TextInput
-          onChangeText={setQuery}
+          onChangeText={onQueryChange}
           placeholder="ค้นหาสินค้า โรงพยาบาล หรือหมวดหมู่"
-          placeholderTextColor={logoPalette.muted}
-          style={[styles.searchInput, isCompact ? styles.searchInputCompact : null]}
+          placeholderTextColor={brand.muted}
+          style={styles.searchInput}
           value={query}
         />
-        <Text style={styles.resultCount}>{isLoading ? 'กำลังซิงก์' : `${products.length} รายการ`}</Text>
+        <Text style={styles.resultCount}>{products.length} items</Text>
       </View>
 
       <View style={styles.productGrid}>
-        {products.map((product) => (
-          <SalesProductCard
-            cardWidth={cardWidth}
-            isSelected={selectedProductId === product.id}
-            key={product.id}
-            onPress={() => onChooseProduct(product)}
-            product={product}
-          />
+        {isLoading ? <Text style={styles.emptyBody}>กำลังโหลดสินค้า...</Text> : null}
+        {!isLoading && products.length === 0 ? <Text style={styles.emptyBody}>ยังไม่พบสินค้าที่ตรงกับคำค้น</Text> : null}
+        {products.map((product, index) => (
+          <Pressable
+            key={`${product.id}-${product.catalogKey}-${index}`}
+            onPress={() => onProductPress(product)}
+            style={[styles.productCard, { width: cardWidth }, selectedProduct?.id === product.id ? styles.productCardSelected : null]}
+          >
+            <View style={styles.productImageWrap}>
+              <Image resizeMode="contain" source={productImageSource(product, index)} style={styles.productImage} />
+            </View>
+            <View style={styles.productCardBody}>
+              <Text numberOfLines={2} style={styles.productTitle}>{product.title}</Text>
+              <Text style={styles.productMeta}>{getProductCategoryLabel(product.category)}</Text>
+              <Text style={styles.productPrice}>{formatMoney(product.priceAmount)}</Text>
+              <Text style={styles.productCommission}>{commissionLabel(referrer, product)}</Text>
+            </View>
+          </Pressable>
         ))}
       </View>
-
-      {!isLoading && products.length === 0 ? (
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyTitle}>ไม่พบสินค้า</Text>
-          <Text style={styles.emptyBody}>ลองเปลี่ยนคำค้นหา หรือกลับมาดูอีกครั้งหลัง sync สินค้าจาก hospital portal</Text>
-        </View>
-      ) : null}
     </View>
   );
 }
 
-function SalesProductCard({
-  cardWidth,
-  isSelected,
-  onPress,
-  product,
+function ReferralPanel({
+  appLink,
+  canSelfProvision,
+  isProvisioning,
+  onCopyAppLink,
+  onCopyCode,
+  onCopyLink,
+  onProvision,
+  referrer,
+  referralLink,
 }: {
-  cardWidth: DimensionValue;
-  isSelected: boolean;
-  onPress: () => void;
-  product: SalesProduct;
+  appLink: string | null;
+  canSelfProvision: boolean;
+  isProvisioning: boolean;
+  onCopyAppLink: () => void;
+  onCopyCode: () => void;
+  onCopyLink: () => void;
+  onProvision: () => void;
+  referrer: ReferrerRow | null;
+  referralLink: string | null;
 }) {
   return (
-    <Pressable onPress={onPress} style={[styles.productCard, { width: cardWidth }, isSelected ? styles.productCardSelected : null]}>
-      <View style={styles.imageWrap}>
-        <Image resizeMode="contain" source={product.imageUri ? { uri: product.imageUri } : productPreviewImages[product.previewKey]} style={styles.productImage} />
-      </View>
-      <View style={styles.productCardBody}>
-        <Text numberOfLines={2} style={styles.productTitle}>{product.title}</Text>
-        <Text style={styles.productPrice}>{product.priceAmount.toLocaleString('th-TH')} THB</Text>
-      </View>
-    </Pressable>
-  );
-}
+    <View style={styles.panel}>
+      <View style={styles.card}>
+        <Text style={styles.panelTitle}>Referral link ของคุณ</Text>
+        <Text style={styles.panelBody}>ส่งลิงก์นี้ให้ลูกค้า QR และ copy link ใช้ ref_code จริงของบัญชีที่ล็อกอินอยู่</Text>
 
-function ProductDetail({
-  isCompact,
-  onBack,
-  onCreateReferral,
-  product,
-}: {
-  isCompact: boolean;
-  onBack: () => void;
-  onCreateReferral: () => void;
-  product: SalesProduct;
-}) {
-  const commission = Math.round(product.priceAmount * product.commissionRate);
-
-  return (
-    <View style={styles.detailPage}>
-      <Pressable onPress={onBack} style={styles.backButton}>
-        <Text style={styles.backButtonText}>กลับไปเลือกสินค้า</Text>
-      </Pressable>
-
-      <View style={styles.detailLayout}>
-        <View style={[styles.detailImagePanel, isCompact ? styles.detailImagePanelCompact : null]}>
-          <Image resizeMode="contain" source={product.imageUri ? { uri: product.imageUri } : productPreviewImages[product.previewKey]} style={[styles.detailImage, isCompact ? styles.detailImageCompact : null]} />
-        </View>
-
-        <View style={[styles.detailInfoPanel, isCompact ? styles.detailInfoPanelCompact : null]}>
-          <Text style={styles.detailTitle}>{product.title}</Text>
-          <View style={styles.shopMetaRow}>
-            <Text style={styles.shopMetaText}>คะแนน 4.9</Text>
-            <Text style={styles.shopMetaDivider}>|</Text>
-            <Text style={styles.shopMetaText}>ขายแล้ว 128</Text>
-            <Text style={styles.shopMetaDivider}>|</Text>
-            <Text style={styles.shopMetaText}>พร้อมขายหน้างาน</Text>
-          </View>
-          <Text style={styles.detailPrice}>{product.priceAmount.toLocaleString('th-TH')} THB</Text>
-
-          <View style={styles.commissionStrip}>
-            <View>
-              <Text style={styles.commissionLabel}>ค่าคอมฯ โดยประมาณ</Text>
-              <Text style={styles.commissionValue}>{commission.toLocaleString('th-TH')} THB ต่อออเดอร์</Text>
+        {referrer && referralLink ? (
+          <>
+            <View style={styles.qrBox}>
+              <QRCode backgroundColor="#FFFFFF" color={brand.blueDeep} quietZone={10} size={210} value={referralLink} />
             </View>
-            <Text style={styles.commissionRate}>{formatPercent(product.commissionRate)}</Text>
-          </View>
 
-          <View style={styles.detailSection}>
-            <Text style={styles.detailSectionTitle}>รายละเอียดสินค้า</Text>
-            <Text style={styles.detailDescription}>{product.description}</Text>
-          </View>
+            <View style={styles.codeBox}>
+              <Text style={styles.codeLabel}>Referral code</Text>
+              <Text style={styles.codeText}>{referrer.ref_code}</Text>
+              <Text numberOfLines={2} style={styles.linkText}>{referralLink}</Text>
+            </View>
 
-          <View style={styles.detailSection}>
-            <Text style={styles.detailSectionTitle}>ขั้นตอนหลังลูกค้าชำระเงิน</Text>
-            <Text style={styles.detailDescription}>ระบบ mock จะส่งข้อมูลสินค้า ลูกค้า และ referral code ไปให้หลังบ้านเพื่อสร้าง order และติดตามสถานะการซื้อ</Text>
-          </View>
-
-          <Pressable onPress={onCreateReferral} style={styles.buyReferralButton}>
-            <Text style={styles.buyReferralButtonText}>สร้างรหัสแนะนำ</Text>
-          </Pressable>
-        </View>
-      </View>
-    </View>
-  );
-}
-
-function ReferralOrderModal({
-  form,
-  isCompact,
-  modalStep,
-  onChangeForm,
-  onClose,
-  onSubmit,
-  paymentRequest,
-  product,
-  visible,
-}: {
-  form: CustomerForm;
-  isCompact: boolean;
-  modalStep: ModalStep;
-  onChangeForm: (field: keyof CustomerForm, value: string) => void;
-  onClose: () => void;
-  onSubmit: () => void;
-  paymentRequest: PaymentRequest | null;
-  product: SalesProduct | null;
-  visible: boolean;
-}) {
-  const canSubmit = Boolean(product && isCustomerFormReady(form));
-  const nationalIdHint = form.nationalId.length > 0 && form.nationalId.length < 13 ? `กรอกอีก ${13 - form.nationalId.length} หลัก` : 'ใช้เลข 13 หลักสำหรับส่งหลังบ้านเท่านั้น';
-  const ageHint = form.age.length > 0 && !isValidAge(form.age) ? 'กรอกอายุ 1-120 ปี' : 'ข้อมูลนี้ช่วยหลังบ้านเตรียมการจองให้เหมาะกับผู้ป่วย';
-
-  return (
-    <Modal animationType="fade" onRequestClose={onClose} transparent visible={visible}>
-      <View style={styles.modalBackdrop}>
-        <View style={styles.orderModal}>
-          <ScrollView contentContainerStyle={styles.modalContent} keyboardShouldPersistTaps="handled">
-            <View style={styles.modalHeader}>
-              <View style={styles.modalHeaderCopy}>
-                <Text style={styles.eyebrow}>เช็กเอาต์แนะนำลูกค้า</Text>
-                <Text style={styles.modalTitle}>{product?.title ?? 'เลือกสินค้า'}</Text>
-                <Text style={styles.modalBody}>สร้างออเดอร์ตัวอย่างสำหรับลูกค้า สแกนจ่าย และส่งข้อมูลให้หลังบ้าน</Text>
-              </View>
-              <Pressable onPress={onClose} style={styles.closeButton}>
-                <Text style={styles.closeButtonText}>ปิด</Text>
+            <View style={styles.actionRow}>
+              <Pressable onPress={onCopyCode} style={styles.secondaryAction}>
+                <Text style={styles.secondaryActionText}>Copy code</Text>
+              </Pressable>
+              <Pressable onPress={onCopyLink} style={styles.secondaryAction}>
+                <Text style={styles.secondaryActionText}>Copy link</Text>
               </Pressable>
             </View>
-
-            {modalStep === 'form' ? (
-              <View style={styles.formSection}>
-                <View style={styles.formGrid}>
-                  <View style={[styles.inputGroup, styles.halfInputGroup, isCompact ? styles.fullInputGroup : null]}>
-                    <Text style={styles.inputLabel}>ชื่อ</Text>
-                    <TextInput
-                      onChangeText={(value) => onChangeForm('firstName', value)}
-                      placeholder="เช่น ปวีณา"
-                      placeholderTextColor={logoPalette.muted}
-                      style={styles.formInput}
-                      value={form.firstName}
-                    />
-                  </View>
-
-                  <View style={[styles.inputGroup, styles.halfInputGroup, isCompact ? styles.fullInputGroup : null]}>
-                    <Text style={styles.inputLabel}>นามสกุล</Text>
-                    <TextInput
-                      onChangeText={(value) => onChangeForm('lastName', value)}
-                      placeholder="เช่น ใจดี"
-                      placeholderTextColor={logoPalette.muted}
-                      style={styles.formInput}
-                      value={form.lastName}
-                    />
-                  </View>
-                </View>
-
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>เบอร์โทร</Text>
-                  <TextInput
-                    keyboardType="phone-pad"
-                    onChangeText={(value) => onChangeForm('customerPhone', value)}
-                    placeholder="08x-xxx-xxxx"
-                    placeholderTextColor={logoPalette.muted}
-                    style={styles.formInput}
-                    value={form.customerPhone}
-                  />
-                </View>
-
-                <View style={styles.formGrid}>
-                  <View style={[styles.inputGroup, styles.halfInputGroup, isCompact ? styles.fullInputGroup : null]}>
-                    <Text style={styles.inputLabel}>อายุ</Text>
-                    <TextInput
-                      keyboardType="number-pad"
-                      onChangeText={(value) => onChangeForm('age', value)}
-                      placeholder="เช่น 42"
-                      placeholderTextColor={logoPalette.muted}
-                      style={styles.formInput}
-                      value={form.age}
-                    />
-                    <Text style={[styles.inputHint, form.age.length > 0 && !isValidAge(form.age) ? styles.inputHintError : null]}>{ageHint}</Text>
-                  </View>
-
-                  <View style={[styles.inputGroup, styles.halfInputGroup, isCompact ? styles.fullInputGroup : null]}>
-                    <Text style={styles.inputLabel}>เลขบัตรประชาชน 13 หลัก</Text>
-                    <TextInput
-                      keyboardType="number-pad"
-                      maxLength={13}
-                      onChangeText={(value) => onChangeForm('nationalId', value)}
-                      placeholder="1234567890123"
-                      placeholderTextColor={logoPalette.muted}
-                      style={styles.formInput}
-                      value={form.nationalId}
-                    />
-                    <Text style={[styles.inputHint, form.nationalId.length > 0 && form.nationalId.length < 13 ? styles.inputHintError : null]}>{nationalIdHint}</Text>
-                  </View>
-                </View>
-
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>เพศ (optional)</Text>
-                  <View style={styles.choiceRow}>
-                    {genderOptions.map((option) => {
-                      const isSelected = form.gender === option.value;
-
-                      return (
-                        <Pressable key={option.value} onPress={() => onChangeForm('gender', isSelected ? '' : option.value)} style={[styles.choiceChip, isSelected ? styles.choiceChipActive : null]}>
-                          <Text style={[styles.choiceChipText, isSelected ? styles.choiceChipTextActive : null]}>{option.label}</Text>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                </View>
-
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Email ลูกค้า (optional)</Text>
-                  <TextInput
-                    autoCapitalize="none"
-                    keyboardType="email-address"
-                    onChangeText={(value) => onChangeForm('customerEmail', value)}
-                    placeholder="customer@email.com"
-                    placeholderTextColor={logoPalette.muted}
-                    style={styles.formInput}
-                    value={form.customerEmail}
-                  />
-                </View>
-
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>โรคประจำตัว / แพ้ยา / ยาที่ใช้อยู่ (optional)</Text>
-                  <TextInput
-                    multiline
-                    onChangeText={(value) => onChangeForm('medicalNotes', value)}
-                    placeholder="เช่น เบาหวาน แพ้ penicillin หรือทานยาละลายลิ่มเลือด"
-                    placeholderTextColor={logoPalette.muted}
-                    style={[styles.formInput, styles.noteInput]}
-                    value={form.medicalNotes}
-                  />
-                </View>
-
-                <View style={styles.formGrid}>
-                  <View style={[styles.inputGroup, styles.halfInputGroup, isCompact ? styles.fullInputGroup : null]}>
-                    <Text style={styles.inputLabel}>ผู้ติดต่อฉุกเฉิน (optional)</Text>
-                    <TextInput
-                      onChangeText={(value) => onChangeForm('emergencyContactName', value)}
-                      placeholder="ชื่อผู้ติดต่อ"
-                      placeholderTextColor={logoPalette.muted}
-                      style={styles.formInput}
-                      value={form.emergencyContactName}
-                    />
-                  </View>
-
-                  <View style={[styles.inputGroup, styles.halfInputGroup, isCompact ? styles.fullInputGroup : null]}>
-                    <Text style={styles.inputLabel}>เบอร์ผู้ติดต่อ (optional)</Text>
-                    <TextInput
-                      keyboardType="phone-pad"
-                      onChangeText={(value) => onChangeForm('emergencyContactPhone', value)}
-                      placeholder="08x-xxx-xxxx"
-                      placeholderTextColor={logoPalette.muted}
-                      style={styles.formInput}
-                      value={form.emergencyContactPhone}
-                    />
-                  </View>
-                </View>
-
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>หมายเหตุเพิ่มเติม</Text>
-                  <TextInput
-                    multiline
-                    onChangeText={(value) => onChangeForm('note', value)}
-                    placeholder="เช่น ข้อมูลเอกสาร การติดต่อ หรือคำถามเพิ่มเติม"
-                    placeholderTextColor={logoPalette.muted}
-                    style={[styles.formInput, styles.noteInput]}
-                    value={form.note}
-                  />
-                </View>
-
-                <Pressable disabled={!canSubmit} onPress={onSubmit} style={[styles.modalPrimaryButton, !canSubmit ? styles.modalPrimaryButtonDisabled : null]}>
-                  <Text style={styles.modalPrimaryButtonText}>ตกลงและสร้าง QR จ่ายเงิน</Text>
-                </Pressable>
-              </View>
-            ) : null}
-
-            {modalStep === 'qr' && paymentRequest ? (
-              <View style={styles.paymentSection}>
-                <View style={styles.paymentQrBox}>
-                  <QRCode backgroundColor="#FFFFFF" color={logoPalette.blueDeep} quietZone={10} size={220} value={paymentRequest.qrValue} />
-                </View>
-                <View style={styles.paymentSummary}>
-                  <Text style={styles.paymentTitle}>ให้ลูกค้าสแกนเพื่อจ่าย</Text>
-                  <Text style={styles.paymentAmount}>{paymentRequest.product.priceAmount.toLocaleString('th-TH')} THB</Text>
-                  <Text style={styles.paymentLine}>ออเดอร์: {paymentRequest.id}</Text>
-                  <Text style={styles.paymentLine}>รหัสแนะนำ: {paymentRequest.referralCode}</Text>
-                  <Text style={styles.paymentLine}>ลูกค้า: {paymentRequest.customerName}</Text>
-                </View>
-                <View style={styles.paymentWaitingBox}>
-                  <Text style={styles.paymentWaitingTitle}>รอลูกค้าชำระเงิน</Text>
-                  <Text style={styles.paymentWaitingBody}>เมื่อ payment gateway หรือ backend ยืนยันยอด ระบบจะเปลี่ยนเป็นหน้าสำเร็จอัตโนมัติ</Text>
-                </View>
-              </View>
-            ) : null}
-
-            {modalStep === 'complete' && paymentRequest ? (
-              <View style={styles.completeSection}>
-                <Text style={styles.completeTitle}>ชำระเงินสำเร็จ</Text>
-                <Text style={styles.completeBody}>ระบบตัวอย่างส่งข้อมูลไปให้หลังบ้านแล้ว เพื่อบันทึกการซื้อสินค้าและ attribution จากผู้แนะนำ</Text>
-                <View style={styles.backendStatusBox}>
-                  <Text style={styles.paymentLine}>ออเดอร์: {paymentRequest.id}</Text>
-                  <Text style={styles.paymentLine}>ซิงก์หลังบ้าน: {paymentRequest.backendStatus}</Text>
-                </View>
-                <Pressable onPress={onClose} style={styles.modalPrimaryButton}>
-                  <Text style={styles.modalPrimaryButtonText}>ปิด</Text>
-                </Pressable>
-              </View>
-            ) : null}
-          </ScrollView>
-        </View>
-      </View>
-    </Modal>
-  );
-}
-
-function ReferralGenerator({ account, isCompact, onCopy }: { account: ReferralAccount; isCompact: boolean; onCopy: (value: string) => void }) {
-  const referralLink = createAccountReferralLink(account);
-  const deepLink = createAppReferralDeepLink(account);
-
-  return (
-    <View style={styles.referralLayout}>
-      <View style={[styles.referralCard, isCompact ? styles.referralCardCompact : null]}>
-        <Text style={styles.panelTitle}>ลิงก์แนะนำของคุณ</Text>
-        <Text style={styles.panelBody}>ส่งลิงก์นี้ให้ลูกค้า ถ้ามีแอปอยู่แล้วจะเปิดเข้าแอปพร้อมผูก code ถ้ายังไม่มีแอปจะพาไปหน้าโหลดก่อน</Text>
-        <View style={styles.qrBox}>
-          <QRCode backgroundColor="#FFFFFF" color={logoPalette.blueDeep} quietZone={10} size={220} value={referralLink} />
-        </View>
-        <View style={styles.codeBox}>
-          <Text style={styles.codeLabel}>รหัสแนะนำ</Text>
-          <Text style={styles.codeText}>{account.code}</Text>
-          <Text numberOfLines={2} style={styles.linkText}>{referralLink}</Text>
-        </View>
-        <View style={[styles.actionRow, isCompact ? styles.actionRowCompact : null]}>
-          <Pressable onPress={() => onCopy(account.code)} style={styles.secondaryAction}>
-            <Text style={styles.secondaryActionText}>คัดลอกรหัส</Text>
-          </Pressable>
-          <Pressable onPress={() => onCopy(referralLink)} style={styles.secondaryAction}>
-            <Text style={styles.secondaryActionText}>คัดลอกลิงก์</Text>
-          </Pressable>
-        </View>
+          </>
+        ) : canSelfProvision ? (
+          <View style={styles.selfProvisionBox}>
+            <Text style={styles.selfProvisionTitle}>สร้าง referral code ของฉัน</Text>
+            <Text style={styles.panelBody}>บัญชีนี้เป็นสมาชิกของ tenant แล้ว กดครั้งเดียวเพื่อสร้าง code จริงได้เลย</Text>
+            <Pressable disabled={isProvisioning} onPress={onProvision} style={[styles.primaryAction, isProvisioning ? styles.disabled : null]}>
+              <Text style={styles.primaryActionText}>{isProvisioning ? 'กำลังสร้าง' : 'สร้าง referral code ของฉัน'}</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <View style={styles.selfProvisionBox}>
+            <Text style={styles.selfProvisionTitle}>ยังไม่มี referrer profile</Text>
+            <Text style={styles.panelBody}>ให้ tenant admin เพิ่มบัญชีนี้เป็นสมาชิกหรือเปิด referrer profile ก่อน</Text>
+            <Link href="/admin/referrers" asChild>
+              <Pressable style={styles.secondaryAction}>
+                <Text style={styles.secondaryActionText}>เปิดหน้า Referrers Admin</Text>
+              </Pressable>
+            </Link>
+          </View>
+        )}
       </View>
 
-      <View style={[styles.flowCard, isCompact ? styles.flowCardCompact : null]}>
-        <Text style={styles.panelTitle}>เส้นทางลูกค้า</Text>
+      <View style={styles.card}>
+        <Text style={styles.panelTitle}>Customer flow</Text>
         {[
           'ลูกค้ากด referral link หรือสแกน QR',
-          'ถ้ามีแอปแล้ว เปิดเข้าแอปพร้อมผูกรหัส',
-          'ถ้ายังไม่มีแอป พาไปหน้าโหลดก่อน',
-          'เมื่อลูกค้าซื้อสินค้า ค่าคอมมิชชันจะเข้าบัญชีนี้',
+          'ระบบเปิด /r/<CODE> และบันทึก attribution',
+          'ถ้ามี app แล้วใช้ deep link เข้าสู่ MiraCare',
+          'เมื่อลูกค้าซื้อสินค้า commission จะเข้าบัญชีนี้',
         ].map((step, index) => (
           <View key={step} style={styles.flowStep}>
             <Text style={styles.flowNumber}>{index + 1}</Text>
             <Text style={styles.flowText}>{step}</Text>
           </View>
         ))}
+
         <View style={styles.deepLinkBox}>
-          <Text style={styles.deepLinkLabel}>ดีปลิงก์ตัวอย่าง</Text>
-          <Text style={styles.deepLinkText}>{deepLink}</Text>
+          <Text style={styles.deepLinkLabel}>App deep link</Text>
+          <Text selectable numberOfLines={2} style={styles.deepLinkText}>{appLink ?? 'ยังไม่มี deep link'}</Text>
         </View>
+        {appLink ? (
+          <View style={styles.actionRow}>
+            <Pressable onPress={() => void Linking.openURL(appLink)} style={styles.secondaryAction}>
+              <Text style={styles.secondaryActionText}>เปิดในแอป</Text>
+            </Pressable>
+            <Pressable onPress={onCopyAppLink} style={styles.secondaryAction}>
+              <Text style={styles.secondaryActionText}>Copy deep link</Text>
+            </Pressable>
+          </View>
+        ) : null}
       </View>
     </View>
   );
 }
 
-function CommissionDashboard({
-  isCompact,
+function DashboardPanel({
+  commissions,
+  referrer,
   selectedProduct,
+  totals,
 }: {
-  isCompact: boolean;
-  selectedProduct: SalesProduct | null;
+  commissions: CommissionWithOrder[];
+  referrer: ReferrerRow | null;
+  selectedProduct: HospitalProduct | null;
+  totals: { approved: number; paid: number; pending: number };
 }) {
-  const projectedCommission = selectedProduct ? Math.round(selectedProduct.priceAmount * selectedProduct.commissionRate) : 0;
-  const dashboardPanelStyle = [styles.dashboardPanel, isCompact ? styles.dashboardPanelCompact : null];
-  const statCardStyle = [styles.statCard, isCompact ? styles.statCardCompact : null];
-  const areaTrendRows = [
-    { label: 'Jan', value: 28450 },
-    { label: 'Feb', value: 13600 },
-    { label: 'Mar', value: 15200 },
-    { label: 'Apr', value: 10400 },
-    { label: 'May', value: 23100 },
-    { label: 'Jun', value: 28450 },
-    { label: 'Jul', value: 22100 },
-  ];
-  const funnelRows = [
-    { label: 'ผูก code', value: 42 },
-    { label: 'เริ่ม checkout', value: 18 },
-    { label: 'จ่ายสำเร็จ', value: 11 },
-  ];
-  const maxFunnelValue = Math.max(...funnelRows.map((row) => row.value));
-  const lineChartWidth = 320;
-  const lineChartHeight = 218;
-  const lineChartLeft = 38;
-  const lineChartRight = 304;
-  const lineChartTop = 20;
-  const lineChartBottom = 166;
-  const minAreaTrendValue = Math.min(...areaTrendRows.map((row) => row.value));
-  const maxAreaTrendValue = Math.max(...areaTrendRows.map((row) => row.value));
-  const areaTrendRange = Math.max(maxAreaTrendValue - minAreaTrendValue, 1);
-  const areaTrendPoints: ChartPoint[] = areaTrendRows.map((row, index) => {
-    const x = lineChartLeft + index * ((lineChartRight - lineChartLeft) / Math.max(areaTrendRows.length - 1, 1));
-    const y = lineChartTop + (1 - (row.value - minAreaTrendValue) / areaTrendRange) * (lineChartBottom - lineChartTop);
+  const areaRows = buildTrendRows(commissions);
+  const chartWidth = 320;
+  const chartHeight = 218;
+  const chartLeft = 38;
+  const chartRight = 304;
+  const chartTop = 20;
+  const chartBottom = 166;
+  const minValue = Math.min(...areaRows.map((row) => row.value), 0);
+  const maxValue = Math.max(...areaRows.map((row) => row.value), 1);
+  const valueRange = Math.max(maxValue - minValue, 1);
+  const chartPoints: ChartPoint[] = areaRows.map((row, index) => {
+    const x = chartLeft + index * ((chartRight - chartLeft) / Math.max(areaRows.length - 1, 1));
+    const y = chartTop + (1 - (row.value - minValue) / valueRange) * (chartBottom - chartTop);
 
     return { ...row, x, y };
   });
-  const areaTrendPath = areaTrendPoints.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' ');
-  const areaTrendFillPath = `${areaTrendPath} L ${areaTrendPoints[areaTrendPoints.length - 1].x} ${lineChartBottom} L ${areaTrendPoints[0].x} ${lineChartBottom} Z`;
-  const areaChartGridRows = [
-    { label: '30k', y: lineChartTop },
-    { label: '20k', y: lineChartTop + (lineChartBottom - lineChartTop) / 2 },
-    { label: '10k', y: lineChartBottom },
+  const chartPath = chartPoints.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' ');
+  const chartFillPath = `${chartPath} L ${chartPoints[chartPoints.length - 1].x} ${chartBottom} L ${chartPoints[0].x} ${chartBottom} Z`;
+  const gridRows = [
+    { label: formatMoney(maxValue).replace(' THB', ''), y: chartTop },
+    { label: formatMoney(Math.round(maxValue / 2)).replace(' THB', ''), y: chartTop + (chartBottom - chartTop) / 2 },
+    { label: '0', y: chartBottom },
   ];
-  const stats = [
-    { label: 'ค่าคอมมิชชันเดือนนี้', value: '28,450 THB' },
-    { label: 'ลูกค้าที่ผูกรหัส', value: '42' },
-    { label: 'รอ payout', value: '12,700 THB' },
-    { label: 'Conversion', value: '8.4%' },
-  ];
+  const totalCommission = totals.pending + totals.approved + totals.paid;
+  const conversionBase = commissions.filter((entry) => entry.status !== 'void').length;
+  const paidCount = commissions.filter((entry) => entry.status === 'paid').length;
+  const conversion = conversionBase ? Math.round((paidCount / conversionBase) * 100) : 0;
 
   return (
-    <View style={styles.dashboardStack}>
-      <View style={styles.dashboardGrid}>
-        {stats.map((stat) => (
-          <View key={stat.label} style={statCardStyle}>
-            <Text style={styles.statValue}>{stat.value}</Text>
-            <Text style={styles.statLabel}>{stat.label}</Text>
+    <View style={styles.panel}>
+      <View style={styles.statsGrid}>
+        {[
+          [formatMoney(totalCommission), 'ยอด commission ทั้งหมด'],
+          [String(commissions.length), 'รายการ commission'],
+          [formatMoney(totals.pending), 'รอ payout'],
+          [`${conversion}%`, 'Paid conversion'],
+        ].map(([value, label]) => (
+          <View key={label} style={styles.statCard}>
+            <Text style={styles.statValue}>{value}</Text>
+            <Text style={styles.statLabel}>{label}</Text>
           </View>
         ))}
       </View>
 
-      <View style={dashboardPanelStyle}>
+      <View style={styles.card}>
         <View style={styles.chartHeader}>
           <View>
-            <Text style={styles.panelTitle}>แนวโน้มค่าคอมมิชชัน</Text>
-            <Text style={styles.chartSubtitle}>ยอดสะสมรายเดือนจากออเดอร์ที่มีรหัสแนะนำ</Text>
+            <Text style={styles.panelTitle}>Commission trend</Text>
+            <Text style={styles.panelBody}>ยอดค่าคอมมิชชันจริงจาก commission_entries</Text>
           </View>
-          <Text style={styles.chartTotal}>+18%</Text>
+          <Text style={styles.chartTotal}>{formatMoney(totalCommission)}</Text>
         </View>
 
-        <View style={styles.lineChartCard}>
-          <Svg height={lineChartHeight} viewBox={`0 0 ${lineChartWidth} ${lineChartHeight}`} width="100%">
+        <View style={styles.areaChartCard}>
+          <Svg height={chartHeight} viewBox={`0 0 ${chartWidth} ${chartHeight}`} width="100%">
             <Defs>
               <LinearGradient id="commissionAreaFill" x1="0" x2="0" y1="0" y2="1">
-                <Stop offset="0" stopColor="#4FB9D5" stopOpacity={0.62} />
-                <Stop offset="1" stopColor="#4FB9D5" stopOpacity={0.28} />
+                <Stop offset="0" stopColor={brand.blueMid} stopOpacity={0.62} />
+                <Stop offset="1" stopColor={brand.blueMid} stopOpacity={0.28} />
               </LinearGradient>
             </Defs>
-
-            <SvgText fill={logoPalette.blueDeep} fontSize={11} fontWeight="900" textAnchor="start" x={lineChartLeft} y={12}>
-              COMM.
+            <SvgText fill={brand.blueDeep} fontSize={11} fontWeight="900" textAnchor="start" x={chartLeft} y={12}>
+              COMMISSION
             </SvgText>
-
-            {areaChartGridRows.map((row) => (
+            {gridRows.map((row) => (
               <G key={row.label}>
-                <SvgText fill={logoPalette.muted} fontSize={9} fontWeight="700" textAnchor="end" x={lineChartLeft - 8} y={row.y + 3}>
+                <SvgText fill={brand.muted} fontSize={9} fontWeight="700" textAnchor="end" x={chartLeft - 8} y={row.y + 3}>
                   {row.label}
                 </SvgText>
-                <Line stroke={logoPalette.line} strokeWidth={1} x1={lineChartLeft} x2={lineChartRight} y1={row.y} y2={row.y} />
+                <Line stroke={brand.line} strokeWidth={1} x1={chartLeft} x2={chartRight} y1={row.y} y2={row.y} />
               </G>
             ))}
-            <Line stroke={logoPalette.line} strokeWidth={1} x1={lineChartLeft} x2={lineChartLeft} y1={lineChartTop} y2={lineChartBottom} />
-            <Line stroke={logoPalette.line} strokeWidth={1.4} x1={lineChartLeft} x2={lineChartRight} y1={lineChartBottom} y2={lineChartBottom} />
-            <Path d={areaTrendFillPath} fill="url(#commissionAreaFill)" />
-            <Path d={areaTrendPath} fill="none" stroke="#4FB9D5" strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} />
-            {areaTrendPoints.map((point) => (
-              <Circle cx={point.x} cy={point.y} fill="#FFFFFF" key={`area-dot-${point.label}`} r={3.6} stroke="#4FB9D5" strokeWidth={2.4} />
+            <Line stroke={brand.line} strokeWidth={1} x1={chartLeft} x2={chartLeft} y1={chartTop} y2={chartBottom} />
+            <Line stroke={brand.line} strokeWidth={1.4} x1={chartLeft} x2={chartRight} y1={chartBottom} y2={chartBottom} />
+            <Path d={chartFillPath} fill="url(#commissionAreaFill)" />
+            <Path d={chartPath} fill="none" stroke={brand.blueMid} strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} />
+            {chartPoints.map((point) => (
+              <Circle cx={point.x} cy={point.y} fill="#FFFFFF" key={`area-dot-${point.label}`} r={3.6} stroke={brand.blueMid} strokeWidth={2.4} />
             ))}
-            {areaTrendPoints.map((point) => (
-              <SvgText fill={logoPalette.muted} fontSize={8.5} fontWeight="800" key={`area-label-${point.label}`} textAnchor="middle" x={point.x} y={lineChartBottom + 18}>
+            {chartPoints.map((point) => (
+              <SvgText fill={brand.muted} fontSize={8.5} fontWeight="800" key={`area-label-${point.label}`} textAnchor="middle" x={point.x} y={chartBottom + 18}>
                 {point.label}
               </SvgText>
             ))}
@@ -948,150 +962,90 @@ function CommissionDashboard({
         </View>
 
         <View style={styles.chartLegendRow}>
-          <Text style={styles.chartLegendText}>Jan 28.4k</Text>
-          <Text style={styles.chartLegendText}>Jun 28.4k THB</Text>
+          <Text style={styles.chartLegendText}>{areaRows[0].label} {formatMoney(areaRows[0].value)}</Text>
+          <Text style={styles.chartLegendText}>{areaRows[areaRows.length - 1].label} {formatMoney(areaRows[areaRows.length - 1].value)}</Text>
         </View>
       </View>
 
-      <View style={dashboardPanelStyle}>
+      <View style={styles.card}>
         <View style={styles.chartHeader}>
           <View>
-            <Text style={styles.panelTitle}>ฟันเนลผู้แนะนำ</Text>
-            <Text style={styles.chartSubtitle}>ลูกค้าจากรหัสแนะนำจนถึงจ่ายสำเร็จ</Text>
+            <Text style={styles.panelTitle}>Commission status</Text>
+            <Text style={styles.panelBody}>สถานะจริงจากรายการ commission_entries</Text>
           </View>
-          <Text style={styles.chartTotal}>26%</Text>
+          <Text style={styles.chartTotal}>{commissions.length}</Text>
         </View>
-
-        {funnelRows.map((row) => {
-          const fillWidth = `${Math.max(10, Math.round((row.value / maxFunnelValue) * 100))}%` as DimensionValue;
+        {[
+          ['pending', commissions.filter((entry) => entry.status === 'pending').length],
+          ['approved', commissions.filter((entry) => entry.status === 'approved').length],
+          ['paid', paidCount],
+        ].map(([label, value]) => {
+          const width = `${Math.max(10, Math.round((Number(value) / Math.max(conversionBase, 1)) * 100))}%` as DimensionValue;
 
           return (
-            <View key={row.label} style={styles.funnelRow}>
+            <View key={label} style={styles.funnelRow}>
               <View style={styles.funnelCopy}>
-                <Text style={styles.funnelLabel}>{row.label}</Text>
-                <Text style={styles.funnelValue}>{row.value.toLocaleString('th-TH')}</Text>
+                <Text style={styles.funnelLabel}>{label}</Text>
+                <Text style={styles.funnelValue}>{value}</Text>
               </View>
               <View style={styles.funnelTrack}>
-                <View style={[styles.funnelFill, { width: fillWidth }]} />
+                <View style={[styles.funnelFill, { width }]} />
               </View>
             </View>
           );
         })}
       </View>
 
-      <View style={dashboardPanelStyle}>
-        <Text style={styles.panelTitle}>ค่าคอมฯ ต่อสินค้า</Text>
-        {selectedProduct ? (
-          <>
-            <Text numberOfLines={2} style={styles.dashboardProductName}>{selectedProduct.title}</Text>
-            <Text style={[styles.panelBody, styles.dashboardEstimateText]}>
-              จะได้ค่าคอมมิชชันประมาณ {projectedCommission.toLocaleString('th-TH')} THB ต่อออเดอร์
-            </Text>
-          </>
+      <View style={styles.card}>
+        <Text style={styles.panelTitle}>Selected product estimate</Text>
+        <Text style={styles.panelBody}>
+          {selectedProduct
+            ? `${selectedProduct.title} จะได้ commission ประมาณ ${formatMoney(estimatedCommission(referrer, selectedProduct))} ต่อ order`
+            : 'เลือกสินค้าจาก tab สินค้า เพื่อดู commission estimate รายสินค้า'}
+        </Text>
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.panelTitle}>รายการล่าสุด</Text>
+        {commissions.length === 0 ? (
+          <Text style={styles.panelBody}>รายการจะเกิดหลังมี order ที่ถูกยืนยันโดยแอดมิน</Text>
         ) : (
-          <Text style={[styles.panelBody, styles.dashboardEstimateText]}>เลือกสินค้าจากแท็บสินค้าเพื่อดูค่าคอมมิชชันโดยประมาณรายสินค้า</Text>
+          <View style={styles.commissionList}>
+            {commissions.slice(0, 8).map((entry) => {
+              const order = fromJoin(entry.orders);
+              const product = fromJoin(order?.products);
+
+              return (
+                <View key={entry.id} style={styles.commissionRow}>
+                  <View style={styles.commissionCopy}>
+                    <Text numberOfLines={1} style={styles.commissionTitle}>{product?.name ?? `Order ${entry.order_id.slice(0, 8)}`}</Text>
+                    <Text style={styles.commissionMeta}>{new Date(entry.created_at).toLocaleDateString('th-TH')}</Text>
+                  </View>
+                  <Text style={styles.commissionAmount}>{formatMoney(entry.amount_baht)}</Text>
+                  <View style={[styles.statusChip, statusTone(entry.status)]}>
+                    <Text style={styles.statusText}>{entry.status}</Text>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
         )}
       </View>
     </View>
   );
 }
 
-function filterProducts(products: SalesProduct[], query: string) {
-  const normalizedQuery = query.trim().toLowerCase();
-
-  if (!normalizedQuery) {
-    return products;
-  }
-
-  return products.filter((product) =>
-    [
-      product.title,
-      product.hospitalName,
-      product.categoryLabel,
-      product.description,
-      product.tags.join(' '),
-    ]
-      .join(' ')
-      .toLowerCase()
-      .includes(normalizedQuery),
+function Banner({ text, tone }: { text: string; tone: 'error' | 'success' }) {
+  return (
+    <View style={[styles.banner, tone === 'error' ? styles.errorBanner : styles.successBanner]}>
+      <Text style={[styles.bannerText, tone === 'error' ? styles.errorBannerText : styles.successBannerText]}>{text}</Text>
+    </View>
   );
 }
-
-function buildCustomerName(form: CustomerForm) {
-  return [form.firstName.trim(), form.lastName.trim()].filter(Boolean).join(' ');
-}
-
-function digitsOnly(value: string) {
-  return value.replace(/\D/g, '');
-}
-
-function isCustomerFormReady(form: CustomerForm) {
-  return Boolean(
-    form.firstName.trim() &&
-      form.lastName.trim() &&
-      form.customerPhone.trim() &&
-      isValidAge(form.age) &&
-      form.nationalId.length === 13,
-  );
-}
-
-function isValidAge(value: string) {
-  const age = Number(value);
-
-  return Number.isInteger(age) && age >= 1 && age <= 120;
-}
-
-function toSalesProduct(product: HospitalProduct): SalesProduct {
-  return {
-    categoryLabel: getProductCategoryLabel(product.category),
-    commissionRate: product.commissionRate,
-    description: product.description,
-    hospitalName: product.hospitalName,
-    id: product.id,
-    imageUri: product.productImagePreviewUri,
-    previewKey: inferPreviewKey(product.title, product.category, product.tags),
-    priceAmount: product.priceAmount,
-    source: 'hospital_portal',
-    tags: product.tags.length ? product.tags : ['Hospital product'],
-    title: product.title,
-  };
-}
-
-function inferPreviewKey(title: string, category: string, tags: string[]): NonNullable<HealthPackage['previewImageKey']> {
-  const text = `${title} ${category} ${tags.join(' ')}`.toLowerCase();
-
-  if (text.includes('cancer') || text.includes('tumor') || text.includes('oncology')) {
-    return 'cancer';
-  }
-
-  if (text.includes('longevity') || text.includes('hormone') || text.includes('wellness')) {
-    return 'longevity';
-  }
-
-  if (text.includes('heart') || text.includes('metabolic') || text.includes('cardio')) {
-    return 'heart';
-  }
-
-  return 'blood';
-}
-
-const fallbackProducts: SalesProduct[] = healthPackages.map((product) => ({
-  categoryLabel: product.category,
-  commissionRate: fallbackCommissionRateByPreviewKey[product.previewImageKey ?? 'blood'],
-  description: product.bestFor,
-  hospitalName: product.hospital,
-  id: product.id,
-  imageUri: null,
-  previewKey: product.previewImageKey ?? 'blood',
-  priceAmount: product.price.amount,
-  source: 'demo',
-  tags: product.tags,
-  title: product.title,
-}));
 
 const styles = StyleSheet.create({
   safeArea: {
-    backgroundColor: logoPalette.canvas,
+    backgroundColor: brand.canvas,
     flex: 1,
   },
   pageScroll: {
@@ -1099,89 +1053,543 @@ const styles = StyleSheet.create({
   },
   pageContent: {
     alignSelf: 'center',
-    gap: 16,
+    gap: 12,
     maxWidth: 1180,
     padding: 16,
-    paddingBottom: 24,
+    paddingBottom: 86,
     width: '100%',
-  },
-  pageContentCompact: {
-    gap: 12,
-    padding: 12,
-  },
-  pageContentWithTabs: {
-    paddingBottom: 104,
   },
   brandHero: {
     alignItems: 'center',
-    backgroundColor: logoPalette.brandWash,
+    backgroundColor: brand.blueSoft,
     borderColor: '#FFFFFF',
     borderRadius: 8,
     borderWidth: 1,
-    gap: 8,
+    gap: 6,
     justifyContent: 'center',
-    minHeight: 150,
+    minHeight: 118,
     overflow: 'hidden',
     paddingHorizontal: 18,
-    paddingVertical: 20,
+    paddingVertical: 18,
     ...softShadow,
   },
   brandLogo: {
-    height: 70,
-    maxWidth: 330,
-    width: '86%',
+    height: 58,
+    maxWidth: 280,
+    width: '84%',
   },
   brandProgramText: {
-    color: logoPalette.blueDeep,
-    fontSize: 15,
+    color: brand.blueDeep,
+    fontSize: 13,
     fontWeight: '900',
     textTransform: 'lowercase',
   },
-  eyebrow: {
-    color: logoPalette.blue,
+  brandSubtitle: {
+    color: brand.muted,
+    fontSize: 12,
+    fontWeight: '800',
+    lineHeight: 17,
+    textAlign: 'center',
+  },
+  panel: {
+    gap: 10,
+  },
+  card: {
+    backgroundColor: brand.mist,
+    borderColor: brand.line,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 10,
+    padding: 12,
+  },
+  panelTitle: {
+    color: brand.text,
+    fontSize: 17,
+    fontWeight: '900',
+  },
+  panelBody: {
+    color: brand.muted,
+    fontSize: 12,
+    fontWeight: '800',
+    lineHeight: 18,
+  },
+  banner: {
+    borderRadius: 8,
+    borderWidth: 1,
+    padding: 12,
+  },
+  errorBanner: {
+    backgroundColor: '#FDECEC',
+    borderColor: '#F4BBBB',
+  },
+  successBanner: {
+    backgroundColor: '#E7F4ED',
+    borderColor: '#B8DCCB',
+  },
+  bannerText: {
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  errorBannerText: {
+    color: '#8F2424',
+  },
+  successBannerText: {
+    color: '#1E7C63',
+  },
+  noticeInline: {
+    backgroundColor: '#FFF7DD',
+    borderColor: '#F3D17B',
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 8,
+    padding: 14,
+  },
+  noticeTitle: {
+    color: brand.text,
+    fontSize: 17,
+    fontWeight: '900',
+  },
+  noticeBody: {
+    color: brand.muted,
+    fontSize: 13,
+    fontWeight: '800',
+    lineHeight: 19,
+  },
+  searchRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 8,
+  },
+  searchInput: {
+    backgroundColor: '#FFFFFF',
+    borderColor: brand.line,
+    borderRadius: 8,
+    borderWidth: 1,
+    color: brand.text,
+    flex: 1,
+    fontSize: 13,
+    minHeight: 44,
+    paddingHorizontal: 12,
+  },
+  formInput: {
+    backgroundColor: '#FFFFFF',
+    borderColor: brand.line,
+    borderRadius: 8,
+    borderWidth: 1,
+    color: brand.text,
+    fontSize: 13,
+    minHeight: 44,
+    paddingHorizontal: 12,
+  },
+  inputError: {
+    borderColor: MiraDesign.color.danger,
+  },
+  fieldStack: {
+    gap: 5,
+  },
+  fieldError: {
+    color: MiraDesign.color.danger,
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  resultCount: {
+    color: brand.blue,
     fontSize: 12,
     fontWeight: '900',
-    textTransform: 'uppercase',
   },
-  tabBar: {
-    backgroundColor: logoPalette.mist,
-    borderRadius: 8,
+  productGrid: {
     flexDirection: 'row',
-    gap: 4,
-    padding: 4,
+    flexWrap: 'wrap',
+    gap: 10,
   },
-  tabButton: {
-    alignItems: 'center',
-    borderRadius: 8,
-    flex: 1,
-    minHeight: 42,
-    justifyContent: 'center',
-  },
-  tabButtonActive: {
+  productCard: {
     backgroundColor: '#FFFFFF',
-    borderColor: logoPalette.line,
+    borderColor: brand.line,
+    borderRadius: 8,
     borderWidth: 1,
+    overflow: 'hidden',
   },
-  tabButtonText: {
-    color: logoPalette.muted,
+  productCardSelected: {
+    borderColor: brand.blue,
+    borderWidth: 2,
+  },
+  productImageWrap: {
+    backgroundColor: '#FFFFFF',
+    height: 154,
+  },
+  productImage: {
+    height: '100%',
+    width: '100%',
+  },
+  productImageFallback: {
+    alignItems: 'center',
+    backgroundColor: brand.blueSoft,
+    height: '100%',
+    justifyContent: 'center',
+    padding: 8,
+    width: '100%',
+  },
+  productImageFallbackText: {
+    color: brand.blueDeep,
+    fontSize: 11,
+    fontWeight: '900',
+    textAlign: 'center',
+  },
+  productCardBody: {
+    gap: 5,
+    padding: 9,
+  },
+  productTitle: {
+    color: brand.text,
+    fontSize: 12,
+    fontWeight: '900',
+    lineHeight: 17,
+  },
+  productMeta: {
+    color: brand.muted,
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  productPrice: {
+    color: brand.text,
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  productCommission: {
+    color: '#6A4D00',
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  branchBlock: {
+    gap: 8,
+  },
+  fieldLabel: {
+    color: brand.text,
     fontSize: 13,
     fontWeight: '900',
   },
-  tabButtonTextActive: {
-    color: logoPalette.blue,
+  branchHint: {
+    color: brand.muted,
+    fontSize: 12,
+    fontWeight: '700',
+    lineHeight: 17,
+  },
+  branchStatic: {
+    backgroundColor: '#FFFFFF',
+    borderColor: brand.line,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 4,
+    padding: 10,
+  },
+  branchStaticName: {
+    color: brand.text,
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  branchList: {
+    backgroundColor: '#FFFFFF',
+    borderColor: brand.line,
+    borderRadius: 8,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  estimateBox: {
+    backgroundColor: '#FFFFFF',
+    borderColor: brand.blueSoft,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 4,
+    padding: 11,
+  },
+  estimateValue: {
+    color: brand.blueDeep,
+    fontSize: 20,
+    fontWeight: '900',
+  },
+  primaryAction: {
+    alignItems: 'center',
+    backgroundColor: brand.blue,
+    borderRadius: 8,
+    minHeight: 42,
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+  },
+  primaryActionText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  disabled: {
+    opacity: 0.45,
+  },
+  orderStack: {
+    gap: 10,
+  },
+  qrCaption: {
+    color: brand.muted,
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  qrBox: {
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderColor: brand.line,
+    borderRadius: 8,
+    borderWidth: 1,
+    justifyContent: 'center',
+    padding: 14,
+  },
+  codeBox: {
+    backgroundColor: '#FFFFFF',
+    borderColor: brand.blueSoft,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 4,
+    padding: 11,
+  },
+  codeLabel: {
+    color: brand.blue,
+    fontSize: 10,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+  },
+  codeText: {
+    color: brand.blueDeep,
+    fontSize: 22,
+    fontWeight: '900',
+  },
+  linkText: {
+    color: brand.blue,
+    fontSize: 11,
+    fontWeight: '800',
+    lineHeight: 16,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  secondaryAction: {
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderColor: brand.line,
+    borderRadius: 8,
+    borderWidth: 1,
+    flex: 1,
+    minHeight: 40,
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+  },
+  secondaryActionText: {
+    color: brand.blue,
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  selfProvisionBox: {
+    gap: 10,
+  },
+  selfProvisionTitle: {
+    color: brand.text,
+    fontSize: 15,
+    fontWeight: '900',
+  },
+  flowStep: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 8,
+  },
+  flowNumber: {
+    backgroundColor: brand.blueSoft,
+    borderRadius: 999,
+    color: brand.blue,
+    fontSize: 11,
+    fontWeight: '900',
+    height: 24,
+    lineHeight: 24,
+    textAlign: 'center',
+    width: 24,
+  },
+  flowText: {
+    color: brand.text,
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '800',
+    lineHeight: 17,
+  },
+  deepLinkBox: {
+    backgroundColor: '#FFFFFF',
+    borderColor: brand.line,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 4,
+    padding: 10,
+  },
+  deepLinkLabel: {
+    color: brand.muted,
+    fontSize: 10,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+  },
+  deepLinkText: {
+    color: brand.text,
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  statCard: {
+    backgroundColor: brand.mist,
+    borderColor: brand.line,
+    borderRadius: 8,
+    borderWidth: 1,
+    padding: 12,
+    width: '48%',
+  },
+  statValue: {
+    color: brand.blueDeep,
+    fontSize: 18,
+    fontWeight: '900',
+  },
+  statLabel: {
+    color: brand.muted,
+    fontSize: 11,
+    fontWeight: '800',
+    marginTop: 4,
+  },
+  chartHeader: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: 10,
+    justifyContent: 'space-between',
+  },
+  chartTotal: {
+    color: brand.blue,
+    fontSize: 14,
+    fontWeight: '900',
+  },
+  areaChartCard: {
+    backgroundColor: '#FFFFFF',
+    borderColor: brand.line,
+    borderRadius: 8,
+    borderWidth: 1,
+    overflow: 'hidden',
+    padding: 8,
+  },
+  chartLegendRow: {
+    borderTopColor: brand.line,
+    borderTopWidth: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingTop: 8,
+  },
+  chartLegendText: {
+    color: brand.muted,
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  funnelRow: {
+    gap: 7,
+  },
+  funnelCopy: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  funnelLabel: {
+    color: brand.text,
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  funnelValue: {
+    color: brand.blue,
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  funnelTrack: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 999,
+    height: 10,
+    overflow: 'hidden',
+  },
+  funnelFill: {
+    backgroundColor: brand.blueMid,
+    borderRadius: 999,
+    height: '100%',
+  },
+  commissionList: {
+    gap: 8,
+  },
+  commissionRow: {
+    alignItems: 'center',
+    borderBottomColor: brand.line,
+    borderBottomWidth: 1,
+    flexDirection: 'row',
+    gap: 8,
+    paddingBottom: 8,
+  },
+  commissionCopy: {
+    flex: 1,
+    gap: 2,
+    minWidth: 0,
+  },
+  commissionTitle: {
+    color: brand.text,
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  commissionMeta: {
+    color: brand.muted,
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  commissionAmount: {
+    color: brand.blue,
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  statusChip: {
+    borderRadius: 999,
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+  },
+  statusText: {
+    color: brand.text,
+    fontSize: 10,
+    fontWeight: '900',
+  },
+  statusPaid: {
+    backgroundColor: '#DFF8EC',
+  },
+  statusApproved: {
+    backgroundColor: '#E5F0FF',
+  },
+  statusPending: {
+    backgroundColor: '#FFF4D6',
+  },
+  statusVoid: {
+    backgroundColor: '#F6DCDC',
+  },
+  emptyBody: {
+    color: brand.muted,
+    fontSize: 12,
+    fontWeight: '800',
+    lineHeight: 18,
   },
   bottomTabShell: {
     alignItems: 'center',
-    backgroundColor: logoPalette.canvas,
-    borderTopColor: logoPalette.line,
+    backgroundColor: brand.canvas,
+    borderTopColor: brand.line,
     borderTopWidth: 1,
-    paddingHorizontal: 12,
     paddingBottom: 10,
+    paddingHorizontal: 12,
     paddingTop: 8,
   },
   bottomTabBar: {
     backgroundColor: '#FFFFFF',
-    borderColor: logoPalette.line,
+    borderColor: brand.line,
     borderRadius: 8,
     borderWidth: 1,
     flexDirection: 'row',
@@ -1196,823 +1604,27 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     flex: 1,
     gap: 4,
-    minHeight: 50,
+    minHeight: 48,
     justifyContent: 'center',
   },
   bottomTabButtonActive: {
-    backgroundColor: logoPalette.mist,
+    backgroundColor: brand.blueSoft,
   },
   bottomTabDot: {
-    backgroundColor: '#B9CAE8',
+    backgroundColor: MiraDesign.color.muted,
     borderRadius: 999,
     height: 5,
     width: 18,
   },
   bottomTabDotActive: {
-    backgroundColor: logoPalette.blue,
+    backgroundColor: brand.blue,
   },
   bottomTabText: {
-    color: logoPalette.muted,
-    fontSize: 12,
+    color: brand.muted,
+    fontSize: 11,
     fontWeight: '900',
   },
   bottomTabTextActive: {
-    color: logoPalette.blue,
-  },
-  panel: {
-    gap: 14,
-  },
-  searchRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  searchInput: {
-    backgroundColor: '#FFFFFF',
-    borderColor: logoPalette.line,
-    borderRadius: 8,
-    borderWidth: 1,
-    color: logoPalette.text,
-    flex: 1,
-    fontSize: 15,
-    minHeight: 48,
-    minWidth: 250,
-    paddingHorizontal: 13,
-  },
-  searchInputCompact: {
-    flexBasis: '100%',
-    minWidth: 0,
-    width: '100%',
-  },
-  resultCount: {
-    color: logoPalette.blue,
-    fontSize: 12,
-    fontWeight: '900',
-  },
-  productGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  productCard: {
-    backgroundColor: '#FFFFFF',
-    borderColor: logoPalette.line,
-    borderRadius: 8,
-    borderWidth: 1,
-    overflow: 'hidden',
-  },
-  productCardSelected: {
-    borderColor: logoPalette.blue,
-    borderWidth: 2,
-  },
-  imageWrap: {
-    backgroundColor: '#FFFFFF',
-    height: 154,
-    overflow: 'hidden',
-    padding: 8,
-  },
-  productImage: {
-    height: '100%',
-    width: '100%',
-  },
-  productCardBody: {
-    gap: 6,
-    padding: 10,
-  },
-  productTitle: {
-    color: logoPalette.text,
-    fontSize: 14,
-    fontWeight: '900',
-    lineHeight: 19,
-  },
-  productPrice: {
-    color: logoPalette.text,
-    fontSize: 13,
-    fontWeight: '900',
-  },
-  detailPage: {
-    gap: 12,
-  },
-  backButton: {
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    backgroundColor: '#FFFFFF',
-    borderColor: logoPalette.line,
-    borderRadius: 8,
-    borderWidth: 1,
-    minHeight: 38,
-    justifyContent: 'center',
-    paddingHorizontal: 12,
-  },
-  backButtonText: {
-    color: logoPalette.blue,
-    fontSize: 13,
-    fontWeight: '900',
-  },
-  detailLayout: {
-    alignItems: 'flex-start',
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  detailImagePanel: {
-    backgroundColor: '#FFFFFF',
-    borderColor: logoPalette.line,
-    borderRadius: 8,
-    borderWidth: 1,
-    flex: 1,
-    minWidth: 300,
-    overflow: 'hidden',
-  },
-  detailImagePanelCompact: {
-    flexBasis: '100%',
-    minWidth: 0,
-    width: '100%',
-  },
-  detailImage: {
-    backgroundColor: '#FFFFFF',
-    height: 360,
-    width: '100%',
-  },
-  detailImageCompact: {
-    height: 248,
-  },
-  detailInfoPanel: {
-    backgroundColor: '#FFFFFF',
-    borderColor: logoPalette.line,
-    borderRadius: 8,
-    borderWidth: 1,
-    flex: 1,
-    gap: 12,
-    minWidth: 300,
-    padding: 14,
-  },
-  detailInfoPanelCompact: {
-    flexBasis: '100%',
-    minWidth: 0,
-    width: '100%',
-  },
-  detailTitle: {
-    color: logoPalette.text,
-    fontSize: 24,
-    fontWeight: '900',
-    lineHeight: 30,
-  },
-  shopMetaRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 7,
-  },
-  shopMetaText: {
-    color: logoPalette.muted,
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  shopMetaDivider: {
-    color: '#B9CAE8',
-    fontSize: 12,
-    fontWeight: '900',
-  },
-  detailPrice: {
-    color: logoPalette.blue,
-    fontSize: 26,
-    fontWeight: '900',
-  },
-  commissionStrip: {
-    alignItems: 'center',
-    backgroundColor: logoPalette.mist,
-    borderColor: '#C8DBFF',
-    borderRadius: 8,
-    borderWidth: 1,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 10,
-    padding: 12,
-  },
-  commissionLabel: {
-    color: logoPalette.muted,
-    fontSize: 11,
-    fontWeight: '900',
-    textTransform: 'uppercase',
-  },
-  commissionValue: {
-    color: logoPalette.text,
-    fontSize: 15,
-    fontWeight: '900',
-    marginTop: 3,
-  },
-  commissionRate: {
-    color: logoPalette.blue,
-    fontSize: 20,
-    fontWeight: '900',
-  },
-  detailSection: {
-    borderTopColor: logoPalette.line,
-    borderTopWidth: 1,
-    gap: 6,
-    paddingTop: 12,
-  },
-  detailSectionTitle: {
-    color: logoPalette.text,
-    fontSize: 15,
-    fontWeight: '900',
-  },
-  detailDescription: {
-    color: logoPalette.muted,
-    fontSize: 13,
-    lineHeight: 20,
-  },
-  buyReferralButton: {
-    alignItems: 'center',
-    backgroundColor: logoPalette.blue,
-    borderRadius: 8,
-    minHeight: 52,
-    justifyContent: 'center',
-    paddingHorizontal: 16,
-  },
-  buyReferralButtonText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '900',
-  },
-  referralLayout: {
-    alignItems: 'flex-start',
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 14,
-  },
-  referralCard: {
-    backgroundColor: '#FFFFFF',
-    borderColor: logoPalette.line,
-    borderRadius: 8,
-    borderWidth: 1,
-    flex: 1,
-    gap: 12,
-    minWidth: 300,
-    padding: 14,
-  },
-  referralCardCompact: {
-    flexBasis: '100%',
-    minWidth: 0,
-    width: '100%',
-  },
-  flowCard: {
-    backgroundColor: '#FFFFFF',
-    borderColor: logoPalette.line,
-    borderRadius: 8,
-    borderWidth: 1,
-    flex: 1,
-    gap: 10,
-    minWidth: 300,
-    padding: 14,
-  },
-  flowCardCompact: {
-    flexBasis: '100%',
-    minWidth: 0,
-    width: '100%',
-  },
-  panelTitle: {
-    color: logoPalette.text,
-    fontSize: 18,
-    fontWeight: '900',
-  },
-  panelBody: {
-    color: logoPalette.muted,
-    flexShrink: 1,
-    fontSize: 13,
-    lineHeight: 20,
-  },
-  qrBox: {
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderColor: logoPalette.line,
-    borderRadius: 8,
-    borderWidth: 1,
-    justifyContent: 'center',
-    padding: 16,
-  },
-  codeBox: {
-    backgroundColor: '#F7FBFF',
-    borderColor: logoPalette.blueSoft,
-    borderRadius: 8,
-    borderWidth: 1,
-    gap: 5,
-    padding: 12,
-  },
-  codeLabel: {
-    color: logoPalette.blue,
-    fontSize: 10,
-    fontWeight: '900',
-    textTransform: 'uppercase',
-  },
-  codeText: {
-    color: logoPalette.blueDeep,
-    fontSize: 22,
-    fontWeight: '900',
-  },
-  linkText: {
-    color: logoPalette.blue,
-    fontSize: 12,
-    fontWeight: '700',
-    lineHeight: 17,
-  },
-  actionRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  actionRowCompact: {
-    flexDirection: 'column',
-  },
-  secondaryAction: {
-    alignItems: 'center',
-    backgroundColor: '#F7FBFF',
-    borderColor: logoPalette.line,
-    borderWidth: 1,
-    borderRadius: 8,
-    flex: 1,
-    minHeight: 42,
-    justifyContent: 'center',
-  },
-  secondaryActionText: {
-    color: logoPalette.blue,
-    fontSize: 13,
-    fontWeight: '900',
-  },
-  flowStep: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 10,
-  },
-  flowNumber: {
-    backgroundColor: logoPalette.mist,
-    borderRadius: 999,
-    color: logoPalette.blue,
-    fontSize: 12,
-    fontWeight: '900',
-    height: 28,
-    lineHeight: 28,
-    textAlign: 'center',
-    width: 28,
-  },
-  flowText: {
-    color: logoPalette.text,
-    flex: 1,
-    fontSize: 13,
-    fontWeight: '800',
-    lineHeight: 19,
-  },
-  deepLinkBox: {
-    backgroundColor: logoPalette.mist,
-    borderColor: logoPalette.line,
-    borderRadius: 8,
-    borderWidth: 1,
-    gap: 4,
-    padding: 10,
-  },
-  deepLinkLabel: {
-    color: logoPalette.muted,
-    fontSize: 10,
-    fontWeight: '900',
-    textTransform: 'uppercase',
-  },
-  deepLinkText: {
-    color: logoPalette.text,
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  dashboardStack: {
-    gap: 10,
-    width: '100%',
-  },
-  dashboardGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    width: '100%',
-  },
-  statCard: {
-    backgroundColor: '#F7FBFF',
-    borderColor: logoPalette.line,
-    borderRadius: 8,
-    borderWidth: 1,
-    flexGrow: 1,
-    minWidth: 170,
-    padding: 13,
-  },
-  statCardCompact: {
-    flexGrow: 0,
-    minWidth: 0,
-    width: '100%',
-  },
-  statValue: {
-    color: logoPalette.blueDeep,
-    fontSize: 20,
-    fontWeight: '900',
-  },
-  statLabel: {
-    color: logoPalette.muted,
-    fontSize: 12,
-    fontWeight: '800',
-    marginTop: 4,
-  },
-  dashboardPanel: {
-    backgroundColor: '#F7FBFF',
-    borderColor: logoPalette.line,
-    borderRadius: 8,
-    borderWidth: 1,
-    flexGrow: 1,
-    gap: 9,
-    minWidth: 300,
-    padding: 14,
-  },
-  dashboardPanelCompact: {
-    flexGrow: 0,
-    minWidth: 0,
-    width: '100%',
-  },
-  dashboardProductName: {
-    color: logoPalette.muted,
-    flexShrink: 1,
-    fontSize: 12,
-    fontWeight: '800',
-    lineHeight: 18,
-    width: '100%',
-  },
-  dashboardEstimateText: {
-    width: '100%',
-  },
-  chartHeader: {
-    alignItems: 'flex-start',
-    flexDirection: 'row',
-    gap: 10,
-    justifyContent: 'space-between',
-  },
-  chartSubtitle: {
-    color: logoPalette.muted,
-    fontSize: 12,
-    fontWeight: '800',
-    lineHeight: 18,
-    marginTop: 3,
-  },
-  chartTotal: {
-    color: logoPalette.blue,
-    fontSize: 15,
-    fontWeight: '900',
-  },
-  lineChartCard: {
-    backgroundColor: '#FFFFFF',
-    borderColor: logoPalette.line,
-    borderRadius: 8,
-    borderWidth: 1,
-    overflow: 'hidden',
-    padding: 8,
-  },
-  chartLegendRow: {
-    borderTopColor: logoPalette.line,
-    borderTopWidth: 1,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingTop: 9,
-  },
-  chartLegendText: {
-    color: logoPalette.muted,
-    fontSize: 11,
-    fontWeight: '800',
-  },
-  funnelRow: {
-    gap: 7,
-  },
-  funnelCopy: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  funnelLabel: {
-    color: logoPalette.text,
-    fontSize: 13,
-    fontWeight: '900',
-  },
-  funnelValue: {
-    color: logoPalette.blue,
-    fontSize: 13,
-    fontWeight: '900',
-  },
-  funnelTrack: {
-    backgroundColor: logoPalette.mist,
-    borderRadius: 999,
-    height: 11,
-    overflow: 'hidden',
-  },
-  funnelFill: {
-    backgroundColor: logoPalette.blueMid,
-    borderRadius: 999,
-    height: '100%',
-  },
-  activityRow: {
-    alignItems: 'center',
-    borderBottomColor: logoPalette.line,
-    borderBottomWidth: 1,
-    flexDirection: 'row',
-    gap: 10,
-    paddingBottom: 9,
-  },
-  activityCopy: {
-    flex: 1,
-    gap: 3,
-  },
-  activityOrder: {
-    color: logoPalette.text,
-    fontSize: 13,
-    fontWeight: '900',
-  },
-  activityProduct: {
-    color: logoPalette.muted,
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  activityAmount: {
-    color: logoPalette.blue,
-    fontSize: 13,
-    fontWeight: '900',
-  },
-  messageText: {
-    color: logoPalette.blue,
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  emptyState: {
-    backgroundColor: '#FFFFFF',
-    borderColor: logoPalette.line,
-    borderRadius: 8,
-    borderWidth: 1,
-    gap: 4,
-    padding: 14,
-  },
-  emptyTitle: {
-    color: logoPalette.text,
-    fontSize: 15,
-    fontWeight: '900',
-  },
-  emptyBody: {
-    color: logoPalette.muted,
-    fontSize: 13,
-    lineHeight: 19,
-  },
-  modalBackdrop: {
-    alignItems: 'center',
-    backgroundColor: 'rgba(16,42,95,0.42)',
-    flex: 1,
-    justifyContent: 'center',
-    padding: 16,
-  },
-  orderModal: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-    maxHeight: '92%',
-    maxWidth: 520,
-    overflow: 'hidden',
-    width: '100%',
-  },
-  modalContent: {
-    gap: 14,
-    padding: 16,
-  },
-  modalHeader: {
-    alignItems: 'flex-start',
-    flexDirection: 'row',
-    gap: 12,
-    justifyContent: 'space-between',
-  },
-  modalHeaderCopy: {
-    flex: 1,
-    gap: 4,
-  },
-  modalTitle: {
-    color: logoPalette.text,
-    fontSize: 20,
-    fontWeight: '900',
-    lineHeight: 26,
-  },
-  modalBody: {
-    color: logoPalette.muted,
-    fontSize: 13,
-    lineHeight: 19,
-  },
-  closeButton: {
-    alignItems: 'center',
-    backgroundColor: logoPalette.mist,
-    borderRadius: 8,
-    minHeight: 36,
-    justifyContent: 'center',
-    paddingHorizontal: 11,
-  },
-  closeButtonText: {
-    color: logoPalette.text,
-    fontSize: 12,
-    fontWeight: '900',
-  },
-  formSection: {
-    gap: 12,
-  },
-  formGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  inputGroup: {
-    gap: 6,
-  },
-  halfInputGroup: {
-    flex: 1,
-    minWidth: 150,
-  },
-  fullInputGroup: {
-    flexBasis: '100%',
-    minWidth: 0,
-    width: '100%',
-  },
-  inputLabel: {
-    color: logoPalette.text,
-    fontSize: 13,
-    fontWeight: '900',
-  },
-  formInput: {
-    backgroundColor: '#FFFFFF',
-    borderColor: logoPalette.line,
-    borderRadius: 8,
-    borderWidth: 1,
-    color: logoPalette.text,
-    fontSize: 15,
-    minHeight: 46,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  inputHint: {
-    color: logoPalette.muted,
-    fontSize: 11,
-    fontWeight: '700',
-    lineHeight: 16,
-  },
-  inputHintError: {
-    color: '#B45309',
-  },
-  choiceRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  choiceChip: {
-    backgroundColor: logoPalette.mist,
-    borderColor: logoPalette.line,
-    borderRadius: 8,
-    borderWidth: 1,
-    minHeight: 38,
-    justifyContent: 'center',
-    paddingHorizontal: 12,
-  },
-  choiceChipActive: {
-    backgroundColor: '#E2ECFF',
-    borderColor: logoPalette.blue,
-  },
-  choiceChipText: {
-    color: logoPalette.muted,
-    fontSize: 12,
-    fontWeight: '900',
-  },
-  choiceChipTextActive: {
-    color: logoPalette.blue,
-  },
-  noteInput: {
-    minHeight: 84,
-    textAlignVertical: 'top',
-  },
-  modalPrimaryButton: {
-    alignItems: 'center',
-    backgroundColor: logoPalette.blue,
-    borderRadius: 8,
-    minHeight: 50,
-    justifyContent: 'center',
-    paddingHorizontal: 14,
-  },
-  modalPrimaryButtonDisabled: {
-    backgroundColor: '#BFD0EF',
-  },
-  modalPrimaryButtonText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '900',
-  },
-  paymentSection: {
-    gap: 13,
-  },
-  paymentQrBox: {
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderColor: logoPalette.line,
-    borderRadius: 8,
-    borderWidth: 1,
-    padding: 16,
-  },
-  paymentSummary: {
-    backgroundColor: logoPalette.mist,
-    borderColor: logoPalette.line,
-    borderRadius: 8,
-    borderWidth: 1,
-    gap: 5,
-    padding: 12,
-  },
-  paymentTitle: {
-    color: logoPalette.text,
-    fontSize: 16,
-    fontWeight: '900',
-  },
-  paymentAmount: {
-    color: logoPalette.blue,
-    fontSize: 24,
-    fontWeight: '900',
-  },
-  paymentLine: {
-    color: logoPalette.muted,
-    fontSize: 13,
-    fontWeight: '800',
-    lineHeight: 19,
-  },
-  paymentWaitingBox: {
-    backgroundColor: logoPalette.mist,
-    borderColor: '#C8DBFF',
-    borderRadius: 8,
-    borderWidth: 1,
-    gap: 5,
-    padding: 12,
-  },
-  paymentWaitingTitle: {
-    color: logoPalette.blue,
-    fontSize: 15,
-    fontWeight: '900',
-  },
-  paymentWaitingBody: {
-    color: logoPalette.muted,
-    fontSize: 13,
-    fontWeight: '800',
-    lineHeight: 19,
-  },
-  completeSection: {
-    gap: 12,
-  },
-  completeTitle: {
-    color: logoPalette.blue,
-    fontSize: 22,
-    fontWeight: '900',
-  },
-  completeBody: {
-    color: logoPalette.muted,
-    fontSize: 14,
-    lineHeight: 21,
-  },
-  backendStatusBox: {
-    backgroundColor: logoPalette.mist,
-    borderColor: logoPalette.line,
-    borderRadius: 8,
-    borderWidth: 1,
-    gap: 5,
-    padding: 12,
-  },
-  accessCard: {
-    alignSelf: 'center',
-    backgroundColor: '#FFFFFF',
-    borderColor: logoPalette.line,
-    borderRadius: 8,
-    borderWidth: 1,
-    gap: 12,
-    maxWidth: 520,
-    padding: 18,
-    width: '100%',
-    ...softShadow,
-  },
-  accessTitle: {
-    color: logoPalette.text,
-    fontSize: 24,
-    fontWeight: '900',
-    lineHeight: 30,
-  },
-  accessBody: {
-    color: logoPalette.muted,
-    fontSize: 14,
-    lineHeight: 21,
-  },
-  primaryButton: {
-    alignItems: 'center',
-    backgroundColor: logoPalette.blue,
-    borderRadius: 8,
-    minHeight: 48,
-    justifyContent: 'center',
-    paddingHorizontal: 16,
-  },
-  primaryButtonText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '900',
+    color: brand.blue,
   },
 });

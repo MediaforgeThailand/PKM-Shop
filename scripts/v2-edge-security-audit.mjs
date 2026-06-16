@@ -19,6 +19,10 @@ const files = {
   orders: 'supabase/functions/_shared/orders.ts',
   pdpaDelete: 'supabase/functions/pdpa-delete/index.ts',
   pdpaExport: 'supabase/functions/pdpa-export/index.ts',
+  referralBind: 'supabase/functions/referral-bind/index.ts',
+  referralBindShared: 'supabase/functions/_shared/referralBind.ts',
+  referralSelfProvision: 'supabase/functions/referral-self-provision/index.ts',
+  referralSelfProvisionShared: 'supabase/functions/_shared/referralSelfProvision.ts',
   referrerOrder: 'supabase/functions/referrer-order/index.ts',
   stripe: 'supabase/functions/_shared/stripe.ts',
   stripeCheckout: 'supabase/functions/stripe-checkout/index.ts',
@@ -40,6 +44,8 @@ const v2EdgeFunctions = {
   labConfirm: files.labConfirm,
   pdpaDelete: files.pdpaDelete,
   pdpaExport: files.pdpaExport,
+  referralBind: files.referralBind,
+  referralSelfProvision: files.referralSelfProvision,
   referrerOrder: files.referrerOrder,
   stripeCheckout: files.stripeCheckout,
   stripePromptpayQr: files.stripePromptpayQr,
@@ -260,6 +266,20 @@ expect(
     sources.referrerOrder.includes('referrer_id: referrer.id') &&
     sources.referrerOrder.includes('referrer_id: `eq.${referrer.id}`'),
   'referrer assisted orders must credit the authenticated referrer directly and scope payment_done to that referrer',
+);
+
+expect(
+  'referral self-provision member gate',
+  sources.referralSelfProvision.includes('resolveAuthUser(req.headers.get') &&
+    sources.referralSelfProvision.includes('assertTenant(body.tenant_slug)') &&
+    sources.referralSelfProvision.includes('handleReferralSelfProvision') &&
+    sources.referralSelfProvisionShared.includes("selectOne<TenantMemberRecord>('tenant_members'") &&
+    sources.referralSelfProvisionShared.includes("selectOne<ReferrerRow>('referrers'") &&
+    sources.referralSelfProvisionShared.includes("insertRow<ReferrerRow>('referrers'") &&
+    sources.referralSelfProvisionShared.includes('Only tenant members can create their own referral code.') &&
+    sources.referralSelfProvisionShared.includes("type: 'staff'") &&
+    !sources.referralSelfProvisionShared.includes('commission_scheme:'),
+  'referral-self-provision must require a Supabase JWT, enforce tenant membership, reuse existing referrers, and insert active staff referrers with DB default commission/code',
 );
 
 expect(

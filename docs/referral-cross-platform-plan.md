@@ -206,8 +206,8 @@ commission creation on admin confirm, `referrer-order`. LINE simply feeds the ex
 
 ## 8. DoD checklist (fill ✅/❌ + date in each Task PR)
 
-- [ ] T1. Native attribution store persists + reads `ref_code`; read is async; web unchanged.
-- [ ] T2. `mirahealth://` unified; smart landing routes web/app/LINE + renders 3 CTAs; cold-start handled.
-- [ ] T3. LIFF route + `line-referral-bind` verify ID token and credit referrer; orchestrateLine threads `ref_code`.
-- [ ] T4. sales-portal uses real referrer + `referrer-order` + single share link; mock generator retired.
-- [ ] T5. typecheck + v2:verify green; tests added; line-setup.md + v2 plan §10 updated.
+- [x] ✅ 2026-06-16 — T1. Native attribution store persists + reads `ref_code`; read is async; web cookie/localStorage path remains covered.
+- [ ] ❌ 2026-06-16 — T2. `mirahealth://` and app-link config/link audit are in place, but the LINE/3-CTA smart landing and live OS app-link routing remain pending owner config.
+- [ ] ❌ 2026-06-16 — T3. LIFF route + `line-referral-bind` remain pending; this PR does not implement the LINE owner-console work.
+- [ ] ❌ 2026-06-16 — T4. sales-portal is wired to real referrer data, self-provision, `referrer-order`, single `EXPO_PUBLIC_WEB_ORIGIN` share link/QR, and real `commission_entries`; live assisted-order/admin-queue E2E still needs to be rerun after deployment.
+- [ ] ❌ 2026-06-16 — T5. `typecheck` + `v2:verify` are green and referral tests/audits were added; LINE setup docs/v2 §10 bookkeeping are still pending with the LIFF task.

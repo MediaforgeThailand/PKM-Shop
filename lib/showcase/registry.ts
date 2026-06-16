@@ -80,7 +80,7 @@ export const showcaseModuleMeta: Record<ShowcaseModuleId, ShowcaseModuleMeta> = 
     eyebrow_en: 'Growth engine',
     id: 'referral',
     script_th: [
-      'เปิดลิงก์ referral เพื่อโชว์ว่าระบบบันทึก code ก่อนส่งลูกค้าเข้าหน้ารวม',
+      'เปิด sales-portal เพื่อให้ทีมขายหรือหมอสร้าง referral code จริง แล้วคัดลอกลิงก์หรือ QR ให้ลูกค้า',
       'เปิด workspace ของ partner เพื่อสร้างออเดอร์ช่วยลูกค้าและดูยอด commission',
       'เปิดหน้า admin referrers เพื่อให้โรงพยาบาลเห็นการจัดการพาร์ทเนอร์และ commission',
     ],
@@ -132,19 +132,6 @@ export const showcaseEntries: readonly ShowcaseEntry[] = [
   },
   {
     auth: 'none',
-    demoOrder: 1,
-    description_th: 'หน้านี้บันทึก referral code ลงเครื่องลูกค้า เพื่อผูก attribution กับการซื้อที่เข้าเงื่อนไข.',
-    href: { pathname: '/r/[ref_code]', params: { ref_code: 'DRNOK2' } },
-    id: 'referral-public-entry',
-    label_en: 'Referral Link Entry',
-    label_th: 'ลิงก์แนะนำลูกค้า',
-    module: 'referral',
-    path: '/r/DRNOK2',
-    poster: null,
-    status: 'live',
-  },
-  {
-    auth: 'none',
     demoOrder: 2,
     description_th: 'พื้นที่ partner เปิดดูตัวอย่างได้ทันทีโดยไม่ต้องล็อกอิน ใช้เลือกแพ็กเกจ กรอกข้อมูลผู้ซื้อ สร้างออเดอร์เดโม และดู commission.',
     href: '/partner',
@@ -171,7 +158,7 @@ export const showcaseEntries: readonly ShowcaseEntry[] = [
   },
   {
     auth: 'none',
-    demoOrder: 4,
+    demoOrder: 1,
     description_th: 'พื้นที่ขายของทีมโรงพยาบาลสำหรับดูสินค้า สร้างลิงก์ referral และติดตาม commission ใน flow เดียว.',
     href: '/sales-portal',
     id: 'referral-sales-portal',

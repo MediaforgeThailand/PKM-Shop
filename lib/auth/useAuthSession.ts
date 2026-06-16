@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import { supabase, supabaseConfigStatus } from '@/lib/supabase';
+import { bindStoredReferralToCustomer } from '@/lib/referrals/bind';
 
 import type { Session, User } from '@supabase/supabase-js';
 
@@ -234,6 +235,8 @@ async function ensureCustomerAccount(user: User, options: AuthAccessOptions) {
     // waiting to be applied.
     console.warn('customer account claim skipped:', error.message);
   }
+
+  await bindStoredReferralToCustomer(options.tenantSlug ?? defaultTenantSlug);
 }
 
 async function ensureStaffAccount(user: User, options: AuthAccessOptions) {
