@@ -23,6 +23,7 @@ import {
   loadOrderForPanel,
   missingOrderFields,
   ORDER_WITH_PRODUCT_SELECT,
+  PAYMENT_WINDOW_MS,
   paymentSlipStoragePath,
   toOrderPanel,
   transition,
@@ -274,8 +275,38 @@ async function createSlipUpload({
   };
 }
 
+// Auto-expire an unpaid order once its 10-minute payment window lapses (measured from
+// when it entered awaiting_payment = its updated_at). Cancels via the sanctioned
+// transition path so the customer is unblocked to book again and the QR stops being
+// re-shown. Best-effort: a failed cancel just leaves the order as-is for this turn.
+async function expireOverduePayment(
+  order: OrderWithProductRow | null,
+  tenant: TenantRow,
+): Promise<OrderWithProductRow | null> {
+  if (!order || order.status !== 'awaiting_payment') {
+    return order;
+  }
+
+  const issuedAt = new Date(order.updated_at).getTime();
+
+  if (Number.isNaN(issuedAt) || Date.now() - issuedAt < PAYMENT_WINDOW_MS) {
+    return order;
+  }
+
+  try {
+    await transition(order.id, 'cancelled', 'customer');
+    console.warn('payment_expired_cancelled', { orderId: order.id, tenantId: tenant.id });
+
+    return null;
+  } catch (error) {
+    console.warn('payment_expiry_cancel_failed', error instanceof Error ? error.message : error);
+
+    return order;
+  }
+}
+
 async function refreshActiveOrder(session: ChatSessionRow, tenant: TenantRow): Promise<ChatOrchestratorResponse> {
-  const order = await loadActiveOrder(session.id, tenant.id);
+  const order = await expireOverduePayment(await loadActiveOrder(session.id, tenant.id), tenant);
 
   return {
     cards: [],
@@ -1178,7 +1209,10 @@ async function completeChatTurn({
     await ensureHealthDataCollectionConsent(customer, tenant);
   }
 
-  let activeOrder = actionResult.order ?? await loadActiveOrder(session.id, tenant.id);
+  let activeOrder = await expireOverduePayment(
+    actionResult.order ?? await loadActiveOrder(session.id, tenant.id),
+    tenant,
+  );
 
   // V3-7 (LINE): record any typed buyer info / confirmation BEFORE building the
   // prompt context, so the order state the model sees is current — it can read the
