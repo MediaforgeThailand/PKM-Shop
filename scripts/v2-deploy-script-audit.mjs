@@ -11,6 +11,8 @@ const expectedFunctions = [
   'admin-line-reply',
   'admin-stripe-product-sync',
   'referrer-order',
+  'referral-bind',
+  'referral-self-provision',
   'line-webhook',
   'stripe-checkout',
   'stripe-promptpay-qr',

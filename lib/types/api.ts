@@ -343,6 +343,26 @@ export type ReferrerOrderResponse = {
   referrer: Pick<ReferrerRow, 'id' | 'name' | 'ref_code'>;
 };
 
+export type ReferralBindRequest = {
+  ref_code: string;
+  tenant_slug: string;
+};
+
+export type ReferralBindResponse = {
+  already_referred: boolean;
+  bound: boolean;
+};
+
+export type ReferralSelfProvisionRequest = {
+  tenant_slug: string;
+};
+
+export type ReferralSelfProvisionResponse = {
+  created: boolean;
+  ref_code: string;
+  referrer_id: string;
+};
+
 export type LabIngestRequest = {
   collected_date?: string;
   customer_id: string;

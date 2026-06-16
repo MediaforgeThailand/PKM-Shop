@@ -43,6 +43,8 @@ const productionFiles = [
   'lib/health/labConfirm.ts',
   'lib/health/v2HealthDashboard.ts',
   'lib/marketplace/hospitalProducts.ts',
+  'lib/referrals/attribution.ts',
+  'lib/referrals/bind.ts',
 ];
 
 const forbidden = [
@@ -189,13 +191,33 @@ const requiredSnippets = [
   },
   {
     relativePath: 'app/r/[ref_code].tsx',
-    snippet: 'storeReferralCode(refCode)',
+    snippet: 'await storeReferralCode(refCode)',
     message: 'referral landing route must persist the normalized referral code before chat',
   },
   {
+    relativePath: 'app/r/[ref_code].tsx',
+    snippet: 'await bindStoredReferralToCustomer();',
+    message: 'referral landing route must bind immediately when a customer session already exists',
+  },
+  {
     relativePath: 'lib/ai/miraChat.ts',
-    snippet: 'ref_code: readStoredReferralCode() ?? undefined',
+    snippet: 'const refCode = await readStoredReferralCode();',
     message: 'chat orchestrator request must forward a stored referral code when present',
+  },
+  {
+    relativePath: 'lib/referrals/attribution.ts',
+    snippet: 'export async function clearStoredReferralCode()',
+    message: 'referral attribution storage must be clearable after a successful bind',
+  },
+  {
+    relativePath: 'lib/referrals/bind.ts',
+    snippet: "invokeFunction<ReferralBindRequest, ReferralBindResponse>('referral-bind'",
+    message: 'referral attribution bind must call the trusted referral-bind edge function',
+  },
+  {
+    relativePath: 'lib/auth/useAuthSession.ts',
+    snippet: 'await bindStoredReferralToCustomer(options.tenantSlug ?? defaultTenantSlug);',
+    message: 'customer login/signup must bind a stored referral code immediately after account claim',
   },
   {
     relativePath: 'components/chat/MessageBubble.tsx',
