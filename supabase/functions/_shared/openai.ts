@@ -262,8 +262,14 @@ export async function callOrderFieldExtractor(message: string) {
       preferred_date: {
         type: ['string', 'null'],
       },
+      preferred_date_end: {
+        type: ['string', 'null'],
+      },
+      preferred_time_window: {
+        type: ['string', 'null'],
+      },
     },
-    required: ['buyer_age', 'buyer_name', 'buyer_phone', 'confirmed', 'preferred_date'],
+    required: ['buyer_age', 'buyer_name', 'buyer_phone', 'confirmed', 'preferred_date', 'preferred_date_end', 'preferred_time_window'],
     type: 'object',
   };
   const payload = await postResponses(
@@ -271,7 +277,7 @@ export async function callOrderFieldExtractor(message: string) {
       input: [
         {
           content:
-            'Extract only explicitly stated order form fields from the Thai user message. Do not infer. buyer_age must be a numeric age in years when explicit, otherwise null. preferred_date must be ISO YYYY-MM-DD when explicit enough, otherwise null. Set confirmed to true ONLY when the message simply approves or agrees that previously provided booking details are correct (e.g. "ใช่", "ถูกต้อง", "ยืนยัน", "โอเค") and provides no new details; otherwise false.',
+            'Extract only explicitly stated order form fields from the Thai user message. Do not infer. buyer_age must be a numeric age in years when explicit, otherwise null. preferred_date is the earliest convenient booking date as ISO YYYY-MM-DD when explicit enough, otherwise null. preferred_date_end is the latest date of a stated range (e.g. "20-25 มิ.ย.") as ISO YYYY-MM-DD, otherwise null. preferred_time_window is a short Thai phrase for the time of day when stated (e.g. "ช่วงเช้า", "บ่าย", "หลังเลิกงาน"), otherwise null. Set confirmed to true ONLY when the message simply approves or agrees that previously provided booking details are correct (e.g. "ใช่", "ถูกต้อง", "ยืนยัน", "โอเค") and provides no new details; otherwise false.',
           role: 'system',
         },
         {
@@ -313,6 +319,14 @@ export async function callOrderFieldExtractor(message: string) {
       preferred_date:
         typeof parsed.preferred_date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(parsed.preferred_date)
           ? parsed.preferred_date
+          : undefined,
+      preferred_date_end:
+        typeof parsed.preferred_date_end === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(parsed.preferred_date_end)
+          ? parsed.preferred_date_end
+          : undefined,
+      preferred_time_window:
+        typeof parsed.preferred_time_window === 'string' && parsed.preferred_time_window.trim()
+          ? parsed.preferred_time_window.trim().slice(0, 120)
           : undefined,
     };
   } catch {

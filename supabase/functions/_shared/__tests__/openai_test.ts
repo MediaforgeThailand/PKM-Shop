@@ -84,6 +84,48 @@ Deno.test('callOrderFieldExtractor reports confirmation', async () => {
   );
 });
 
+Deno.test('callOrderFieldExtractor extracts a preferred date range and window', async () => {
+  await withStubbedExtraction(
+    JSON.stringify({
+      buyer_age: null,
+      buyer_name: null,
+      buyer_phone: null,
+      confirmed: false,
+      preferred_date: '2026-06-20',
+      preferred_date_end: '2026-06-25',
+      preferred_time_window: 'ช่วงเช้า',
+    }),
+    async () => {
+      const extracted = await callOrderFieldExtractor('สะดวก 20-25 มิ.ย. ช่วงเช้า');
+
+      assertEquals(extracted.preferred_date, '2026-06-20');
+      assertEquals(extracted.preferred_date_end, '2026-06-25');
+      assertEquals(extracted.preferred_time_window, 'ช่วงเช้า');
+    },
+  );
+});
+
+Deno.test('callOrderFieldExtractor drops a malformed preferred_date_end', async () => {
+  await withStubbedExtraction(
+    JSON.stringify({
+      buyer_age: null,
+      buyer_name: null,
+      buyer_phone: null,
+      confirmed: false,
+      preferred_date: '2026-06-20',
+      preferred_date_end: 'next week',
+      preferred_time_window: null,
+    }),
+    async () => {
+      const extracted = await callOrderFieldExtractor('20 มิ.ย. เป็นต้นไป');
+
+      assertEquals(extracted.preferred_date, '2026-06-20');
+      assertEquals(extracted.preferred_date_end, undefined);
+      assertEquals(extracted.preferred_time_window, undefined);
+    },
+  );
+});
+
 Deno.test('callOrderFieldExtractor confirmed defaults false', async () => {
   await withStubbedExtraction(
     JSON.stringify({ buyer_age: null, buyer_name: 'Somchai', buyer_phone: null, preferred_date: null }),

@@ -76,6 +76,13 @@ const actionSchema = z.discriminatedUnion('type', [
   }),
   z.object({
     order_id: z.string().uuid(),
+    preferred_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    preferred_date_end: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    preferred_time_window: z.string().min(1).max(120).optional(),
+    type: z.literal('set_booking_window'),
+  }),
+  z.object({
+    order_id: z.string().uuid(),
     slip_path: z.string().optional(),
     type: z.literal('payment_done'),
   }),
@@ -486,6 +493,34 @@ async function handleAction({
         text: ORDER_INFO_COMPLETE_NOTICE_TH,
       },
     };
+  }
+
+  if (action.type === 'set_booking_window') {
+    const existingOrder = await loadOrderForPanel(action.order_id, tenant.id);
+
+    assertOrderBelongsToSession(existingOrder, {
+      customerId: customer.id,
+      sessionId,
+    });
+
+    if (existingOrder?.status !== 'collecting_info') {
+      throw new HttpError('VALIDATION', 'This order is not waiting for buyer information.', 400);
+    }
+
+    await updateOrderFields(action.order_id, {
+      customerId: customer.id,
+      sessionId,
+      tenantId: tenant.id,
+    }, {
+      preferred_date: action.preferred_date,
+      preferred_date_end: action.preferred_date_end,
+      preferred_time_window: action.preferred_time_window,
+    });
+
+    // Return the order (no canned line) so the turn runs through the model and
+    // Mira acknowledges the chosen window and keeps collecting the rest. The QR is
+    // still gated by the confirm step — the date window is additive, never a blocker.
+    return { order: await loadOrderForPanel(action.order_id, tenant.id) };
   }
 
   if (action.type === 'payment_done') {
@@ -1031,7 +1066,9 @@ async function updateCollectingOrderFromMessage(order: OrderWithProductRow | nul
     extracted.buyer_age !== undefined ||
     Boolean(extracted.buyer_name) ||
     Boolean(extracted.buyer_phone) ||
-    Boolean(extracted.preferred_date);
+    Boolean(extracted.preferred_date) ||
+    Boolean(extracted.preferred_date_end) ||
+    Boolean(extracted.preferred_time_window);
 
   if (hasNewFields) {
     const updated = await updateOrderFields(order.id, {

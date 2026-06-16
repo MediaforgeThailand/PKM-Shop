@@ -1,4 +1,5 @@
 import {
+  bookingDateLineFlexMessage,
   branchSelectionLineFlexMessage,
   categoryLineFlexMessage,
   linePostbackToAction,
@@ -227,6 +228,70 @@ Deno.test('linePostbackToAction maps branch selection postback', () => {
 
   assertEquals(action.order_id, 'order-9');
   assertEquals(action.branch_id, 'branch-a');
+});
+
+Deno.test('linePostbackToAction maps a date-range preset postback', () => {
+  const parsed = linePostbackToAction('set_date:order-9:week');
+  const action = parsed.action;
+
+  if (!action || action.type !== 'set_booking_window') {
+    throw new Error('expected set_booking_window action');
+  }
+
+  assertEquals(action.order_id, 'order-9');
+  assertEquals(typeof action.preferred_date, 'string');
+  assertEquals(/^\d{4}-\d{2}-\d{2}$/.test(action.preferred_date ?? ''), true);
+  assertEquals(/^\d{4}-\d{2}-\d{2}$/.test(action.preferred_date_end ?? ''), true);
+});
+
+Deno.test('linePostbackToAction maps the "later" date option to a time-window note', () => {
+  const parsed = linePostbackToAction('set_date:order-9:later');
+  const action = parsed.action;
+
+  if (!action || action.type !== 'set_booking_window') {
+    throw new Error('expected set_booking_window action');
+  }
+
+  assertEquals(action.preferred_date, undefined);
+  assertEquals(action.preferred_date_end, undefined);
+  assertEquals(Boolean(action.preferred_time_window), true);
+});
+
+Deno.test('linePostbackToAction ignores an unknown date key', () => {
+  const parsed = linePostbackToAction('set_date:order-9:bogus');
+
+  assertEquals(parsed.action, null);
+});
+
+Deno.test('bookingDateLineFlexMessage builds a bubble of date-range postbacks', () => {
+  const order: NonNullable<OrderPanelState> = {
+    amount_baht: 1590,
+    booking_at: null,
+    branch_name: null,
+    branches: [],
+    id: 'order-9',
+    missing_fields: [],
+    payment_provider: null,
+    preferred_date: null,
+    preferred_date_end: null,
+    preferred_time_window: null,
+    product_name: 'Checkup',
+    step: 'form',
+    status: 'collecting_info',
+  };
+
+  const message = bookingDateLineFlexMessage(order);
+
+  assertEquals(message.type, 'flex');
+
+  const bubble = message.contents as {
+    footer: { contents: Array<{ action: { data: string; type: string } }> };
+    type: string;
+  };
+  assertEquals(bubble.type, 'bubble');
+  assertEquals(bubble.footer.contents.length, 5);
+  assertEquals(bubble.footer.contents[0].action.type, 'postback');
+  assertEquals(bubble.footer.contents[0].action.data, 'set_date:order-9:asap');
 });
 
 Deno.test('branchSelectionLineFlexMessage builds carousel with branch postbacks', () => {
