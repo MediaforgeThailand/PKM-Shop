@@ -757,12 +757,13 @@ body{margin:0;background:#fff;font-family:'Anuphan',system-ui,sans-serif;-webkit
         </div>
         <div style="background:#fff;border-radius:20px;padding:26px;box-shadow:0 30px 60px -20px rgba(8,20,60,.5)">
           <div style="display:flex;flex-direction:column;gap:12px">
-            <input placeholder="ชื่อ-นามสกุล" style="border:1px solid #e3eafa;border-radius:11px;padding:13px 15px;font-size:15px;font-family:inherit;outline:none">
-            <input placeholder="เบอร์โทร / LINE ID" style="border:1px solid #e3eafa;border-radius:11px;padding:13px 15px;font-size:15px;font-family:inherit;outline:none">
-            <input type="email" placeholder="อีเมล" style="border:1px solid #e3eafa;border-radius:11px;padding:13px 15px;font-size:15px;font-family:inherit;outline:none">
-            <input placeholder="ชื่อธุรกิจ" style="border:1px solid #e3eafa;border-radius:11px;padding:13px 15px;font-size:15px;font-family:inherit;outline:none">
-            <input placeholder="เว็บไซต์บริษัท (ไม่บังคับ)" style="border:1px solid #e3eafa;border-radius:11px;padding:13px 15px;font-size:15px;font-family:inherit;outline:none">
-            <button style="border:none;background:linear-gradient(135deg,#2563eb,#38bdf8);color:#fff;padding:14px;border-radius:11px;font-weight:700;font-size:16px;font-family:inherit;cursor:pointer;box-shadow:0 14px 30px -12px rgba(37,99,235,.6)">นัด Demo</button>
+            <input data-f="name" placeholder="ชื่อ-นามสกุล" style="border:1px solid #e3eafa;border-radius:11px;padding:13px 15px;font-size:15px;font-family:inherit;outline:none">
+            <input data-f="contact" placeholder="เบอร์โทร / LINE ID" style="border:1px solid #e3eafa;border-radius:11px;padding:13px 15px;font-size:15px;font-family:inherit;outline:none">
+            <input data-f="email" type="email" placeholder="อีเมล" style="border:1px solid #e3eafa;border-radius:11px;padding:13px 15px;font-size:15px;font-family:inherit;outline:none">
+            <input data-f="company" placeholder="ชื่อธุรกิจ" style="border:1px solid #e3eafa;border-radius:11px;padding:13px 15px;font-size:15px;font-family:inherit;outline:none">
+            <input data-f="website" placeholder="เว็บไซต์บริษัท (ไม่บังคับ)" style="border:1px solid #e3eafa;border-radius:11px;padding:13px 15px;font-size:15px;font-family:inherit;outline:none">
+            <button data-f-submit style="border:none;background:linear-gradient(135deg,#2563eb,#38bdf8);color:#fff;padding:14px;border-radius:11px;font-weight:700;font-size:16px;font-family:inherit;cursor:pointer;box-shadow:0 14px 30px -12px rgba(37,99,235,.6)">นัด Demo</button>
+            <div data-f-note style="display:none;text-align:center;font-size:13px;font-weight:600;line-height:1.5"></div>
             <div style="text-align:center;font-size:12px;color:#9aa8c2">เราจะไม่ส่งสแปม และเก็บข้อมูลของคุณเป็นความลับ</div>
           </div>
         </div>
@@ -842,9 +843,52 @@ class Component extends DCLogic {
       this._admin();
       this._lineoa();
       this._appflow();
+      this._form();
       var em=document.querySelector('[data-email]');
-      if(em && em.getAttribute('data-set')!=='1'){ var addr='info'+'@'+'mediaforge.co'; em.textContent=addr; em.setAttribute('data-set','1'); var lk=document.querySelector('[data-emaillink]'); if(lk) lk.href='mailto:'+addr; }
+      if(em && em.getAttribute('data-set')!=='1'){ var addr='taksin.taeprasert'+'@'+'gmail.com'; em.textContent=addr; em.setAttribute('data-set','1'); var lk=document.querySelector('[data-emaillink]'); if(lk) lk.href='mailto:'+addr; }
     },30);
+  }
+  _form(){
+    var btn=document.querySelector('[data-f-submit]');
+    if(!btn || btn.__bound) return; btn.__bound=1;
+    var note=document.querySelector('[data-f-note]');
+    var KEY='d46bfb35-733a-4c27-8242-c24c68a6653f';
+    var RCPT='taksin.taeprasert@gmail.com';
+    var val=function(k){ var el=document.querySelector('[data-f="'+k+'"]'); return el?el.value.trim():''; };
+    var say=function(m,ok){ if(!note) return; note.textContent=m; note.style.display='block'; note.style.color=ok?'#16a34a':'#dc2626'; };
+    var mailto=function(d){
+      var body='ชื่อ: '+d.name+'\nเบอร์/LINE: '+d.contact+'\nอีเมล: '+d.email+'\nธุรกิจ: '+d.company+'\nเว็บไซต์: '+d.website;
+      window.location.href='mailto:'+RCPT+'?subject='+encodeURIComponent('Mira — ขอนัด Demo')+'&body='+encodeURIComponent(body);
+      say('เปิดแอปอีเมลแล้ว — ถ้าไม่ขึ้น ส่งมาที่ '+RCPT, true);
+    };
+    btn.addEventListener('click', function(e){
+      e.preventDefault();
+      var d={ name:val('name'), contact:val('contact'), email:val('email'), company:val('company'), website:val('website') };
+      if(!d.name || (!d.contact && !d.email)){ say('กรอกชื่อ และเบอร์หรืออีเมล อย่างน้อย 1 ช่อง', false); return; }
+      var label=btn.textContent; btn.disabled=true; btn.textContent='กำลังส่ง…';
+      fetch('https://api.web3forms.com/submit',{
+        method:'POST',
+        headers:{'Content-Type':'application/json',Accept:'application/json'},
+        body:JSON.stringify({
+          access_key:KEY,
+          subject:'Mira — ขอนัด Demo (จากเว็บ)',
+          from_name:'Mira Landing',
+          replyto:d.email||'',
+          'ชื่อ-นามสกุล':d.name,
+          'เบอร์/LINE':d.contact,
+          'อีเมล':d.email,
+          'ชื่อธุรกิจ':d.company,
+          'เว็บไซต์':d.website
+        })
+      }).then(function(r){ return r.json().then(function(o){ return {ok:r.ok,o:o}; }); })
+        .then(function(res){
+          if(!res.ok || !res.o.success) throw new Error((res.o&&res.o.message)||'fail');
+          ['name','contact','email','company','website'].forEach(function(k){ var el=document.querySelector('[data-f="'+k+'"]'); if(el) el.value=''; });
+          say('ส่งคำขอเรียบร้อย — ทีมงานจะติดต่อกลับภายใน 24 ชม.', true);
+        })
+        .catch(function(err){ console.error('[form]',err); mailto(d); })
+        .then(function(){ btn.disabled=false; btn.textContent=label; });
+    });
   }
   _drawChart(){
     const line=document.querySelector('[data-km-line]');
