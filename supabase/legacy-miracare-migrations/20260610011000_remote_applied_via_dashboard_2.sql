@@ -1,3 +1,0 @@
--- Placeholder: this migration version was applied directly to the remote project
--- (outside the repo) before local history caught up. Kept empty so local and
--- remote migration histories align. Do not add statements here.
