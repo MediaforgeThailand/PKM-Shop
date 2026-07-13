@@ -16,7 +16,9 @@ declare const Deno: {
   serve: (handler: (req: Request) => Response | Promise<Response>) => void;
 };
 
-const IMAGE = z.object({ image_base64: z.string().min(1), content_type: z.enum(['image/jpeg', 'image/png', 'image/webp']) });
+// Cap base64 length BEFORE decode (~5MB binary ≈ 6.9MB base64) so an oversized payload is
+// rejected by zod up front instead of OOM-decoding the whole string (audit: image DoS).
+const IMAGE = z.object({ image_base64: z.string().min(1).max(7_000_000), content_type: z.enum(['image/jpeg', 'image/png', 'image/webp']) });
 
 const schema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('create_category'), tenant_slug: z.string().min(1), name: z.string().trim().min(1).max(60), sort: z.number().int().min(0).max(9999).optional() }),

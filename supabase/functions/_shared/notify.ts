@@ -95,12 +95,21 @@ async function sendOne(params: {
     );
     notifId = row?.id ?? null;
   } catch (error) {
-    // Duplicate (already sent) — skip silently. Anything else: log and move on.
     if (error instanceof HttpError && error.status === 409) {
+      // Row already exists (dedup). Re-drive delivery if the earlier attempt never reached LINE
+      // (status pending/failed) — otherwise a transient push failure would be lost forever.
+      const existing = await selectOne<{ id: string; status: string }>('notifications', {
+        tenant_id: `eq.${params.tenantId}`, dedup_key: `eq.${params.dedupKey}`, select: 'id,status', limit: '1',
+      }).catch(() => null);
+      if (existing && existing.status !== 'sent' && params.lineUserId) {
+        notifId = existing.id; // fall through to (re)push below
+      } else {
+        return;
+      }
+    } else {
+      console.warn('notify_insert_failed', error instanceof Error ? error.message : error);
       return;
     }
-    console.warn('notify_insert_failed', error instanceof Error ? error.message : error);
-    return;
   }
 
   if (!params.lineUserId || !notifId) {

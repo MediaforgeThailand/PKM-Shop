@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../lib/supabase';
 import { catalogAction, fileToImagePayload, invokeFn, uploadToBucket } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
-import { EmptyState, Field, Modal, PageHeader, Spinner, useUI } from '../../lib/ui';
+import { EmptyState, ErrorState, Field, Modal, PageHeader, Spinner, useUI } from '../../lib/ui';
 import type { Category, Product } from '../../lib/types';
 
 function uid() {
@@ -16,7 +16,7 @@ export function Catalog() {
   const [editing, setEditing] = useState<Product | 'new' | null>(null);
   const [stockTarget, setStockTarget] = useState<Product | null>(null);
 
-  const { data: products = [], isLoading } = useQuery({
+  const { data: products = [], isLoading, isError, refetch } = useQuery({
     queryKey: ['products'],
     queryFn: async (): Promise<Product[]> => {
       const { data, error } = await supabase
@@ -44,7 +44,9 @@ export function Catalog() {
         action={<button className="btn-primary btn-sm" onClick={() => setEditing('new')}>+ เพิ่มสินค้า</button>}
       />
 
-      {isLoading ? (
+      {isError ? (
+        <ErrorState onRetry={() => void refetch()} />
+      ) : isLoading ? (
         <Spinner />
       ) : products.length === 0 ? (
         <EmptyState icon="📦" title="ยังไม่มีสินค้า" hint="กด “เพิ่มสินค้า” เพื่อเริ่มขาย" />

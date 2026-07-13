@@ -135,6 +135,19 @@ export function EmptyState({ icon = '📭', title, hint }: { icon?: string; titl
   );
 }
 
+// Distinct from EmptyState: a fetch actually FAILED (network/expired session), so the user must
+// not mistake it for "no data". Offers a retry.
+export function ErrorState({ onRetry }: { onRetry?: () => void }) {
+  return (
+    <div className="py-10 text-center">
+      <div className="text-4xl">⚠️</div>
+      <div className="mt-2 text-sm font-medium text-slate-700">โหลดข้อมูลไม่สำเร็จ</div>
+      <div className="mt-1 text-xs text-slate-400">อาจเป็นเน็ตหลุดหรือเซสชันหมดอายุ — ข้อมูลยังอยู่ในระบบ</div>
+      {onRetry && <button className="btn-ghost btn-sm mt-3" onClick={onRetry}>ลองใหม่</button>}
+    </div>
+  );
+}
+
 export function PageHeader({ title, action }: { title: string; action?: ReactNode }) {
   return (
     <div className="flex items-center justify-between gap-2">

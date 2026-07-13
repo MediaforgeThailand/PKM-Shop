@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { invokeFn, uploadToBucket } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import { EmptyState, Spinner, useUI } from '../lib/ui';
+import { EmptyState, ErrorState, Spinner, useUI } from '../lib/ui';
 import type { Order } from '../lib/types';
 
 export function PackerQueue() {
@@ -11,7 +11,7 @@ export function PackerQueue() {
   const { toast } = useUI();
   const tenantId = profile?.tenant_id ?? '';
 
-  const { data: orders = [], isLoading } = useQuery({
+  const { data: orders = [], isLoading, isError, refetch } = useQuery({
     queryKey: ['packer-queue'],
     refetchInterval: 10_000,
     queryFn: async (): Promise<Order[]> => {
@@ -59,7 +59,9 @@ export function PackerQueue() {
   return (
     <div className="space-y-3">
       <h1 className="text-lg font-bold">คิวแพ็คของ</h1>
-      {isLoading ? (
+      {isError ? (
+        <ErrorState onRetry={() => void refetch()} />
+      ) : isLoading ? (
         <Spinner />
       ) : orders.length === 0 ? (
         <EmptyState icon="🎁" title="ไม่มีของต้องแพ็คตอนนี้" />

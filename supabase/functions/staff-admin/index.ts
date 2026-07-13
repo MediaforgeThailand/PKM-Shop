@@ -57,21 +57,13 @@ Deno.serve(async (req) => {
     const auth = req.headers.get('authorization');
 
     if (body.action === 'ensure_self') {
+      // READ-ONLY. This is a SHARED multi-tenant DB and tenant_slug is caller-supplied, so we
+      // must NEVER mint an admin here (that allowed cross-tenant self-promotion — audit blocker).
+      // The first admin per tenant is seeded out-of-band with the service role; everyone else is
+      // added by an existing admin via create_login. A user with no profile is "pending".
       const user = await resolveAuthUser(auth);
       const existing = await selectOne<Profile>('profiles', { user_id: `eq.${user.id}`, tenant_id: `eq.${tenant.id}`, select: PROFILE_SELECT });
-      if (existing) return json({ ok: true, profile: existing, bootstrapped: false });
-
-      // No profile yet — bootstrap the first user as owner/admin only if no admin exists.
-      const admins = await selectMany<{ id: string }>('profiles', { tenant_id: `eq.${tenant.id}`, roles: 'cs.{admin}', active: 'eq.true', select: 'id', limit: '1' });
-      if (admins.length === 0) {
-        const created = await insertRow<Profile>('profiles', {
-          tenant_id: tenant.id, user_id: user.id, name: body.name?.trim() || 'เจ้าของร้าน', roles: ['admin'], active: true,
-        }, { select: PROFILE_SELECT });
-        console.log('staff_admin_bootstrap_owner', { tenant: tenant.slug, user: user.id });
-        return json({ ok: true, profile: created, bootstrapped: true });
-      }
-      // Admin already exists — this user needs to be added by an admin.
-      return json({ ok: true, profile: null, bootstrapped: false, pending: true });
+      return json({ ok: true, profile: existing ?? null, pending: !existing });
     }
 
     // Remaining actions require an admin.

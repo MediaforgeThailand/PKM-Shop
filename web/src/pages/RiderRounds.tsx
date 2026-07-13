@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { invokeFn, uploadToBucket } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import { EmptyState, Field, Modal, Spinner, useUI } from '../lib/ui';
+import { EmptyState, ErrorState, Field, Modal, Spinner, useUI } from '../lib/ui';
 import { ORDER_STATUS_TH, type DeliveryRound, type Order } from '../lib/types';
 
 function bkkTime(iso: string) {
@@ -16,7 +16,7 @@ export function RiderRounds() {
   const { toast } = useUI();
   const tenantId = profile?.tenant_id ?? '';
 
-  const { data: rounds = [], isLoading } = useQuery({
+  const { data: rounds = [], isLoading, isError, refetch } = useQuery({
     queryKey: ['rider-rounds'],
     refetchInterval: 10_000,
     queryFn: async (): Promise<DeliveryRound[]> => {
@@ -43,7 +43,9 @@ export function RiderRounds() {
   return (
     <div className="space-y-4">
       <h1 className="text-lg font-bold">รอบจัดส่ง</h1>
-      {isLoading ? (
+      {isError ? (
+        <ErrorState onRetry={() => void refetch()} />
+      ) : isLoading ? (
         <Spinner />
       ) : rounds.length === 0 ? (
         <EmptyState icon="🛵" title="ยังไม่มีรอบที่พร้อม" hint="รอบจะขึ้นเมื่อถึงเวลาปิดรอบ" />

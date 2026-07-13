@@ -1,4 +1,7 @@
-const MARKER_RE = /\n?\[\[(products|categories|order_status)(?::\s*([^\]]*))?\]\]\s*$/;
+// End-anchored, but tolerant of trailing whitespace / emoji / Thai particles the model often
+// appends after the marker (e.g. "... [[products: a,b]] 😊" or "... [[categories]] ค่ะ") so the
+// card still renders and the literal marker isn't shown to the customer (audit finding).
+const MARKER_RE = /\n?\[\[(products|categories|order_status)(?::\s*([^\]]*))?\]\][\s\p{Extended_Pictographic}฀-๿.,!~-]*$/u;
 const ANY_MARKER_RE = /\n?\[\[(products|categories|order_status)(?::\s*([^\]]*))?\]\]\s*/g;
 
 export type ChatMarkerType = 'categories' | 'order_status' | 'products';

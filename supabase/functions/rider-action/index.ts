@@ -43,14 +43,18 @@ async function maybeCompleteRound(roundId: string, tenantId: string, actor: stri
   const didWork = orders.some((o) => ['delivered', 'returned'].includes(o.status));
   try {
     const round = await selectOne<{ id: string; status: string }>('delivery_rounds', { id: `eq.${roundId}`, select: 'id,status', tenant_id: `eq.${tenantId}` });
-    if (!round || round.status === 'done') return;
+    if (!round) return;
+    if (round.status === 'done') {
+      // Round already closed; retry pay in case a prior run flipped 'done' but pay failed (pay is idempotent).
+      if (didWork) await rpc('pkm_record_rider_round_pay', { p_round_id: roundId });
+      return;
+    }
     if (round.status === 'confirmed') {
       await rpc('pkm_transition_round', { p_actor: actor, p_meta: {}, p_round_id: roundId, p_rider_id: null, p_to_status: 'in_progress' });
     }
+    // Pay BEFORE flipping to 'done' so a pay failure leaves the round completable (retriable).
+    if (didWork) await rpc('pkm_record_rider_round_pay', { p_round_id: roundId });
     await rpc('pkm_transition_round', { p_actor: actor, p_meta: {}, p_round_id: roundId, p_rider_id: null, p_to_status: 'done' });
-    if (didWork) {
-      await rpc('pkm_record_rider_round_pay', { p_round_id: roundId });
-    }
   } catch (error) {
     console.warn('round_complete_failed', roundId, error instanceof Error ? error.message : error);
   }
@@ -68,6 +72,9 @@ async function handleClaimRound(roundId: string, tenant: { id: string; slug: str
     }
   }
   await notifyEvent({ eventType: 'rider_accepted', roundId, tenantId: tenant.id, tenantSlug: tenant.slug }).catch(() => {});
+  // If every order was an unpacked straggler (all reassigned out), close the now-empty round
+  // immediately so it never orphans in 'confirmed' (didWork=false -> no pay).
+  await maybeCompleteRound(roundId, tenant.id, actor);
 }
 
 Deno.serve(async (req) => {
@@ -120,16 +127,25 @@ Deno.serve(async (req) => {
       return json({ ok: true });
     }
 
-    // return
-    await rpc('pkm_transition_order', { p_actor: actor, p_meta: { reason: body.reason }, p_note: body.reason, p_order_id: order.id, p_to_status: 'returned' });
-    await insertRow('returns', { order_id: order.id, reason: body.reason, tenant_id: tenant.id });
-    await rpc('pkm_restock_returned_order', { p_order_id: order.id }).catch(() => {});
-    await rpc('pkm_transition_order', { p_actor: 'system', p_meta: {}, p_order_id: order.id, p_to_status: 'awaiting_redelivery_fee' }).catch(() => {});
-    await notifyEvent({ eventType: 'returned', extra: { reason: body.reason }, orderId: order.id, tenantId: tenant.id, tenantSlug: tenant.slug }).catch(() => {});
-    if (order.round_id) {
-      await maybeCompleteRound(order.round_id, tenant.id, actor);
+    // return — idempotent. Only a stop still with the rider can be returned; a repeat call
+    // must NOT insert a second returns row or restock again (audit: double-restock).
+    if (['out_for_delivery', 'delivering'].includes(order.status)) {
+      await rpc('pkm_transition_order', { p_actor: actor, p_meta: { reason: body.reason }, p_note: body.reason, p_order_id: order.id, p_to_status: 'returned' });
+      // returns(order_id) is UNIQUE — a duplicate insert is deduped, so restock runs exactly once.
+      await insertRow('returns', { order_id: order.id, reason: body.reason, tenant_id: tenant.id }).catch(() => {});
+      await rpc('pkm_restock_returned_order', { p_order_id: order.id }).catch(() => {});
+      await rpc('pkm_transition_order', { p_actor: 'system', p_meta: {}, p_order_id: order.id, p_to_status: 'awaiting_redelivery_fee' }).catch(() => {});
+      await notifyEvent({ eventType: 'returned', extra: { reason: body.reason }, orderId: order.id, tenantId: tenant.id, tenantSlug: tenant.slug }).catch(() => {});
+      if (order.round_id) await maybeCompleteRound(order.round_id, tenant.id, actor);
+      return json({ ok: true });
     }
-    return json({ ok: true });
+    if (order.status === 'returned') {
+      // Recover a return whose finalize transition failed previously (no restock re-run).
+      await rpc('pkm_transition_order', { p_actor: 'system', p_meta: {}, p_order_id: order.id, p_to_status: 'awaiting_redelivery_fee' }).catch(() => {});
+      if (order.round_id) await maybeCompleteRound(order.round_id, tenant.id, actor);
+      return json({ ok: true, recovered: true });
+    }
+    return json({ ok: true, already: order.status });
   } catch (error) {
     return toErrorResponse(error);
   }
