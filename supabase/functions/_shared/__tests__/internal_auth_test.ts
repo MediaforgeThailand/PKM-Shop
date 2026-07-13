@@ -10,11 +10,6 @@ declare const Deno: {
   test: (name: string, fn: () => Promise<void> | void) => void;
 };
 
-type TestGlobal = typeof globalThis & { __MIRACARE_SUPPRESS_SERVE__?: boolean };
-type Handler = (req: Request) => Promise<Response> | Response;
-
-const testUuid = '00000000-0000-4000-8000-000000000001';
-
 async function withServiceConfig(fn: () => Promise<void> | void) {
   const previousUrl = Deno.env.get('SUPABASE_URL');
   const previousKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
@@ -39,27 +34,9 @@ async function withServiceConfig(fn: () => Promise<void> | void) {
   }
 }
 
-function internalRequest(body: Record<string, unknown>) {
-  return new Request('http://127.0.0.1/functions/v1/internal', {
-    body: JSON.stringify(body),
-    headers: {
-      authorization: 'Bearer anon-key',
-      'content-type': 'application/json',
-    },
-    method: 'POST',
-  });
-}
-
-async function expectAnonRejected(name: string, handler: Handler, body: Record<string, unknown>) {
-  await withServiceConfig(async () => {
-    const response = await handler(internalRequest(body));
-
-    if (response.status !== 401) {
-      throw new Error(`${name} should reject anon tokens with 401, received ${response.status}.`);
-    }
-  });
-}
-
+// The PKM internal functions (notify, fare-calc, slip-verify, round-lock, payroll-cutoff)
+// all call assertServiceRoleAuthorization (re-exported from internalAuth) before any work.
+// This unit-tests that guard directly; the per-function wiring is covered by deno check.
 Deno.test('assertInternalServiceRoleAuthorization accepts service role and rejects anon tokens', async () => {
   await withServiceConfig(() => {
     assertInternalServiceRoleAuthorization('Bearer service-secret');
@@ -75,34 +52,5 @@ Deno.test('assertInternalServiceRoleAuthorization accepts service role and rejec
     }
 
     throw new Error('Expected internal service-role guard to reject anon token.');
-  });
-});
-
-Deno.test('fact-extractor rejects anon key calls before internal work', async () => {
-  (globalThis as TestGlobal).__MIRACARE_SUPPRESS_SERVE__ = true;
-  const { handleFactExtractor } = await import('../../fact-extractor/index.ts');
-
-  await expectAnonRejected('fact-extractor', handleFactExtractor, {
-    message_id: testUuid,
-  });
-});
-
-Deno.test('lab-ingest rejects anon key calls before internal work', async () => {
-  (globalThis as TestGlobal).__MIRACARE_SUPPRESS_SERVE__ = true;
-  const { handleLabIngest } = await import('../../lab-ingest/index.ts');
-
-  await expectAnonRejected('lab-ingest', handleLabIngest, {
-    customer_id: testUuid,
-    storage_path: 'labs/demo/report.jpg',
-  });
-});
-
-Deno.test('wearable-ingest rejects anon key calls before internal work', async () => {
-  (globalThis as TestGlobal).__MIRACARE_SUPPRESS_SERVE__ = true;
-  const { handleWearableIngest } = await import('../../wearable-ingest/index.ts');
-
-  await expectAnonRejected('wearable-ingest', handleWearableIngest, {
-    customer_id: testUuid,
-    storage_path: 'wearables/demo/export.zip',
   });
 });

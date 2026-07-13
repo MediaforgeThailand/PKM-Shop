@@ -1,5 +1,6 @@
+// PKM-Shop — LINE transport (signature verify, reply/push, profile, loading, text). Pure
+// transport, vertical-agnostic; PKM Flex builders + postback parsing live in pkmLine.ts.
 import { HttpError } from './http.ts';
-import type { ChatAction, ChatCategory, ChatProduct, OrderPanelState } from './types.ts';
 
 declare const Deno: {
   env: {
@@ -25,73 +26,6 @@ export type LineImageMessage = {
 };
 
 export type LineMessage = LineFlexMessage | LineImageMessage | LineTextMessage;
-
-type NonNullOrderPanelState = Exclude<OrderPanelState, null>;
-
-const BOOK_LABEL = '\u0e08\u0e2d\u0e07';
-const CUSTOMER_PAID_LABEL = '\u0e25\u0e39\u0e01\u0e04\u0e49\u0e32\u0e08\u0e48\u0e32\u0e22\u0e41\u0e25\u0e49\u0e27';
-const GREETING_MESSAGE = '\u0e2a\u0e27\u0e31\u0e2a\u0e14\u0e35';
-const PACKAGE_DETAILS_FALLBACK =
-  '\u0e23\u0e32\u0e22\u0e25\u0e30\u0e40\u0e2d\u0e35\u0e22\u0e14\u0e41\u0e1e\u0e47\u0e01\u0e40\u0e01\u0e08';
-const RECOMMENDED_PACKAGES_ALT =
-  '\u0e41\u0e1e\u0e47\u0e01\u0e40\u0e01\u0e08\u0e17\u0e35\u0e48\u0e41\u0e19\u0e30\u0e19\u0e33';
-const SELECT_PRODUCT_MESSAGE =
-  '\u0e15\u0e49\u0e2d\u0e07\u0e01\u0e32\u0e23\u0e08\u0e2d\u0e07\u0e41\u0e1e\u0e47\u0e01\u0e40\u0e01\u0e08\u0e19\u0e35\u0e49';
-// "\u0e40\u0e25\u0e37\u0e2d\u0e01\u0e2a\u0e32\u0e02\u0e32\u0e19\u0e35\u0e49" (choose this branch)
-const SELECT_BRANCH_LABEL = '\u0e40\u0e25\u0e37\u0e2d\u0e01\u0e2a\u0e32\u0e02\u0e32\u0e19\u0e35\u0e49';
-// "\u0e40\u0e25\u0e37\u0e2d\u0e01\u0e2a\u0e32\u0e02\u0e32" (choose a branch)
-const SELECT_BRANCH_ALT = '\u0e40\u0e25\u0e37\u0e2d\u0e01\u0e2a\u0e32\u0e02\u0e32';
-// "\u0e14\u0e39\u0e41\u0e1e\u0e47\u0e01\u0e40\u0e01\u0e08" (view packages)
-const CATEGORY_VIEW_LABEL = '\u0e14\u0e39\u0e41\u0e1e\u0e47\u0e01\u0e40\u0e01\u0e08';
-// "\u0e40\u0e25\u0e37\u0e2d\u0e01\u0e2b\u0e21\u0e27\u0e14\u0e17\u0e35\u0e48\u0e2a\u0e19\u0e43\u0e08" (choose a category)
-const CATEGORY_LIST_ALT = '\u0e40\u0e25\u0e37\u0e2d\u0e01\u0e2b\u0e21\u0e27\u0e14\u0e17\u0e35\u0e48\u0e2a\u0e19\u0e43\u0e08';
-// "\u0e02\u0e2d\u0e14\u0e39\u0e41\u0e1e\u0e47\u0e01\u0e40\u0e01\u0e08\u0e43\u0e19\u0e2b\u0e21\u0e27\u0e14\u0e19\u0e35\u0e49" (browse this category)
-const BROWSE_CATEGORY_MESSAGE = '\u0e02\u0e2d\u0e14\u0e39\u0e41\u0e1e\u0e47\u0e01\u0e40\u0e01\u0e08\u0e43\u0e19\u0e2b\u0e21\u0e27\u0e14\u0e19\u0e35\u0e49';
-// "\u0e41\u0e1e\u0e47\u0e01\u0e40\u0e01\u0e08" (packages, unit suffix)
-const PACKAGE_UNIT_LABEL = '\u0e41\u0e1e\u0e47\u0e01\u0e40\u0e01\u0e08';
-
-// Booking date-range picker (parity with the web chat's calendar date-range step in
-// PrototypeChatPanel). Shown on LINE during collecting_info so the customer can tap a
-// convenient window instead of having to type a date; staff still confirm the exact
-// appointment afterwards.
-const BOOKING_DATE_ALT = '\u0e40\u0e25\u0e37\u0e2d\u0e01\u0e0a\u0e48\u0e27\u0e07\u0e27\u0e31\u0e19\u0e17\u0e35\u0e48\u0e17\u0e35\u0e48\u0e2a\u0e30\u0e14\u0e27\u0e01';
-const BOOKING_DATE_TITLE = '\u0e2a\u0e30\u0e14\u0e27\u0e01\u0e40\u0e02\u0e49\u0e32\u0e23\u0e31\u0e1a\u0e1a\u0e23\u0e34\u0e01\u0e32\u0e23\u0e0a\u0e48\u0e27\u0e07\u0e44\u0e2b\u0e19\u0e04\u0e30';
-const BOOKING_DATE_HINT = '\u0e40\u0e25\u0e37\u0e2d\u0e01\u0e0a\u0e48\u0e27\u0e07\u0e04\u0e23\u0e48\u0e32\u0e27\u0e46 \u0e44\u0e14\u0e49\u0e40\u0e25\u0e22\u0e04\u0e48\u0e30 \u0e40\u0e14\u0e35\u0e4b\u0e22\u0e27\u0e40\u0e08\u0e49\u0e32\u0e2b\u0e19\u0e49\u0e32\u0e17\u0e35\u0e48\u0e22\u0e37\u0e19\u0e22\u0e31\u0e19\u0e27\u0e31\u0e19\u0e19\u0e31\u0e14\u0e17\u0e35\u0e48\u0e41\u0e19\u0e48\u0e19\u0e2d\u0e19\u0e2d\u0e35\u0e01\u0e04\u0e23\u0e31\u0e49\u0e07';
-const BOOKING_DATE_LATER_WINDOW = '\u0e25\u0e39\u0e01\u0e04\u0e49\u0e32\u0e08\u0e30\u0e41\u0e08\u0e49\u0e07\u0e27\u0e31\u0e19\u0e20\u0e32\u0e22\u0e2b\u0e25\u0e31\u0e07';
-const BOOKING_DATE_MESSAGE_PREFIX = '\u0e0a\u0e48\u0e27\u0e07\u0e27\u0e31\u0e19\u0e17\u0e35\u0e48\u0e2a\u0e30\u0e14\u0e27\u0e01: ';
-
-type BookingDateOption = { end?: number; key: string; label: string; start?: number; window?: string };
-
-const BOOKING_DATE_OPTIONS: BookingDateOption[] = [
-  { end: 3, key: 'asap', label: '\u0e40\u0e23\u0e47\u0e27\u0e17\u0e35\u0e48\u0e2a\u0e38\u0e14 (\u0e20\u0e32\u0e22\u0e43\u0e19 3 \u0e27\u0e31\u0e19)', start: 0 },
-  { end: 7, key: 'week', label: '\u0e20\u0e32\u0e22\u0e43\u0e19\u0e2a\u0e31\u0e1b\u0e14\u0e32\u0e2b\u0e4c\u0e19\u0e35\u0e49', start: 0 },
-  { end: 14, key: 'twoweeks', label: '\u0e43\u0e19 1-2 \u0e2a\u0e31\u0e1b\u0e14\u0e32\u0e2b\u0e4c', start: 7 },
-  { end: 30, key: 'month', label: '\u0e20\u0e32\u0e22\u0e43\u0e19\u0e40\u0e14\u0e37\u0e2d\u0e19\u0e19\u0e35\u0e49', start: 14 },
-  { key: 'later', label: '\u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e23\u0e30\u0e1a\u0e38 \u0e41\u0e08\u0e49\u0e07\u0e20\u0e32\u0e22\u0e2b\u0e25\u0e31\u0e07', window: BOOKING_DATE_LATER_WINDOW },
-];
-
-// Resolve a relative day offset to an ISO date in Asia/Bangkok (UTC+7, no DST).
-function bangkokDateOffset(days: number) {
-  const ms = Date.now() + (7 * 60 + days * 24 * 60) * 60 * 1000;
-
-  return new Date(ms).toISOString().slice(0, 10);
-}
-
-// Payment card (bank-style frame): a teal header + amount + a "pay before HH:MM"
-// countdown derived from order.payment_due_at, shown above the PromptPay QR image.
-const PAYMENT_ALT = 'ชำระเงิน';
-const PAYMENT_HEADER = 'ชำระเงิน';
-const PAYMENT_SCAN_HINT = 'สแกน QR ด้านบนด้วยแอปธนาคารใดก็ได้';
-const PAYMENT_DUE_PREFIX = 'กรุณาชำระภายใน ';
-
-function bangkokClock(iso: string) {
-  return new Intl.DateTimeFormat('en-GB', {
-    hour: '2-digit',
-    hourCycle: 'h23',
-    minute: '2-digit',
-    timeZone: 'Asia/Bangkok',
-  }).format(new Date(iso));
-}
 
 function requireEnv(key: string) {
   const value = Deno.env.get(key)?.trim();
@@ -156,10 +90,7 @@ export async function verifyLineSignature(body: string, signature: string | null
   const key = await crypto.subtle.importKey(
     'raw',
     new TextEncoder().encode(secret),
-    {
-      hash: 'SHA-256',
-      name: 'HMAC',
-    },
+    { hash: 'SHA-256', name: 'HMAC' },
     false,
     ['verify'],
   );
@@ -175,14 +106,8 @@ export async function verifyLineSignature(body: string, signature: string | null
 export async function replyLineMessages(replyToken: string, messages: LineMessage[], tenantSlug: string) {
   const token = requireLineChannelToken(tenantSlug);
   const response = await fetch('https://api.line.me/v2/bot/message/reply', {
-    body: JSON.stringify({
-      messages,
-      replyToken,
-    }),
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
+    body: JSON.stringify({ messages, replyToken }),
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     method: 'POST',
   });
 
@@ -194,14 +119,8 @@ export async function replyLineMessages(replyToken: string, messages: LineMessag
 export async function pushLineMessages(tenantSlug: string, lineUserId: string, messages: LineMessage[]) {
   const token = requireLineChannelToken(tenantSlug);
   const response = await fetch('https://api.line.me/v2/bot/message/push', {
-    body: JSON.stringify({
-      messages,
-      to: lineUserId,
-    }),
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
+    body: JSON.stringify({ messages, to: lineUserId }),
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     method: 'POST',
   });
 
@@ -210,10 +129,6 @@ export async function pushLineMessages(tenantSlug: string, lineUserId: string, m
   }
 }
 
-// Best-effort lookup of a LINE user's display name so the agent console can show a
-// real name instead of a generic placeholder. Returns null on any failure (the user
-// has not added the OA as a friend, the token is missing, the API hiccups) — never
-// throws, so it can run inside a normal message turn without breaking it.
 export async function fetchLineProfile(
   tenantSlug: string,
   lineUserId: string,
@@ -221,9 +136,7 @@ export async function fetchLineProfile(
   try {
     const token = requireLineChannelToken(tenantSlug);
     const response = await fetch(`https://api.line.me/v2/bot/profile/${encodeURIComponent(lineUserId)}`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
+      headers: { Authorization: `Bearer ${token}` },
     });
 
     if (!response.ok) {
@@ -243,445 +156,16 @@ export async function fetchLineProfile(
 export async function startLineLoading(tenantSlug: string, lineUserId: string, seconds = 20) {
   const token = requireLineChannelToken(tenantSlug);
   const response = await fetch('https://api.line.me/v2/bot/chat/loading/start', {
-    body: JSON.stringify({
-      chatId: lineUserId,
-      loadingSeconds: seconds,
-    }),
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
+    body: JSON.stringify({ chatId: lineUserId, loadingSeconds: seconds }),
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     method: 'POST',
   });
 
-  // The loading animation is best-effort UX — never fail the turn over it.
   if (!response.ok) {
     console.warn('line_loading_failed', response.status);
   }
 }
 
 export function textLineMessage(text: string): LineTextMessage {
-  return {
-    text: text.slice(0, 4500),
-    type: 'text',
-  };
-}
-
-export function linePostbackToAction(data: string | undefined): { action: ChatAction | null; message: string } {
-  if (!data) {
-    return {
-      action: null,
-      message: GREETING_MESSAGE,
-    };
-  }
-
-  if (data.startsWith('select_product:')) {
-    return {
-      action: {
-        catalog_key: data.replace('select_product:', ''),
-        type: 'select_product',
-      },
-      message: SELECT_PRODUCT_MESSAGE,
-    };
-  }
-
-  if (data.startsWith('payment_done:')) {
-    return {
-      action: {
-        order_id: data.replace('payment_done:', ''),
-        type: 'payment_done',
-      },
-      message: CUSTOMER_PAID_LABEL,
-    };
-  }
-
-  if (data.startsWith('select_branch:')) {
-    const rest = data.slice('select_branch:'.length);
-    const separator = rest.indexOf(':');
-
-    if (separator > 0) {
-      const orderId = rest.slice(0, separator);
-      const branchId = rest.slice(separator + 1);
-
-      if (orderId && branchId) {
-        return {
-          action: {
-            branch_id: branchId,
-            order_id: orderId,
-            type: 'select_branch',
-          },
-          message: SELECT_BRANCH_LABEL,
-        };
-      }
-    }
-  }
-
-  if (data.startsWith('browse_category:')) {
-    const category = data.slice('browse_category:'.length).trim();
-
-    if (category) {
-      return {
-        action: {
-          category,
-          type: 'browse_category',
-        },
-        message: BROWSE_CATEGORY_MESSAGE,
-      };
-    }
-  }
-
-  if (data.startsWith('set_date:')) {
-    const rest = data.slice('set_date:'.length);
-    const separator = rest.indexOf(':');
-
-    if (separator > 0) {
-      const orderId = rest.slice(0, separator);
-      const key = rest.slice(separator + 1);
-      const option = BOOKING_DATE_OPTIONS.find((candidate) => candidate.key === key);
-
-      if (orderId && option) {
-        return {
-          action: {
-            order_id: orderId,
-            preferred_date: typeof option.start === 'number' ? bangkokDateOffset(option.start) : undefined,
-            preferred_date_end: typeof option.end === 'number' ? bangkokDateOffset(option.end) : undefined,
-            preferred_time_window: option.window,
-            type: 'set_booking_window',
-          },
-          message: `${BOOKING_DATE_MESSAGE_PREFIX}${option.label}`,
-        };
-      }
-    }
-  }
-
-  return {
-    action: null,
-    message: data.slice(0, 400) || GREETING_MESSAGE,
-  };
-}
-
-export function productLineFlexMessage(products: ChatProduct[]): LineFlexMessage | null {
-  if (products.length === 0) {
-    return null;
-  }
-
-  return {
-    altText: RECOMMENDED_PACKAGES_ALT,
-    contents: {
-      contents: products.slice(0, 10).map((product) => ({
-        body: {
-          contents: [
-            {
-              size: 'md',
-              text: product.name,
-              type: 'text',
-              weight: 'bold',
-              wrap: true,
-            },
-            {
-              color: '#4E5F59',
-              margin: 'sm',
-              size: 'sm',
-              text: product.description || PACKAGE_DETAILS_FALLBACK,
-              type: 'text',
-              wrap: true,
-            },
-            {
-              color: '#163F34',
-              margin: 'md',
-              size: 'sm',
-              text: `${product.price_baht.toLocaleString('th-TH')} THB`,
-              type: 'text',
-              weight: 'bold',
-            },
-          ],
-          layout: 'vertical',
-          type: 'box',
-        },
-        footer: {
-          contents: [
-            {
-              action: {
-                data: `select_product:${product.catalog_key}`,
-                label: BOOK_LABEL,
-                type: 'postback',
-              },
-              color: '#163F34',
-              style: 'primary',
-              type: 'button',
-            },
-          ],
-          layout: 'vertical',
-          type: 'box',
-        },
-        hero: product.image_url
-          ? {
-              aspectMode: 'cover',
-              aspectRatio: '20:13',
-              size: 'full',
-              type: 'image',
-              url: product.image_url,
-            }
-          : undefined,
-        type: 'bubble',
-      })),
-      type: 'carousel',
-    },
-    type: 'flex',
-  };
-}
-
-export function categoryLineFlexMessage(categories: ChatCategory[]): LineFlexMessage | null {
-  if (categories.length === 0) {
-    return null;
-  }
-
-  return {
-    altText: CATEGORY_LIST_ALT,
-    contents: {
-      contents: categories.slice(0, 10).map((category) => ({
-        body: {
-          contents: [
-            {
-              size: 'md',
-              text: category.icon ? `${category.icon} ${category.label_th}` : category.label_th,
-              type: 'text',
-              weight: 'bold',
-              wrap: true,
-            },
-            {
-              color: '#4E5F59',
-              margin: 'sm',
-              size: 'sm',
-              text: `${category.product_count} ${PACKAGE_UNIT_LABEL}`,
-              type: 'text',
-            },
-          ],
-          layout: 'vertical',
-          type: 'box',
-        },
-        footer: {
-          contents: [
-            {
-              action: {
-                data: `browse_category:${category.key}`,
-                label: CATEGORY_VIEW_LABEL,
-                type: 'postback',
-              },
-              color: '#163F34',
-              style: 'primary',
-              type: 'button',
-            },
-          ],
-          layout: 'vertical',
-          type: 'box',
-        },
-        type: 'bubble',
-      })),
-      type: 'carousel',
-    },
-    type: 'flex',
-  };
-}
-
-export function branchSelectionLineFlexMessage(order: NonNullOrderPanelState): LineFlexMessage | null {
-  const branches = order.branches ?? [];
-
-  if (branches.length === 0) {
-    return null;
-  }
-
-  return {
-    altText: SELECT_BRANCH_ALT,
-    contents: {
-      contents: branches.slice(0, 10).map((branch) => {
-        const location = branch.district || branch.address || null;
-
-        return {
-          body: {
-            contents: [
-              {
-                size: 'md',
-                text: branch.name,
-                type: 'text',
-                weight: 'bold',
-                wrap: true,
-              },
-              ...(location
-                ? [
-                    {
-                      color: '#4E5F59',
-                      margin: 'sm',
-                      size: 'sm',
-                      text: location,
-                      type: 'text',
-                      wrap: true,
-                    },
-                  ]
-                : []),
-            ],
-            layout: 'vertical',
-            type: 'box',
-          },
-          footer: {
-            contents: [
-              {
-                action: {
-                  data: `select_branch:${order.id}:${branch.id}`,
-                  label: SELECT_BRANCH_LABEL,
-                  type: 'postback',
-                },
-                color: '#163F34',
-                style: 'primary',
-                type: 'button',
-              },
-            ],
-            layout: 'vertical',
-            type: 'box',
-          },
-          type: 'bubble',
-        };
-      }),
-      type: 'carousel',
-    },
-    type: 'flex',
-  };
-}
-
-export function bookingDateLineFlexMessage(order: NonNullOrderPanelState): LineFlexMessage {
-  return {
-    altText: BOOKING_DATE_ALT,
-    contents: {
-      body: {
-        contents: [
-          {
-            size: 'md',
-            text: BOOKING_DATE_TITLE,
-            type: 'text',
-            weight: 'bold',
-            wrap: true,
-          },
-          {
-            color: '#4E5F59',
-            margin: 'sm',
-            size: 'sm',
-            text: BOOKING_DATE_HINT,
-            type: 'text',
-            wrap: true,
-          },
-        ],
-        layout: 'vertical',
-        type: 'box',
-      },
-      footer: {
-        contents: BOOKING_DATE_OPTIONS.map((option) => ({
-          action: {
-            data: `set_date:${order.id}:${option.key}`,
-            label: option.label,
-            type: 'postback',
-          },
-          color: option.key === 'later' ? undefined : '#163F34',
-          style: option.key === 'later' ? 'secondary' : 'primary',
-          type: 'button',
-        })),
-        layout: 'vertical',
-        spacing: 'sm',
-        type: 'box',
-      },
-      type: 'bubble',
-    },
-    type: 'flex',
-  };
-}
-
-export function orderQrLineImageMessage(qrUrl: string): LineImageMessage {
-  return {
-    originalContentUrl: qrUrl,
-    previewImageUrl: qrUrl,
-    type: 'image',
-  };
-}
-
-export function orderPaymentLineFlexMessage(order: NonNullOrderPanelState): LineFlexMessage {
-  const bodyContents: Record<string, unknown>[] = [
-    {
-      size: 'md',
-      text: order.product_name,
-      type: 'text',
-      weight: 'bold',
-      wrap: true,
-    },
-    {
-      color: '#0F6E56',
-      margin: 'sm',
-      size: 'xl',
-      text: `฿${order.amount_baht.toLocaleString('th-TH')}`,
-      type: 'text',
-      weight: 'bold',
-    },
-    {
-      color: '#8A8F99',
-      margin: 'sm',
-      size: 'xs',
-      text: PAYMENT_SCAN_HINT,
-      type: 'text',
-      wrap: true,
-    },
-  ];
-
-  if (order.payment_due_at) {
-    bodyContents.push({
-      color: '#C0392B',
-      margin: 'md',
-      size: 'sm',
-      text: `${PAYMENT_DUE_PREFIX}${bangkokClock(order.payment_due_at)} น.`,
-      type: 'text',
-      weight: 'bold',
-      wrap: true,
-    });
-  }
-
-  return {
-    altText: PAYMENT_ALT,
-    contents: {
-      body: {
-        contents: bodyContents,
-        layout: 'vertical',
-        type: 'box',
-      },
-      footer: {
-        contents: [
-          {
-            action: {
-              data: `payment_done:${order.id}`,
-              label: CUSTOMER_PAID_LABEL,
-              type: 'postback',
-            },
-            color: '#0F6E56',
-            style: 'primary',
-            type: 'button',
-          },
-        ],
-        layout: 'vertical',
-        type: 'box',
-      },
-      header: {
-        backgroundColor: '#0F6E56',
-        contents: [
-          {
-            color: '#FFFFFF',
-            size: 'md',
-            text: PAYMENT_HEADER,
-            type: 'text',
-            weight: 'bold',
-          },
-        ],
-        layout: 'vertical',
-        paddingAll: '14px',
-        type: 'box',
-      },
-      type: 'bubble',
-    },
-    type: 'flex',
-  };
+  return { text: text.slice(0, 4500), type: 'text' };
 }

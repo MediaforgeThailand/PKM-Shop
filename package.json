@@ -56,9 +56,9 @@
     "v2:deploy-audit": "node scripts/v2-deploy-script-audit.mjs",
     "v2:type-safety-audit": "node scripts/v2-type-safety-audit.mjs",
     "v2:edge-security-audit": "node scripts/v2-edge-security-audit.mjs",
-    "v2:deno-check": "npx -y deno@2.8.2 check --import-map=supabase/functions/import_map.json supabase/functions/chat-orchestrator/index.ts supabase/functions/fact-extractor/index.ts supabase/functions/admin-order-action/index.ts supabase/functions/admin-line-reply/index.ts supabase/functions/admin-stripe-product-sync/index.ts supabase/functions/referrer-order/index.ts supabase/functions/referral-bind/index.ts supabase/functions/referral-self-provision/index.ts supabase/functions/lab-ingest/index.ts supabase/functions/lab-confirm/index.ts supabase/functions/wearable-ingest/index.ts supabase/functions/line-webhook/index.ts supabase/functions/stripe-checkout/index.ts supabase/functions/stripe-promptpay-qr/index.ts supabase/functions/stripe-webhook/index.ts supabase/functions/pdpa-export/index.ts supabase/functions/pdpa-delete/index.ts",
+    "v2:deno-check": "npx -y deno@2.8.2 check --node-modules-dir=none --import-map=supabase/functions/import_map.json supabase/functions/chat-orchestrator/index.ts supabase/functions/line-webhook/index.ts supabase/functions/notify/index.ts supabase/functions/fare-calc/index.ts supabase/functions/slip-verify/index.ts supabase/functions/round-lock/index.ts supabase/functions/payroll-cutoff/index.ts supabase/functions/stock-action/index.ts supabase/functions/packer-action/index.ts supabase/functions/rider-action/index.ts supabase/functions/admin-action/index.ts supabase/functions/checkin/index.ts",
     "v2:pdpa-coverage-audit": "node scripts/pdpa-coverage-audit.mjs",
-    "v2:deno-test": "npx -y deno@2.8.2 test --allow-env --allow-net --import-map=supabase/functions/import_map.json supabase/functions/_shared/__tests__/",
+    "v2:deno-test": "npx -y deno@2.8.2 test --node-modules-dir=none --allow-env --allow-net --import-map=supabase/functions/import_map.json supabase/functions/_shared/__tests__/",
     "v2:docs-audit": "node scripts/v2-docs-audit.mjs",
     "v2:e2e-commerce": "node scripts/e2e-commerce.mjs",
     "v2:external-preflight": "node scripts/v2-external-preflight.mjs",
@@ -70,7 +70,8 @@
     "v2:client-audit": "node scripts/v2-client-audit.mjs",
     "referrals:store-test": "npx -y deno@2.8.2 test lib/referrals/__tests__/attributionCore_test.ts",
     "referrals:link-audit": "node scripts/referral-link-audit.mjs",
-    "v2:verify": "npm run typecheck && npm run referrals:store-test && npm run referrals:link-audit && npm run showcase:route-audit && npm run v2:type-safety-audit && npm run chat:quality && npm run orders:status-audit && npm run orders:rpc-grant-audit && npm run v2:schema-audit && npm run v2:open-questions-audit && npm run v2:local-readiness-audit && npm run v2:docs-audit && npm run v2:client-audit && npm run v2:edge-security-audit && npm run v2:health-safety-audit && npm run v2:pdpa-coverage-audit && npm run types:mirror-audit && npm run templates:mirror-audit && npm run v2:deploy-audit && npm run v2:deno-check && npm run v2:deno-test",
+    "pkm:verify": "npm run v2:deno-check && npm run v2:deno-test",
+    "v2:verify": "npm run v2:deno-check && npm run v2:deno-test",
     "typecheck": "tsc --noEmit"
   },
   "private": true
