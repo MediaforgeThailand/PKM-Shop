@@ -111,6 +111,17 @@ cache). Auth = Supabase email/password (staff). Reuse `lib/api/client.ts` + `lib
 
 Legend: ☐ todo · ⏳ in progress · ✅ done (with date).
 
+> **Status 2026-07-13:** BACKEND COMPLETE + green (12 edge functions `deno check`, 31
+> deno tests pass, delivery-math + PromptPay tested). Full schema, RPCs, ops layer, staff
+> API, AI sales agent + LINE loop, MiraCare removed. Migrations/functions are files — the
+> owner applies them (clone runbook). **Remaining: the Vite staff web app (5 dashboards).**
+
+### Backend edge functions — done (2026-07-13, `deno check` + tests green)
+- ✅ `chat-orchestrator` (AI sales agent, app entry) + `line-webhook` (LINE: text/postback/location/image→slip, QR)
+- ✅ `notify` (LINE fan-out) · `fare-calc` · `slip-verify` (SlipOK stub) · `round-lock` cron · `payroll-cutoff` cron
+- ✅ `stock-action` · `packer-action` · `rider-action` · `admin-action` · `checkin`
+- ✅ Shared: openai(callMiraPrompt/PKM_PROMPT_ID) · settings · slipok · notify+templates · fare · rounds · pkmAuth · pkmContext · pkmOrders · pkmLine · pkmOrchestrate
+
 ### DB schema — 8 migrations written (2026-07-13) *(files only; not yet applied to a live project)*
 - ✅ `20260712990000_pkm_phase0_cleanup` — drop all MiraCare health objects (cleanup-first, so PKM tables create with no collisions)
 - ✅ `20260713000000_pkm_phase1_foundations` — enums · `profiles` (5 roles + `link_code`) · PKM RLS helpers · `app_settings` (+defaults) · `categories` · `products` +stock/weight/commission · `stock_movements` + `pkm_apply_stock_movement` · `stock-in` bucket
