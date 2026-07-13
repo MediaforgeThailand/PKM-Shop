@@ -14,7 +14,7 @@ import {
   type LineMessage,
 } from '../_shared/line.ts';
 import { categoryFlex, deliveryOptionsFlex, paymentFlex, pkmPostbackToAction, productFlex } from '../_shared/pkmLine.ts';
-import { handleLineSlip, orchestrateLine } from '../_shared/pkmOrchestrate.ts';
+import { bindStaffLinkCode, handleLineSlip, orchestrateLine } from '../_shared/pkmOrchestrate.ts';
 import { uploadStorageObject } from '../_shared/storage.ts';
 import type { PkmChatResponse } from '../_shared/pkmTypes.ts';
 
@@ -124,6 +124,12 @@ async function handleEvent(event: LineEvent, tenantSlug: string) {
   }
 
   if (event.type === 'message' && event.message?.type === 'text' && event.message.text) {
+    // Staff binding: a 6-char link code from a staff member's profile page.
+    const bind = await bindStaffLinkCode(tenantSlug, lineUserId, event.message.text);
+    if (bind) {
+      await replyLineMessages(replyToken, [textLineMessage(bind)], tenantSlug);
+      return;
+    }
     const response = await orchestrateLine({ action: null, client_msg_id: event.message.id ?? crypto.randomUUID(), line_user_id: lineUserId, message: event.message.text, tenant_slug: tenantSlug });
     if (response) {
       await replyLineMessages(replyToken, await toLineMessages(response), tenantSlug);

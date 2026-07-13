@@ -111,10 +111,24 @@ cache). Auth = Supabase email/password (staff). Reuse `lib/api/client.ts` + `lib
 
 Legend: ☐ todo · ⏳ in progress · ✅ done (with date).
 
-> **Status 2026-07-13:** BACKEND COMPLETE + green (12 edge functions `deno check`, 31
-> deno tests pass, delivery-math + PromptPay tested). Full schema, RPCs, ops layer, staff
-> API, AI sales agent + LINE loop, MiraCare removed. Migrations/functions are files — the
-> owner applies them (clone runbook). **Remaining: the Vite staff web app (5 dashboards).**
+> **Status 2026-07-13:** BACKEND + WEB APP COMPLETE & VERIFIED.
+> - Backend: 9 migrations + 12 edge functions (`deno check` clean), 31 deno tests pass,
+>   delivery-math + PromptPay tested. Full schema, RPCs, ops layer, staff API, AI sales
+>   agent + LINE loop, staff LINE binding. MiraCare removed.
+> - Web app (`web/`): Vite + React 18 + Tailwind + Router + PWA — `tsc` clean, prod build OK.
+>   Login + 5-role routing; admin order board / slip queue / catalog+stock / settings /
+>   payroll; packer; rider multi-stop; staff check-in + team chat.
+>
+> **Known remaining (trackable, non-blocking):** analytics dashboard (Ready.md: first to
+> cut) · shifts-CRUD admin UI (table + check-in exist) · Grab/Lalamove customer deeplinks &
+> Kerry-round admin UI polish · multi-item cart recipient name/phone capture · PWA icon PNGs.
+>
+> **To go live (owner):** apply migrations + deploy the 12 functions to the PKM Supabase
+> project (clone runbook) · set secrets (OPENAI_API_KEY, PKM_PROMPT_ID, SUPABASE_*, and —
+> when obtained — LINE_CHANNEL_*, SLIPOK_*) · publish the goods-selling OpenAI prompt · run
+> `supabase/seed.sql` + set store lat/lng + create the first admin profile · schedule
+> `round-lock` (hourly :30) and `payroll-cutoff` (Mon 00:00) in Asia/Bangkok · point the LINE
+> webhook at `line-webhook?tenant=pkm-shop` · `cd web && npm i && npm run build` + host.
 
 ### Backend edge functions — done (2026-07-13, `deno check` + tests green)
 - ✅ `chat-orchestrator` (AI sales agent, app entry) + `line-webhook` (LINE: text/postback/location/image→slip, QR)

@@ -311,6 +311,28 @@ export async function orchestrateChat(req: PkmChatRequest, authorization: string
   return runTurn(tenant, customer, session, req.action, req.client_msg_id, req.message);
 }
 
+// Staff LINE binding (Ready.md §6): a staff member adds the OA and types their link code.
+// If the text matches an unbound profile link_code for this tenant, bind their line_user_id
+// and return a confirmation; otherwise return null (fall through to the customer chat).
+export async function bindStaffLinkCode(tenantSlug: string, lineUserId: string, text: string): Promise<string | null> {
+  const code = text.trim().toUpperCase();
+  if (!/^[0-9A-Z]{6}$/.test(code)) {
+    return null;
+  }
+  const tenant = await assertTenant(tenantSlug);
+  const profile = await selectOne<{ id: string; name: string }>('profiles', {
+    line_user_id: 'is.null',
+    link_code: `eq.${code}`,
+    select: 'id,name',
+    tenant_id: `eq.${tenant.id}`,
+  });
+  if (!profile) {
+    return null;
+  }
+  await updateRows('profiles', { line_user_id: lineUserId }, { id: `eq.${profile.id}`, select: 'id', tenant_id: `eq.${tenant.id}` });
+  return `ผูกบัญชีพนักงานสำเร็จ ✅ คุณ${profile.name || ''} จะได้รับแจ้งเตือนงานทาง LINE นี้ค่ะ`;
+}
+
 // A customer sent a slip image in LINE: upload it to the private bucket against their active
 // order and kick off SlipOK verification. Returns the Thai acknowledgement to reply with.
 export async function handleLineSlip(tenantSlug: string, lineUserId: string, bytes: Uint8Array, contentType: string): Promise<string> {
