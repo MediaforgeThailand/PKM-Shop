@@ -32,10 +32,12 @@ async function ordersInRound(roundId: string, tenantId: string): Promise<OrderRo
   });
 }
 
-// Complete a round once no order is still in flight; pay the rider for the round.
+// Complete a round once NO order is still in flight; pay the rider for the round.
+// "In flight" = any non-terminal status, including confirmed/packing (an unpacked order must
+// not orphan when the last packed order is delivered) — audit fix.
 async function maybeCompleteRound(roundId: string, tenantId: string, actor: string) {
   const orders = await ordersInRound(roundId, tenantId);
-  const active = orders.some((o) => ['packed', 'out_for_delivery', 'delivering'].includes(o.status));
+  const active = orders.some((o) => ['confirmed', 'packing', 'packed', 'out_for_delivery', 'delivering'].includes(o.status));
   if (active) {
     return;
   }

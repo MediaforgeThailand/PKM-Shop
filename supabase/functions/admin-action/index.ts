@@ -20,7 +20,7 @@ const schema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('confirm_payout'), tenant_slug: z.string().min(1), payout_id: z.string().uuid(), slip_path: z.string().min(1) }),
 ]);
 
-type OrderRow = { id: string; grand_total: number; tenant_id: string };
+type OrderRow = { id: string; grand_total: number; tenant_id: string; delivery_type: string };
 type PayoutRow = { id: string; profile_id: string; total: number };
 
 Deno.serve(async (req) => {
@@ -37,13 +37,16 @@ Deno.serve(async (req) => {
 
     switch (body.action) {
       case 'confirm_payment': {
-        const order = await selectOne<OrderRow>('orders', { id: `eq.${body.order_id}`, select: 'id,grand_total,tenant_id', tenant_id: `eq.${tenant.id}` });
+        const order = await selectOne<OrderRow>('orders', { id: `eq.${body.order_id}`, select: 'id,grand_total,tenant_id,delivery_type', tenant_id: `eq.${tenant.id}` });
         if (!order) throw new HttpError('VALIDATION', 'Order not found.', 404);
         await rpc('pkm_confirm_payment', {
           p_actor: actor, p_amount: order.grand_total, p_auto: false, p_kind: 'goods', p_method: 'promptpay',
           p_order_id: order.id, p_raw: null, p_slip_url: body.slip_path ?? null, p_trans_ref: null, p_verified_by: profile.user_id,
         });
         await notifyEvent({ eventType: 'paid', orderId: order.id, tenantId: tenant.id, tenantSlug: tenant.slug }).catch(() => {});
+        if (order.delivery_type === 'express_grab') {
+          await notifyEvent({ eventType: 'express_paid', orderId: order.id, tenantId: tenant.id, tenantSlug: tenant.slug }).catch(() => {});
+        }
         return json({ ok: true });
       }
       case 'cancel_order': {
@@ -57,8 +60,9 @@ Deno.serve(async (req) => {
         return json({ ok: true, round });
       }
       case 'kerry_handover': {
+        // Order must be 'packed' first; transition surfaces the error instead of swallowing it.
+        await rpc('pkm_transition_order', { p_actor: actor, p_meta: { tracking: body.tracking }, p_order_id: body.order_id, p_to_status: 'delivered' });
         await updateRows('orders', { external_ref: body.tracking, updated_at: new Date().toISOString() }, { id: `eq.${body.order_id}`, tenant_id: `eq.${tenant.id}` });
-        await rpc('pkm_transition_order', { p_actor: actor, p_meta: { tracking: body.tracking }, p_order_id: body.order_id, p_to_status: 'delivered' }).catch(() => {});
         await notifyEvent({ eventType: 'kerry_handover', extra: { tracking: body.tracking }, orderId: body.order_id, tenantId: tenant.id, tenantSlug: tenant.slug }).catch(() => {});
         return json({ ok: true });
       }

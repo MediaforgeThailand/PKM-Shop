@@ -136,6 +136,7 @@ export type NotifyParams = {
 // Fan an event out to the right customer(s) and/or staff.
 export async function notifyEvent(params: NotifyParams): Promise<void> {
   const { tenantSlug, tenantId, eventType, orderId, roundId, extra = {} } = params;
+  const dayKey = new Date().toISOString().slice(0, 10); // discriminate recurring payroll/payouts
 
   const order = orderId ? await loadOrder(orderId, tenantId) : null;
   const roundLabel = extra.round_label ?? (order ? await roundLabelFor(order.round_id) : await roundLabelFor(roundId ?? null));
@@ -224,7 +225,7 @@ export async function notifyEvent(params: NotifyParams): Promise<void> {
     case 'payroll_cutoff': {
       const admins = await staffByRoles(tenantId, ['admin']);
       for (const a of admins) {
-        await sendOne({ audience: 'staff', body: staffText['payroll_admin']!(baseCtx), dedupKey: `payroll_admin:${extra.total ?? 0}:${a.id}`, eventType, lineUserId: a.line_user_id, recipientProfileId: a.id, tenantId, tenantSlug });
+        await sendOne({ audience: 'staff', body: staffText['payroll_admin']!(baseCtx), dedupKey: `payroll_admin:${dayKey}:${a.id}`, eventType, lineUserId: a.line_user_id, recipientProfileId: a.id, tenantId, tenantSlug });
       }
       break;
     }
@@ -232,7 +233,7 @@ export async function notifyEvent(params: NotifyParams): Promise<void> {
       if (extra.profileId) {
         const p = await selectOne<StaffProfile>('profiles', { id: `eq.${extra.profileId}`, select: 'id,line_user_id,roles', tenant_id: `eq.${tenantId}` });
         if (p) {
-          await sendOne({ audience: 'staff', body: staffText['payout_confirmed']!(baseCtx), dedupKey: `payout:${extra.profileId}:${extra.amount ?? 0}`, eventType, lineUserId: p.line_user_id, recipientProfileId: p.id, tenantId, tenantSlug });
+          await sendOne({ audience: 'staff', body: staffText['payout_confirmed']!(baseCtx), dedupKey: `payout:${extra.profileId}:${dayKey}:${extra.amount ?? 0}`, eventType, lineUserId: p.line_user_id, recipientProfileId: p.id, tenantId, tenantSlug });
         }
       }
       break;

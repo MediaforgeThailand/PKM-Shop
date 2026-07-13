@@ -84,6 +84,9 @@ Deno.serve(async (req) => {
         p_verified_by: null,
       });
       await notifyEvent({ eventType: 'paid', orderId: order.id, tenantId: tenant.id, tenantSlug: tenant.slug }).catch(() => {});
+      if (order.delivery_type === 'express_grab') {
+        await notifyEvent({ eventType: 'express_paid', orderId: order.id, tenantId: tenant.id, tenantSlug: tenant.slug }).catch(() => {});
+      }
       return json({ status: 'paid' });
     }
 
