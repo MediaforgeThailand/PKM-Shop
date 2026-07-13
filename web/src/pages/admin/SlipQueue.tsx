@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../lib/supabase';
 import { invokeFn, signedUrl } from '../../lib/api';
+import { EmptyState, PageHeader, Spinner, useUI } from '../../lib/ui';
 
 type PendingPayment = {
   id: string;
@@ -12,6 +13,7 @@ type PendingPayment = {
 
 export function SlipQueue() {
   const qc = useQueryClient();
+  const { toast, confirm } = useUI();
   const { data: rows = [], isLoading } = useQuery({
     queryKey: ['slip-queue'],
     refetchInterval: 15_000,
@@ -27,33 +29,46 @@ export function SlipQueue() {
   });
 
   async function view(path: string | null) {
-    if (!path) return;
+    if (!path) return toast('สลิปนี้ไม่มีรูปแนบ', 'info');
     const url = await signedUrl('payment-slips', path);
     if (url) window.open(url, '_blank');
+    else toast('เปิดสลิปไม่สำเร็จ', 'error');
   }
 
-  async function confirm(orderId: string) {
-    await invokeFn('admin-action', { action: 'confirm_payment', order_id: orderId });
-    await qc.invalidateQueries({ queryKey: ['slip-queue'] });
+  async function confirmPay(p: PendingPayment) {
+    const ok = await confirm({ title: 'ยืนยันว่าได้รับเงินแล้ว?', message: `${p.orders?.order_no ?? ''} · ฿${p.amount.toLocaleString('th-TH')}`, confirmText: 'ยืนยันชำระ' });
+    if (!ok) return;
+    try {
+      await invokeFn('admin-action', { action: 'confirm_payment', order_id: p.order_id });
+      await qc.invalidateQueries({ queryKey: ['slip-queue'] });
+      toast('ยืนยันชำระแล้ว เข้าสู่รอบจัดส่ง', 'success');
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'ยืนยันไม่สำเร็จ', 'error');
+    }
   }
 
   return (
     <div className="space-y-4">
-      <h1 className="text-lg font-bold">คิวตรวจสลิป (SlipOK ไม่ผ่าน / ยังไม่เชื่อม)</h1>
-      {isLoading && <p className="text-slate-400">กำลังโหลด…</p>}
-      {rows.length === 0 && !isLoading && <p className="text-sm text-slate-400">ไม่มีสลิปรอตรวจ 🎉</p>}
-      {rows.map((p) => (
-        <div key={p.id} className="card flex items-center justify-between">
-          <div>
-            <div className="font-mono text-sm font-semibold">{p.orders?.order_no ?? p.order_id}</div>
-            <div className="text-xs text-slate-500">฿{p.amount.toLocaleString('th-TH')}</div>
+      <PageHeader title="ตรวจสลิป" />
+      <p className="text-xs text-slate-400">สลิปที่ระบบตรวจอัตโนมัติไม่ผ่าน หรือยังไม่ได้เชื่อม SlipOK จะมารอตรงนี้</p>
+      {isLoading ? (
+        <Spinner />
+      ) : rows.length === 0 ? (
+        <EmptyState icon="🎉" title="ไม่มีสลิปรอตรวจ" />
+      ) : (
+        rows.map((p) => (
+          <div key={p.id} className="card flex items-center justify-between">
+            <div>
+              <div className="font-mono text-sm font-semibold">{p.orders?.order_no ?? p.order_id}</div>
+              <div className="text-xs text-slate-500">฿{p.amount.toLocaleString('th-TH')}</div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button className="btn-ghost btn-sm" onClick={() => void view(p.slip_photo_url)}>ดูสลิป</button>
+              <button className="btn-primary btn-sm" onClick={() => void confirmPay(p)}>ยืนยันชำระ</button>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button className="btn-ghost py-1 text-xs" onClick={() => void view(p.slip_photo_url)}>ดูสลิป</button>
-            <button className="btn-primary py-1 text-xs" onClick={() => void confirm(p.order_id)}>ยืนยันชำระ</button>
-          </div>
-        </div>
-      ))}
+        ))
+      )}
     </div>
   );
 }

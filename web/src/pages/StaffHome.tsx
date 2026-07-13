@@ -3,12 +3,14 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { invokeFn, uploadToBucket } from '../lib/api';
 import { useAuth } from '../lib/auth';
+import { useUI } from '../lib/ui';
 
 type TeamChannel = { id: string; name: string };
 type TeamMessage = { id: string; text: string; sender_id: string | null; created_at: string; profiles: { name: string } | null };
 
 export function StaffHome() {
   const { profile } = useAuth();
+  const { toast } = useUI();
   const tenantId = profile?.tenant_id ?? '';
   const [checkinMsg, setCheckinMsg] = useState<string | null>(null);
 
@@ -31,9 +33,13 @@ export function StaffHome() {
         const path = `${tenantId}/${crypto.randomUUID()}.jpg`;
         await uploadToBucket('checkin', path, file);
         const res = await invokeFn<{ geofence_pass: boolean | null }>('checkin', { lat: coords?.latitude, lng: coords?.longitude, photo_path: path });
-        setCheckinMsg(res.geofence_pass === false ? 'เช็คอินแล้ว (อยู่นอกรัศมี)' : 'เช็คอินสำเร็จ ✅');
+        const msg = res.geofence_pass === false ? 'เช็คอินแล้ว (อยู่นอกรัศมี)' : 'เช็คอินสำเร็จ ✅';
+        setCheckinMsg(msg);
+        toast(msg, res.geofence_pass === false ? 'info' : 'success');
       } catch (e) {
-        setCheckinMsg(`เช็คอินไม่สำเร็จ: ${e instanceof Error ? e.message : ''}`);
+        const msg = `เช็คอินไม่สำเร็จ: ${e instanceof Error ? e.message : ''}`;
+        setCheckinMsg(msg);
+        toast('เช็คอินไม่สำเร็จ', 'error');
       }
     };
     input.click();

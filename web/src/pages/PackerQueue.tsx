@@ -2,14 +2,16 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { invokeFn, uploadToBucket } from '../lib/api';
 import { useAuth } from '../lib/auth';
+import { EmptyState, Spinner, useUI } from '../lib/ui';
 import type { Order } from '../lib/types';
 
 export function PackerQueue() {
   const qc = useQueryClient();
   const { profile } = useAuth();
+  const { toast } = useUI();
   const tenantId = profile?.tenant_id ?? '';
 
-  const { data: orders = [] } = useQuery({
+  const { data: orders = [], isLoading } = useQuery({
     queryKey: ['packer-queue'],
     refetchInterval: 10_000,
     queryFn: async (): Promise<Order[]> => {
@@ -24,11 +26,16 @@ export function PackerQueue() {
   });
 
   async function claim(id: string) {
-    await invokeFn('packer-action', { action: 'claim', order_id: id });
-    await qc.invalidateQueries({ queryKey: ['packer-queue'] });
+    try {
+      await invokeFn('packer-action', { action: 'claim', order_id: id });
+      await qc.invalidateQueries({ queryKey: ['packer-queue'] });
+      toast('รับงานแพ็คแล้ว', 'success');
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'รับงานไม่สำเร็จ', 'error');
+    }
   }
 
-  async function pack(id: string) {
+  function pack(id: string) {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'image/*';
@@ -36,10 +43,15 @@ export function PackerQueue() {
     input.onchange = async () => {
       const file = input.files?.[0];
       if (!file) return;
-      const path = `${tenantId}/${crypto.randomUUID()}.jpg`;
-      await uploadToBucket('packing', path, file);
-      await invokeFn('packer-action', { action: 'pack', order_id: id, photo_path: path });
-      await qc.invalidateQueries({ queryKey: ['packer-queue'] });
+      try {
+        const path = `${tenantId}/${crypto.randomUUID()}.jpg`;
+        await uploadToBucket('packing', path, file);
+        await invokeFn('packer-action', { action: 'pack', order_id: id, photo_path: path });
+        await qc.invalidateQueries({ queryKey: ['packer-queue'] });
+        toast('แพ็คเสร็จ แจ้งลูกค้าแล้ว', 'success');
+      } catch (e) {
+        toast(e instanceof Error ? e.message : 'แพ็คไม่สำเร็จ', 'error');
+      }
     };
     input.click();
   }
@@ -47,20 +59,26 @@ export function PackerQueue() {
   return (
     <div className="space-y-3">
       <h1 className="text-lg font-bold">คิวแพ็คของ</h1>
-      {orders.length === 0 && <p className="text-sm text-slate-400">ไม่มีของต้องแพ็คตอนนี้</p>}
-      {orders.map((o) => (
-        <div key={o.id} className="card">
-          <div className="mb-2 flex items-center justify-between">
-            <span className="font-mono text-sm font-semibold">{o.order_no}</span>
-            <span className="badge bg-slate-100 text-slate-600">{o.status === 'confirmed' ? 'รอแพ็ค' : 'กำลังแพ็ค'}</span>
+      {isLoading ? (
+        <Spinner />
+      ) : orders.length === 0 ? (
+        <EmptyState icon="🎁" title="ไม่มีของต้องแพ็คตอนนี้" />
+      ) : (
+        orders.map((o) => (
+          <div key={o.id} className="card">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="font-mono text-sm font-semibold">{o.order_no}</span>
+              <span className="badge bg-slate-100 text-slate-600">{o.status === 'confirmed' ? 'รอแพ็ค' : 'กำลังแพ็ค'}</span>
+            </div>
+            <div className="mb-2 text-xs text-slate-500">{o.recipient_name || 'ลูกค้า'} · ฿{o.grand_total.toLocaleString('th-TH')}</div>
+            {o.status === 'confirmed' ? (
+              <button className="btn-primary w-full" onClick={() => void claim(o.id)}>รับงานแพ็ค</button>
+            ) : (
+              <button className="btn-primary w-full" onClick={() => pack(o.id)}>📷 ถ่ายรูป + แพ็คเสร็จ</button>
+            )}
           </div>
-          {o.status === 'confirmed' ? (
-            <button className="btn-primary w-full text-base" onClick={() => void claim(o.id)}>รับงานแพ็ค</button>
-          ) : (
-            <button className="btn-primary w-full text-base" onClick={() => void pack(o.id)}>ถ่ายรูป + แพ็คเสร็จ</button>
-          )}
-        </div>
-      ))}
+        ))
+      )}
     </div>
   );
 }

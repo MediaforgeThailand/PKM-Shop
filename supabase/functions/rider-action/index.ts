@@ -1,11 +1,12 @@
 // PKM-Shop — rider multi-stop delivery (Ready.md §3.1, §3.2, §3.4). Role: rider or admin.
-//  claim_round: accept a locked round (locked -> confirmed, stamp rider), move its packed
-//               orders to out_for_delivery, notify every customer in the round.
+//  claim_round: accept a locked round (locked -> confirmed, stamp rider). Packed orders go
+//               out_for_delivery; any order NOT yet packed is bumped to the NEXT round so it
+//               never orphans this one (deadlock fix). Notify every customer in the round.
 //  start_stop:  begin a stop (round -> in_progress, order -> delivering), notify that customer.
 //  pod:         proof of delivery (order -> delivered + photo), notify; complete round if last.
 //  return:      undelivered (order -> returned + reason -> awaiting_redelivery_fee), record a
-//               return, notify customer + admin; complete round if last.
-import { assertTenant, insertRow, rpc, selectMany, updateRows } from '../_shared/db.ts';
+//               return + restock goods, notify customer + admin; complete round if last.
+import { assertTenant, insertRow, rpc, selectMany, selectOne, updateRows } from '../_shared/db.ts';
 import { handleOptions, HttpError, json, toErrorResponse, validateJson, z } from '../_shared/http.ts';
 import { assertRole, actorTag, resolveStaffProfile, type StaffProfile } from '../_shared/pkmAuth.ts';
 import { createSignedReadUrl } from '../_shared/storage.ts';
@@ -32,17 +33,27 @@ async function ordersInRound(roundId: string, tenantId: string): Promise<OrderRo
   });
 }
 
-// Complete a round once NO order is still in flight; pay the rider for the round.
-// "In flight" = any non-terminal status, including confirmed/packing (an unpacked order must
-// not orphan when the last packed order is delivered) — audit fix.
+// Complete a round once no stop is still in flight, then pay the rider (only if the rider
+// actually delivered/returned at least one stop). "In flight" = out_for_delivery/delivering
+// only — after claim, unpacked orders are bumped out and packed ones are already dispatched.
 async function maybeCompleteRound(roundId: string, tenantId: string, actor: string) {
   const orders = await ordersInRound(roundId, tenantId);
-  const active = orders.some((o) => ['confirmed', 'packing', 'packed', 'out_for_delivery', 'delivering'].includes(o.status));
-  if (active) {
-    return;
+  const inFlight = orders.some((o) => ['out_for_delivery', 'delivering'].includes(o.status));
+  if (inFlight) return;
+  const didWork = orders.some((o) => ['delivered', 'returned'].includes(o.status));
+  try {
+    const round = await selectOne<{ id: string; status: string }>('delivery_rounds', { id: `eq.${roundId}`, select: 'id,status', tenant_id: `eq.${tenantId}` });
+    if (!round || round.status === 'done') return;
+    if (round.status === 'confirmed') {
+      await rpc('pkm_transition_round', { p_actor: actor, p_meta: {}, p_round_id: roundId, p_rider_id: null, p_to_status: 'in_progress' });
+    }
+    await rpc('pkm_transition_round', { p_actor: actor, p_meta: {}, p_round_id: roundId, p_rider_id: null, p_to_status: 'done' });
+    if (didWork) {
+      await rpc('pkm_record_rider_round_pay', { p_round_id: roundId });
+    }
+  } catch (error) {
+    console.warn('round_complete_failed', roundId, error instanceof Error ? error.message : error);
   }
-  await rpc('pkm_transition_round', { p_actor: actor, p_meta: {}, p_round_id: roundId, p_rider_id: null, p_to_status: 'done' }).catch(() => {});
-  await rpc('pkm_record_rider_round_pay', { p_round_id: roundId }).catch(() => {});
 }
 
 async function handleClaimRound(roundId: string, tenant: { id: string; slug: string }, profile: StaffProfile, actor: string) {
@@ -51,6 +62,9 @@ async function handleClaimRound(roundId: string, tenant: { id: string; slug: str
   for (const o of orders) {
     if (o.status === 'packed') {
       await rpc('pkm_transition_order', { p_actor: actor, p_meta: {}, p_order_id: o.id, p_to_status: 'out_for_delivery' }).catch(() => {});
+    } else if (['confirmed', 'packing'].includes(o.status)) {
+      // Not packed in time — bump to the next round so this claimed round can complete.
+      await rpc('pkm_reassign_order_next_round', { p_order_id: o.id }).catch(() => {});
     }
   }
   await notifyEvent({ eventType: 'rider_accepted', roundId, tenantId: tenant.id, tenantSlug: tenant.slug }).catch(() => {});
@@ -109,6 +123,7 @@ Deno.serve(async (req) => {
     // return
     await rpc('pkm_transition_order', { p_actor: actor, p_meta: { reason: body.reason }, p_note: body.reason, p_order_id: order.id, p_to_status: 'returned' });
     await insertRow('returns', { order_id: order.id, reason: body.reason, tenant_id: tenant.id });
+    await rpc('pkm_restock_returned_order', { p_order_id: order.id }).catch(() => {});
     await rpc('pkm_transition_order', { p_actor: 'system', p_meta: {}, p_order_id: order.id, p_to_status: 'awaiting_redelivery_fee' }).catch(() => {});
     await notifyEvent({ eventType: 'returned', extra: { reason: body.reason }, orderId: order.id, tenantId: tenant.id, tenantSlug: tenant.slug }).catch(() => {});
     if (order.round_id) {

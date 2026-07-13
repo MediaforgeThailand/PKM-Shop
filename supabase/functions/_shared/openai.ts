@@ -51,14 +51,37 @@ function requireOpenAIKey() {
   return apiKey;
 }
 
-function requirePromptId() {
-  const promptId = readEnv('PKM_PROMPT_ID')?.trim() || readEnv('MIRACARE_PROMPT_ID')?.trim();
+// The owner-published PKM sales prompt (by id) is preferred. Until it exists we fall back to
+// inline instructions below so the AI still sells PKM goods with the existing OPENAI_API_KEY
+// (MIRACARE_PROMPT_ID is a health-clinic prompt — wrong for a shop — so we do NOT fall back to it).
+function optionalPromptId(): string | null {
+  return readEnv('PKM_PROMPT_ID')?.trim() || null;
+}
 
-  if (!promptId) {
-    throw new HttpError('UPSTREAM', 'Missing PKM_PROMPT_ID (owner-published sales prompt).', 500);
-  }
-
-  return promptId;
+// Inline PKM goods-selling system prompt (Thai). Variables are interpolated; the AI must end
+// its reply with a marker to render UI cards (see marker.ts): [[categories]], [[order_status]],
+// or [[products: key1,key2]] using catalog_key values from PRODUCT_CATALOG.
+function buildPkmInstructions(vars: {
+  brand_name: string;
+  personal_context: string;
+  product_catalog: string;
+  recent_chat: string;
+  user_nickname: string;
+}): string {
+  return [
+    `คุณคือแอดมินร้าน "${vars.brand_name}" ผู้ช่วยขายของทาง LINE พูดไทยสุภาพ กระชับ เป็นกันเอง เรียกลูกค้าว่า "${vars.user_nickname}"`,
+    `หน้าที่: แนะนำสินค้า ปิดการขาย และพาลูกค้าไปจนจ่ายเงิน โดยขั้นตอนคือ 1) เลือกสินค้า 2) แจ้งที่อยู่จัดส่ง (พิมพ์หรือแชร์ตำแหน่ง) 3) เลือกวิธีส่ง 4) โอนแล้วส่งสลิป`,
+    `กติกาสำคัญ: ห้ามแต่งชื่อสินค้า/ราคาเอง ใช้เฉพาะจากรายการสินค้า (PRODUCT_CATALOG) เท่านั้น ถ้าลูกค้าถามสิ่งที่ไม่มี ให้บอกตามตรงและเสนอของที่ใกล้เคียง ห้ามสัญญาส่วนลด/โปรที่ไม่มีข้อมูล`,
+    `ตอบสั้น ๆ 1-3 ประโยค แล้วปิดท้ายด้วย marker เพื่อให้ระบบแสดงการ์ด (เลือกได้อย่างเดียวต่อข้อความ):`,
+    `- ถ้าจะโชว์หมวดสินค้า ปิดท้ายด้วย [[categories]]`,
+    `- ถ้าจะโชว์สินค้าเจาะจง ปิดท้ายด้วย [[products: catalog_key1, catalog_key2]] (ใช้ catalog_key จาก PRODUCT_CATALOG สูงสุด 4 อย่าง)`,
+    `- ถ้าลูกค้าถามสถานะออเดอร์ ปิดท้ายด้วย [[order_status]]`,
+    `- ถ้าไม่ต้องโชว์การ์ด ไม่ต้องใส่ marker`,
+    ``,
+    `PRODUCT_CATALOG (JSON): ${vars.product_catalog}`,
+    `ข้อมูลลูกค้า: ${vars.personal_context || '-'}`,
+    `บทสนทนาก่อนหน้า: ${vars.recent_chat || '-'}`,
+  ].join('\n');
 }
 
 function extractText(data: OpenAIResponse) {
@@ -114,25 +137,18 @@ export async function callMiraPrompt(
   },
   input: string,
 ) {
-  const promptId = requirePromptId();
+  const promptId = optionalPromptId();
   const promptVersion = readEnv('MIRA_PROMPT_VERSION')?.trim();
   const timeoutMs = Number(envOrDefault('OPENAI_REQUEST_TIMEOUT_MS', '30000'));
+  // Prompt-by-id when the owner has published one; otherwise inline PKM sales instructions.
+  const body: Record<string, unknown> = promptId
+    ? { input, prompt: { id: promptId, ...(promptVersion ? { version: promptVersion } : {}), variables: vars }, store: false }
+    : { input, instructions: buildPkmInstructions(vars), model: envOrDefault('PKM_OPENAI_MODEL', 'gpt-4o-mini'), store: false };
   let lastError: unknown = null;
 
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
-      const payload = await postResponses(
-        {
-          input,
-          prompt: {
-            id: promptId,
-            ...(promptVersion ? { version: promptVersion } : {}),
-            variables: vars,
-          },
-          store: false,
-        },
-        timeoutMs,
-      );
+      const payload = await postResponses(body, timeoutMs);
       const text = extractText(payload);
 
       if (!text) {

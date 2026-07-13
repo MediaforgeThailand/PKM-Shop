@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase, TENANT_SLUG } from './supabase';
+import { invokeFn } from './api';
 import type { PkmRole, Profile } from './types';
 
 type AuthState = {
@@ -31,7 +32,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function hydrate(nextSession: Session | null) {
     setSession(nextSession);
-    setProfile(nextSession ? await loadProfile() : null);
+    if (nextSession) {
+      let p = await loadProfile();
+      // No profile bound yet → let the server bootstrap the owner (first login) or report
+      // that an admin must add this user. Then re-read.
+      if (!p) {
+        try {
+          await invokeFn('staff-admin', { action: 'ensure_self' });
+          p = await loadProfile();
+        } catch {
+          // leave p null; UI shows the pending-access state
+        }
+      }
+      setProfile(p);
+    } else {
+      setProfile(null);
+    }
     setLoading(false);
   }
 

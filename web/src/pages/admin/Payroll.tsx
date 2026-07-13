@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../lib/supabase';
 import { invokeFn, uploadToBucket } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
+import { EmptyState, PageHeader, Spinner, useUI } from '../../lib/ui';
 
 type Payout = {
   id: string;
@@ -15,9 +16,10 @@ type Period = { id: string; period_start: string; period_end: string; status: st
 export function Payroll() {
   const qc = useQueryClient();
   const { profile } = useAuth();
+  const { toast } = useUI();
   const tenantId = profile?.tenant_id ?? '';
 
-  const { data: period } = useQuery({
+  const { data: period, isLoading } = useQuery({
     queryKey: ['payroll-period'],
     queryFn: async (): Promise<Period | null> => {
       const { data } = await supabase.from('payroll_periods').select('id,period_start,period_end,status').order('period_start', { ascending: false }).limit(1).maybeSingle();
@@ -33,42 +35,62 @@ export function Payroll() {
     },
   });
 
-  async function confirm(payout: Payout) {
+  function confirmPayout(payout: Payout) {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'image/*';
     input.onchange = async () => {
       const file = input.files?.[0];
       if (!file) return;
-      const path = `${tenantId}/${crypto.randomUUID()}.jpg`;
-      await uploadToBucket('payout-slips', path, file);
-      await invokeFn('admin-action', { action: 'confirm_payout', payout_id: payout.id, slip_path: path });
-      await qc.invalidateQueries({ queryKey: ['payouts'] });
+      try {
+        const path = `${tenantId}/${crypto.randomUUID()}.jpg`;
+        await uploadToBucket('payout-slips', path, file);
+        await invokeFn('admin-action', { action: 'confirm_payout', payout_id: payout.id, slip_path: path });
+        await qc.invalidateQueries({ queryKey: ['payouts'] });
+        toast('บันทึกการโอนแล้ว', 'success');
+      } catch (e) {
+        toast(e instanceof Error ? e.message : 'บันทึกไม่สำเร็จ', 'error');
+      }
     };
     input.click();
   }
 
+  const total = payouts.reduce((s, p) => s + p.total, 0);
+
   return (
     <div className="space-y-4">
-      <h1 className="text-lg font-bold">เงินเดือน/ค่ารอบ</h1>
-      {period ? (
-        <p className="text-sm text-slate-500">รอบ {period.period_start} → {period.period_end} · {period.status === 'closed' ? 'ปิดรอบแล้ว' : 'กำลังสะสม'}</p>
+      <PageHeader title="เงินเดือน / ค่ารอบ" />
+      {isLoading ? (
+        <Spinner />
       ) : (
-        <p className="text-sm text-slate-400">ยังไม่มีรอบ payroll</p>
-      )}
-      {payouts.map((p) => (
-        <div key={p.id} className="card flex items-center justify-between">
-          <div>
-            <div className="text-sm font-semibold">{p.profiles?.name ?? p.profile_id}</div>
-            <div className="text-xs text-slate-500">฿{p.total.toLocaleString('th-TH')}</div>
-          </div>
-          {p.paid_at ? (
-            <span className="badge bg-green-100 text-green-700">โอนแล้ว</span>
+        <>
+          {period ? (
+            <div className="card">
+              <div className="text-sm text-slate-500">รอบ {period.period_start} → {period.period_end}</div>
+              <div className="mt-1 flex items-center justify-between">
+                <span className={`badge ${period.status === 'closed' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>{period.status === 'closed' ? 'ปิดรอบแล้ว' : 'กำลังสะสม'}</span>
+                <span className="text-sm font-semibold">รวม ฿{total.toLocaleString('th-TH')}</span>
+              </div>
+            </div>
           ) : (
-            <button className="btn-primary py-1 text-xs" onClick={() => void confirm(p)}>ยืนยันโอน + แนบสลิป</button>
+            <EmptyState icon="💰" title="ยังไม่มีรอบจ่ายเงิน" hint="รอบจะสร้างอัตโนมัติเมื่อมีค่ารอบ/ค่าคอม" />
           )}
-        </div>
-      ))}
+
+          {payouts.map((p) => (
+            <div key={p.id} className="card flex items-center justify-between">
+              <div>
+                <div className="text-sm font-semibold">{p.profiles?.name ?? 'พนักงาน'}</div>
+                <div className="text-xs text-slate-500">฿{p.total.toLocaleString('th-TH')}</div>
+              </div>
+              {p.paid_at ? (
+                <span className="badge bg-green-100 text-green-700">โอนแล้ว</span>
+              ) : (
+                <button className="btn-primary btn-sm" onClick={() => confirmPayout(p)}>ยืนยันโอน + สลิป</button>
+              )}
+            </div>
+          ))}
+        </>
+      )}
     </div>
   );
 }

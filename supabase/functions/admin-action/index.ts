@@ -18,6 +18,16 @@ const schema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('create_kerry_round'), tenant_slug: z.string().min(1) }),
   z.object({ action: z.literal('kerry_handover'), tenant_slug: z.string().min(1), order_id: z.string().uuid(), tracking: z.string().min(1) }),
   z.object({ action: z.literal('confirm_payout'), tenant_slug: z.string().min(1), payout_id: z.string().uuid(), slip_path: z.string().min(1) }),
+  z.object({
+    action: z.literal('create_manual_order'), tenant_slug: z.string().min(1),
+    items: z.array(z.object({ product_id: z.string().uuid(), qty: z.number().int().min(1).max(99) })).min(1),
+    delivery_type: z.enum(['rider', 'express_grab', 'lalamove', 'parcel_kerry']).default('rider'),
+    address: z.string().max(500).optional(),
+    recipient_name: z.string().max(120).optional(),
+    recipient_phone: z.string().max(30).optional(),
+    customer_phone: z.string().max(30).optional(),
+    mark_paid: z.boolean().optional(),
+  }),
 ]);
 
 type OrderRow = { id: string; grand_total: number; tenant_id: string; delivery_type: string };
@@ -65,6 +75,29 @@ Deno.serve(async (req) => {
         await updateRows('orders', { external_ref: body.tracking, updated_at: new Date().toISOString() }, { id: `eq.${body.order_id}`, tenant_id: `eq.${tenant.id}` });
         await notifyEvent({ eventType: 'kerry_handover', extra: { tracking: body.tracking }, orderId: body.order_id, tenantId: tenant.id, tenantSlug: tenant.slug }).catch(() => {});
         return json({ ok: true });
+      }
+      case 'create_manual_order': {
+        const order = await rpc<OrderRow>('pkm_create_order', {
+          p_tenant_id: tenant.id,
+          p_items: body.items.map((i) => ({ product_id: i.product_id, qty: i.qty })),
+          p_delivery_type: body.delivery_type,
+          p_address: body.address ?? null,
+          p_recipient_name: body.recipient_name ?? null,
+          p_recipient_phone: body.recipient_phone ?? null,
+          p_customer_phone: body.customer_phone ?? null,
+          p_lat: null, p_lng: null,
+        });
+        if (body.mark_paid) {
+          await rpc('pkm_confirm_payment', {
+            p_actor: actor, p_amount: order.grand_total, p_auto: false, p_kind: 'goods', p_method: 'promptpay',
+            p_order_id: order.id, p_raw: null, p_slip_url: null, p_trans_ref: null, p_verified_by: profile.user_id,
+          });
+          await notifyEvent({ eventType: 'paid', orderId: order.id, tenantId: tenant.id, tenantSlug: tenant.slug }).catch(() => {});
+          if (order.delivery_type === 'express_grab') {
+            await notifyEvent({ eventType: 'express_paid', orderId: order.id, tenantId: tenant.id, tenantSlug: tenant.slug }).catch(() => {});
+          }
+        }
+        return json({ ok: true, order });
       }
       case 'confirm_payout': {
         const payout = await selectOne<PayoutRow>('payroll_payouts', { id: `eq.${body.payout_id}`, select: 'id,profile_id,total', tenant_id: `eq.${tenant.id}` });

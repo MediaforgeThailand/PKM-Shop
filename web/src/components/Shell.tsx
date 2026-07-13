@@ -12,6 +12,7 @@ const NAV: NavItem[] = [
   { to: '/packer', label: 'แพ็ค', icon: '🎁', roles: ['admin', 'packer'] },
   { to: '/rider', label: 'ไรเดอร์', icon: '🛵', roles: ['admin', 'rider'] },
   { to: '/admin/payroll', label: 'เงินเดือน', icon: '💰', roles: ['admin'] },
+  { to: '/admin/staff', label: 'ทีม', icon: '👥', roles: ['admin'] },
   { to: '/admin/settings', label: 'ตั้งค่า', icon: '⚙️', roles: ['admin'] },
   { to: '/staff', label: 'เช็คอิน', icon: '👤', roles: ['admin', 'stock', 'packer', 'rider', 'staff'] },
 ];

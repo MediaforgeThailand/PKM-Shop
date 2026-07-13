@@ -45,10 +45,10 @@ export type Product = {
   description: string;
   price_baht: number;
   category_id: string | null;
+  category?: string;
+  image_url: string | null;
   stock_qty: number;
   reserved_qty: number;
-  weight_g: number;
-  packer_commission_rate: number;
   active: boolean;
 };
 
