@@ -1,6 +1,5 @@
 -- PKM-Shop — consolidated schema (run once in the Supabase SQL Editor of an EMPTY project).
--- Equivalent to applying migrations: substrate + phase0..phase7 in order.
--- Safe/idempotent on a fresh project.
+-- Equivalent to applying migrations: substrate + phase0..phase7 in order. Idempotent.
 
 
 -- ═══ 20260712980000_pkm_substrate.sql ═══
@@ -1621,13 +1620,13 @@ begin
   if exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
     begin
       alter publication supabase_realtime add table public.team_messages;
-    exception when duplicate_object then null; end;
+    exception when others then null; end;
     begin
       alter publication supabase_realtime add table public.orders;
-    exception when duplicate_object then null; end;
+    exception when others then null; end;
     begin
       alter publication supabase_realtime add table public.delivery_rounds;
-    exception when duplicate_object then null; end;
+    exception when others then null; end;
   end if;
 end;
 $$;

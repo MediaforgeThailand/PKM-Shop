@@ -106,13 +106,13 @@ begin
   if exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
     begin
       alter publication supabase_realtime add table public.team_messages;
-    exception when duplicate_object then null; end;
+    exception when others then null; end;
     begin
       alter publication supabase_realtime add table public.orders;
-    exception when duplicate_object then null; end;
+    exception when others then null; end;
     begin
       alter publication supabase_realtime add table public.delivery_rounds;
-    exception when duplicate_object then null; end;
+    exception when others then null; end;
   end if;
 end;
 $$;
