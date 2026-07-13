@@ -1,5 +1,4 @@
--- PKM-Shop — consolidated schema (run once in the Supabase SQL Editor of an EMPTY project).
--- Equivalent to applying migrations: substrate + phase0..phase7 in order. Idempotent.
+-- PKM-Shop — consolidated schema (run once in the Supabase SQL Editor of an EMPTY project). Idempotent.
 
 
 -- ═══ 20260712980000_pkm_substrate.sql ═══
@@ -358,8 +357,9 @@ returns text
 language sql
 volatile
 as $$
-  -- 6-char ambiguity-free code (no 0/O/1/I/L)
-  select string_agg(substr('23456789ABCDEFGHJKMNPQRSTUVWXYZ', 1 + (get_byte(gen_random_bytes(1), 0) % 31)::int, 1), '')
+  -- 6-char ambiguity-free code (no 0/O/1/I/L). Uses built-in random() (pgcrypto's
+  -- gen_random_bytes lives in Supabase's extensions schema, off the migration search_path).
+  select string_agg(substr('23456789ABCDEFGHJKMNPQRSTUVWXYZ', 1 + floor(random() * 31)::int, 1), '')
   from generate_series(1, 6)
 $$;
 
