@@ -1,53 +1,79 @@
-# MiraCare — Rules for ALL AI agents working in this repository
+# PKM-Shop — Rules for ALL AI agents working in this repository
 
-This file is LAW for every AI agent (Codex, Claude, Cursor, Copilot, or any other tool) and every human contributor using one. Read it BEFORE writing any code. If a task conflicts with this file, the task is wrong — stop and ask the owner.
+This file is LAW for every AI agent (Claude, Codex, Cursor, Copilot, any other tool) and every
+human using one. Read it BEFORE writing any code. If a task conflicts with this file, the task
+is wrong — stop and ask the owner.
 
-Only the **owner** (taksin / MediaForge) may change this file, `docs/miracare-codex-handoff.md`, or any section marked DECIDED in the plan documents.
+Only the **owner** (taksin / MediaForge) may change this file, `Ready.md`, or any section marked
+DECIDED in the plan documents.
+
+> **Heritage.** This repo was cloned from the MiraCare health platform and **pivoted** (owner-
+> authorized, 2026-07-13) to PKM-Shop, a LINE goods-delivery commerce + operations platform.
+> The original MiraCare project is separate and untouched. MiraCare-specific health code
+> (lab/wearable/PDPA-health/branches/referrals/RAG/Stripe) is being removed — do not build on it.
 
 ## 0. The one-paragraph context you must have
 
-MiraCare is a white-label hospital health platform (Thai market): an AI sales/consult chat, in-chat commerce (PromptPay QR), an admin panel, a referral program, and a health dashboard, all on one multi-tenant Supabase backend. The AI conversation behavior is governed by a published OpenAI prompt that has been behavior-tested turn-by-turn. Most of the "core" below exists to protect two things: **the tested conversation contract** and **the integrity of money/health data**.
+PKM-Shop is a Thai LINE Official Account commerce+operations platform. Customers buy through
+**one AI in LINE OA** end-to-end: pick products → give address → fare is computed → pay by
+PromptPay slip (verified by SlipOK) → track delivery until it arrives. Back office: stock,
+packing, riders (hourly rounds, 24/7), payroll/commission, team chat, HR check-in, admin panel —
+a single web app (mobile-first for rider/packer). **Every notification, customer- and staff-
+side, goes through the one LINE OA.** The AI chat *engine* is reused from MiraCare; its selling
+*behavior* is governed by an owner-published OpenAI prompt referenced by id. Most of the "core"
+below protects two things: **the reused conversation contract** and **the integrity of money,
+stock, and payroll data**.
 
 ## 1. Where the truth lives (read in this order)
 
 1. `AGENTS.md` (this file) — hard rules.
-2. `docs/miracare-codex-handoff.md` — the AI model contract (PRIME DIRECTIVE).
-3. The plan for your task: `docs/miracare-v3-chat-commerce-plan.md`, `docs/miracare-showcase-frontend-plan.md`, `docs/miracare-v2-product-plan.md`, `docs/codex-goals.md`.
-4. `docs/v3-audit-report-2026-06-12.md` and other audit reports — known follow-ups; do not silently re-fix or contradict them.
+2. `Ready.md` — the business rule set (delivery rounds, fares, payment, payroll, SlipOK §7.1).
+   Business rules come from here; **never invent new ones** — if uncovered, stop and ask.
+3. `docs/pkm-shop-line-commerce-plan.md` — the build plan, DoD tracker, keep/delete inventory.
+4. `docs/pkm-shop-clone-runbook.md` — how PKM-Shop is stood up as its own Supabase project + repo.
 
-If your task is not described by any plan document, treat it as out-of-scope for the core: build it WITHOUT touching anything in §2, or stop and ask.
+If a task is not described by `Ready.md` or the plan, treat it as out-of-scope for the core:
+build it WITHOUT touching §2, or stop and ask.
 
 ## 2. PROTECTED CORE — never change without an owner-approved plan section
 
 | Area | Files | Rule |
 |---|---|---|
-| Model contract | `supabase/functions/_shared/openai.ts` (`callMiraPrompt`) | Prompt referenced by ID only; variables exactly `brand_name`, `user_nickname`, `personal_context`, `recent_chat`, `product_catalog`; `store:false` always; version override ONLY via `MIRA_PROMPT_VERSION` env. Never inline prompt text, never add system prompts on top, never change the model/tools. |
-| Prompt content | OpenAI Platform `pmpt_6a29c7e353b88196a6e648b24c54849e0f6204e24d65c021` | Owner-only. Agents NEVER edit prompt content or flip the default version. If the prompt seems wrong, report — do not work around it by post-processing model text. |
-| Marker protocol | `supabase/functions/_shared/marker.ts` | `[[products: ≤4 ids]]`, `[[categories]]`, `[[order_status]]`, one marker max, final line, always stripped from visible text. Changing syntax/semantics = new prompt version + owner approval + regression suite. |
-| Card suppression | `orchestrate.ts` purchase-flow guard | Product/category cards are suppressed while an order is in `selecting_branch`/`collecting_info`/`awaiting_payment`. Keep it; it is deliberate UX enforcement, not a bug. |
-| Order state machine | `supabase/functions/_shared/orders.ts`, `transition_order` RPC | `transition_order` is the ONLY way to change `orders.status`. Never `update orders set status` directly anywhere (code, scripts, admin). Statuses are fixed: `selecting_branch → collecting_info → awaiting_payment → submitted → confirmed → booked → done / cancelled`. New statuses/transitions = plan change + migration + tests. |
-| Money | `promptpay.ts`, `commissions.ts`, order amount fields | Customer payment = PromptPay QR + staff confirmation. Stripe stays behind a default-off flag. Amounts come only from `products.price_baht` at order creation; commissions only from `commission_scheme_snapshot`. No price math from model output, ever. |
-| Tenancy & RLS | all migrations, `_shared/db.ts` | Every business table carries `tenant_id` + RLS. New tables must ship RLS in the same migration. Service-role keys exist only inside edge functions. |
-| Migrations | `supabase/migrations/*` | Additive only. NEVER edit or delete an existing migration file. New file, new timestamp, idempotent (`if not exists` / `drop policy if exists` + recreate). |
-| Conversation purity | `chat-orchestrator` reply path | The backend NEVER scripts conversational replies, intake questions, or sales lines. Thai text in the reply path is allowed only as templated **system notices** in `templates.ts` and DB-derived context lines built in `orders.ts`/`context.ts`. If you find yourself writing a Thai sentence the "assistant says", you are breaking the architecture. |
-| Facts & PDPA | `facts.ts`, `fact-extractor`, `consents` | `user_facts` is append-only with supersede; facts are extracted from USER messages only, never from assistant text; writes are consent-gated. Health images/slips live in private buckets with signed URLs. |
-| Medical safety | `lab.ts`, `templates.ts` disclaimer | No diagnosis language anywhere; lab summaries pass `sanitizeLabSummary`; emergency behavior (1669/ER, no products) is prompt-governed — never intercept it in code. |
+| AI chat contract (reused) | `supabase/functions/_shared/openai.ts` (`callMiraPrompt`) | Prompt referenced by **id only** (env `PKM_PROMPT_ID` / `MIRACARE_PROMPT_ID`); variables exactly `brand_name`, `user_nickname`, `personal_context`, `recent_chat`, `product_catalog`; `store:false` always. Never inline prompt text, never add a system prompt on top, never change the model/tools in code. The selling prompt is owner-published; if it seems wrong, report — do not post-process model text. |
+| Marker protocol | `supabase/functions/_shared/marker.ts` | `[[products: ≤4 ids]]`, `[[categories]]`, `[[order_status]]`, one marker max, final line, always stripped from visible text. New card type = new prompt version + owner approval + regression suite. |
+| Order/round state machines | new fulfilment RPCs + `order_events` | A single sanctioned RPC per entity is the ONLY way to change `orders.status` / `delivery_rounds.status`. Never `update … set status` directly (code, scripts, admin). Every transition inserts an `order_events` (or round event) row in the **same transaction**. Status sets & transitions are fixed by `Ready.md` §5; changes = plan change + migration + tests. |
+| Money & stock authority | `promptpay.ts`, `fare-calc`, `slip-verify`, `payments`, `stock_movements`, payroll tables | Payment is verified **server-side only** (edge function + service role); the client never declares "paid". SlipOK re-validates amount + receiver account + duplicate slip before an order becomes `paid` (`Ready.md` §7.1). Product prices and fares come only from `products`/`app_settings`, never from model output. Stock reserve/decrement/return only through the sanctioned movement path. Payroll amounts are frozen from `app_settings`/product rates at the event, never recomputed loosely. |
+| Settings, not constants | `app_settings` | No hardcoded rates/fees/radii/round-times/commission anywhere. Read them from `app_settings`; expose them in the admin Settings UI. |
+| Tenancy & RLS | all migrations, `_shared/db.ts` | Every business table carries `tenant_id` + RLS shipped in the **same** migration. Service-role keys live only inside edge functions. |
+| Migrations | `supabase/migrations/*` | Additive only. NEVER edit or delete an already-applied migration file. New file, new timestamp, idempotent (`if not exists` / `drop policy if exists` + recreate). The one exception — removing MiraCare health migrations during the pivot — is an explicit, owner-authorized cleanup step, done in its own reviewable commit. |
+| Conversation purity | `ai-sales-agent` reply path | The backend NEVER scripts conversational replies, intake questions, address prompts, or sales lines. Thai text in the reply path is allowed only as templated **system notices** in `templates.ts` and DB-derived context lines. Collecting the address is the (owner-owned) prompt's job. |
+| Time & rounds | `round-lock`, `payroll-cutoff`, fare/round logic | All round math and cron run in **Asia/Bangkok**, 24/7. Cutoff is minute `:30`; payroll cutoff is Sunday 24:00 (Mon 00:00) TZ Bangkok. Edge cases (12:29/12:30/12:31, cross-midnight) must have tests. |
 
 ## 3. Standing engineering rules
 
-1. **Scope discipline.** One PR per plan phase. Do not "improve" protected-core files opportunistically while doing unrelated work (no drive-by refactors of `_shared/*`).
-2. **Gates stay green.** `npm run typecheck` and `npm run v2:verify` must pass on every PR. Never weaken, skip, or delete an audit script/assertion to make a build pass — fix the cause or stop and report. Test heuristics may only be adjusted with evidence the model output is correct (see `docs/v3-audit-report-2026-06-12.md` for precedent).
-3. **Truthful bookkeeping.** Update DoD checkboxes (✅/❌ + date) in the plan you executed, in the same PR. Never mark items done that need external/live verification you could not run.
-4. **DECIDED is final.** Sections titled "DECIDED by owner" answer their questions permanently. Do not re-ask, do not implement a different option.
-5. **Live environment is owner territory.** Agents do not deploy edge functions, apply migrations to the linked project, change Supabase secrets, or touch CI repo secrets unless the task explicitly grants it. (Owner note: Windows deploys require a UTF-8 console — `chcp 65001` + `[Console]::OutputEncoding=UTF8` — or Thai/emoji literals ship corrupted.)
-6. **Thai-first UX.** Customer- and presenter-facing strings are Thai. Use `MiraDesign` tokens (`constants/Design.ts`); add tokens instead of inlining hex values.
-7. **Compatibility.** `chat_messages`, `ChatOrchestratorResponse`, and the action schema are consumed by app + PWA + LINE + scripts. Shape changes must be additive (deprecate, don't repurpose), mirrored in `lib/types/api.ts` (CI enforces the mirror), and covered by tests.
-8. **When blocked, stop.** If a rule here blocks your task, or two documents contradict each other, stop and report options to the owner. A wrong guess in the core costs more than a paused task.
+1. **Scope discipline.** One PR per plan phase. No drive-by refactors of protected-core files.
+2. **Gates stay green.** `npm run typecheck` and the PKM verify chain must pass on every PR.
+   Never weaken/skip/delete an audit assertion to make a build pass — fix the cause or stop.
+3. **Truthful bookkeeping.** Update DoD checkboxes (✅/❌ + date) in `docs/pkm-shop-line-commerce-plan.md`
+   in the same PR. Never mark items done that need live verification you could not run.
+4. **DECIDED is final.** Owner-decided sections answer their questions permanently.
+5. **Live environment is owner territory.** Agents do not deploy edge functions, apply migrations
+   to the linked project, change Supabase secrets, or touch CI secrets unless the task grants it.
+   (Windows deploys need a UTF-8 console — `chcp 65001` + `[Console]::OutputEncoding=UTF8` — or Thai/emoji ship corrupted.)
+6. **Thai-first UX.** Customer- and staff-facing strings are Thai; code/identifiers English.
+   Rider/Packer screens are mobile-first, big tap targets.
+7. **Compatibility.** `chat_messages`, the orchestrator response, and the action schema are
+   consumed by the LINE webhook, the web app, and scripts. Shape changes must be additive
+   (deprecate, don't repurpose), mirrored in `lib/types/api.ts` (CI enforces the mirror), tested.
+8. **When blocked, stop.** If a rule here blocks your task, or two documents contradict, stop and
+   report options to the owner. A wrong guess in the core costs more than a paused task.
 
 ## 4. Quick self-check before you open a PR
 
-- [ ] Did I touch any file in §2? → Is that change explicitly described in a plan section? If not, revert it.
-- [ ] Any new Thai sentence in the reply path that the model should have said instead? → Remove it.
-- [ ] Any direct `orders.status` write? → Use `transition_order`.
+- [ ] Touched a §2 file? → Is the change described in a plan section? If not, revert it.
+- [ ] Any Thai sentence in the reply path the model should have said? → Remove it.
+- [ ] Any direct `orders.status` / `delivery_rounds.status` write? → Use the sanctioned RPC.
+- [ ] Any hardcoded rate/fee/radius/time? → Move it to `app_settings`.
 - [ ] New table/column without RLS or outside a new migration file? → Fix it.
-- [ ] `npm run v2:verify` green? DoD checkboxes updated truthfully?
+- [ ] Round/payroll time logic without Asia/Bangkok + edge-case tests? → Add them.
+- [ ] Verify chain green? DoD checkboxes updated truthfully?
