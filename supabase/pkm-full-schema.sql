@@ -1,11 +1,9 @@
 -- PKM-Shop — consolidated schema (run once in the Supabase SQL Editor of an EMPTY project).
 -- Equivalent to applying migrations: substrate + phase0..phase7 in order.
--- Generated 2026-07-13T18:06:32Z. Safe/idempotent on a fresh project.
+-- Safe/idempotent on a fresh project.
 
 
--- ═══════════════════════════════════════════════════════════════════════════
--- 20260712980000_pkm_substrate.sql
--- ═══════════════════════════════════════════════════════════════════════════
+-- ═══ 20260712980000_pkm_substrate.sql ═══
 -- PKM-Shop — self-contained substrate. Creates the reused foundation (tenants, customers,
 -- tenant_members, products base, chat, LINE dedup, RLS helpers, storage buckets) so the PKM
 -- migration set builds on a BLANK Supabase project without the MiraCare migration history.
@@ -220,9 +218,7 @@ create policy product_images_staff_insert on storage.objects for insert to authe
 create policy product_images_staff_update on storage.objects for update to authenticated using (bucket_id = 'product-images' and public.is_tenant_admin_slug((storage.foldername(name))[1])) with check (bucket_id = 'product-images' and public.is_tenant_admin_slug((storage.foldername(name))[1]));
 create policy line_assets_public_read on storage.objects for select using (bucket_id = 'line-assets');
 
--- ═══════════════════════════════════════════════════════════════════════════
--- 20260712990000_pkm_phase0_cleanup.sql
--- ═══════════════════════════════════════════════════════════════════════════
+-- ═══ 20260712990000_pkm_phase0_cleanup.sql ═══
 -- PKM-Shop — Phase 0: remove MiraCare health-specific DB objects (owner-authorized full
 -- rewrite, 2026-07-13). Runs AFTER all MiraCare migrations and BEFORE the PKM phases so the
 -- PKM tables (profiles, orders, order_events, …) create cleanly with no name collisions.
@@ -292,13 +288,20 @@ alter table public.products drop column if exists stripe_price_id;
 alter table public.products drop column if exists requires_appointment;
 alter table public.products drop column if exists branch_info;
 
--- health storage buckets (keep payment-slips, product-images, line-assets, stock-in)
-delete from storage.objects where bucket_id in ('lab-reports', 'wearable-imports');
-delete from storage.buckets where id in ('lab-reports', 'wearable-imports');
+-- health storage buckets (keep payment-slips, product-images, line-assets, stock-in).
+-- On a MiraCare clone these may exist; Supabase blocks direct DELETE from storage.objects
+-- (must use the Storage API), so remove them via the dashboard/Storage API. No-op on a fresh
+-- project — wrapped so a blocked delete never aborts the migration.
+do $$
+begin
+  delete from storage.objects where bucket_id in ('lab-reports', 'wearable-imports');
+  delete from storage.buckets where id in ('lab-reports', 'wearable-imports');
+exception when others then
+  raise notice 'skipped health bucket cleanup (do via Storage API if needed): %', sqlerrm;
+end;
+$$;
 
--- ═══════════════════════════════════════════════════════════════════════════
--- 20260713000000_pkm_phase1_foundations.sql
--- ═══════════════════════════════════════════════════════════════════════════
+-- ═══ 20260713000000_pkm_phase1_foundations.sql ═══
 -- PKM-Shop — Phase 1 foundations & catalog
 -- Additive on top of the reused MiraCare substrate (tenants/customers/tenant_members,
 -- RLS helpers, storage). Introduces PKM enums, staff profiles (5 roles + LINE link),
@@ -695,9 +698,7 @@ insert into storage.buckets (id, name, public)
 values ('stock-in', 'stock-in', false)
 on conflict (id) do nothing;
 
--- ═══════════════════════════════════════════════════════════════════════════
--- 20260713010000_pkm_phase2_orders.sql
--- ═══════════════════════════════════════════════════════════════════════════
+-- ═══ 20260713010000_pkm_phase2_orders.sql ═══
 -- PKM-Shop — Phase 2: orders + order_items + fulfilment state machine + stock reservation
 -- Owner-authorized full rewrite (2026-07-13): drops the MiraCare appointment order model
 -- and installs the PKM delivery-fulfilment model with canonical names.
@@ -1077,9 +1078,7 @@ grant execute on function public.pkm_transition_order(uuid, public.order_status,
 revoke execute on function public.pkm_next_order_no(uuid) from public, anon, authenticated;
 grant execute on function public.pkm_next_order_no(uuid) to service_role;
 
--- ═══════════════════════════════════════════════════════════════════════════
--- 20260713020000_pkm_phase3_rounds.sql
--- ═══════════════════════════════════════════════════════════════════════════
+-- ═══ 20260713020000_pkm_phase3_rounds.sql ═══
 -- PKM-Shop — Phase 3: delivery rounds (hourly 24/7, cutoff :30, Asia/Bangkok),
 -- round state machine, order→round assignment, and returns.
 -- Business rules: Ready.md §3.1 (rounds/cutoff), §3.2 (multi-stop), §3.4 (returns).
@@ -1365,9 +1364,7 @@ grant execute on function public.pkm_assign_order_to_round(uuid) to service_role
 grant execute on function public.pkm_transition_round(uuid, public.round_status, text, uuid, jsonb) to service_role;
 grant execute on function public.pkm_lock_due_rounds(uuid) to service_role;
 
--- ═══════════════════════════════════════════════════════════════════════════
--- 20260713030000_pkm_phase4_payments.sql
--- ═══════════════════════════════════════════════════════════════════════════
+-- ═══ 20260713030000_pkm_phase4_payments.sql ═══
 -- PKM-Shop — Phase 4: payments + SlipOK verification columns (stubbed until API access).
 -- Payment is verified SERVER-SIDE only; the single sanctioned "verified -> paid -> เข้ารอบ"
 -- path is pkm_confirm_payment. Business rules: Ready.md §3.6, §7.1.
@@ -1515,9 +1512,7 @@ revoke execute on function public.pkm_confirm_payment(uuid, integer, public.paym
 grant execute on function public.pkm_record_pending_payment(uuid, integer, public.payment_kind, text, text) to service_role;
 grant execute on function public.pkm_confirm_payment(uuid, integer, public.payment_kind, text, text, text, boolean, text, jsonb, uuid) to service_role;
 
--- ═══════════════════════════════════════════════════════════════════════════
--- 20260713040000_pkm_phase5_notify_teamchat.sql
--- ═══════════════════════════════════════════════════════════════════════════
+-- ═══ 20260713040000_pkm_phase5_notify_teamchat.sql ═══
 -- PKM-Shop — Phase 5: notifications outbox (every LINE push logged) + internal team chat.
 -- The reused customer AI chat keeps chat_sessions/chat_messages (covers Ready.md's
 -- line_conversations incl. handoff via chat_sessions.agent_mode). Team chat uses
@@ -1637,9 +1632,7 @@ begin
 end;
 $$;
 
--- ═══════════════════════════════════════════════════════════════════════════
--- 20260713050000_pkm_phase6_payroll_hr.sql
--- ═══════════════════════════════════════════════════════════════════════════
+-- ═══ 20260713050000_pkm_phase6_payroll_hr.sql ═══
 -- PKM-Shop — Phase 6: payroll (rider per-round + packer per-piece) + payouts + HR (shifts/attendance).
 -- Amounts are frozen from app_settings / order_items snapshots (never recomputed loosely).
 -- The system never transfers money — it summarizes for the owner, who confirms payout + slip.
@@ -1908,9 +1901,7 @@ grant execute on function public.pkm_record_rider_round_pay(uuid) to service_rol
 grant execute on function public.pkm_record_packer_commission(uuid) to service_role;
 grant execute on function public.pkm_close_payroll_period(uuid) to service_role;
 
--- ═══════════════════════════════════════════════════════════════════════════
--- 20260713060000_pkm_phase7_storage_policies.sql
--- ═══════════════════════════════════════════════════════════════════════════
+-- ═══ 20260713060000_pkm_phase7_storage_policies.sql ═══
 -- PKM-Shop — Phase 7: storage RLS for staff uploads/views on the private operational buckets.
 -- Paths are `<bucket>/<tenant_id>/<...>`; tenant members may insert + read within their tenant
 -- folder. Customer slip uploads still use server-minted signed upload URLs (service role).

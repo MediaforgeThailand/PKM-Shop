@@ -67,6 +67,15 @@ alter table public.products drop column if exists stripe_price_id;
 alter table public.products drop column if exists requires_appointment;
 alter table public.products drop column if exists branch_info;
 
--- health storage buckets (keep payment-slips, product-images, line-assets, stock-in)
-delete from storage.objects where bucket_id in ('lab-reports', 'wearable-imports');
-delete from storage.buckets where id in ('lab-reports', 'wearable-imports');
+-- health storage buckets (keep payment-slips, product-images, line-assets, stock-in).
+-- On a MiraCare clone these may exist; Supabase blocks direct DELETE from storage.objects
+-- (must use the Storage API), so remove them via the dashboard/Storage API. No-op on a fresh
+-- project — wrapped so a blocked delete never aborts the migration.
+do $$
+begin
+  delete from storage.objects where bucket_id in ('lab-reports', 'wearable-imports');
+  delete from storage.buckets where id in ('lab-reports', 'wearable-imports');
+exception when others then
+  raise notice 'skipped health bucket cleanup (do via Storage API if needed): %', sqlerrm;
+end;
+$$;
