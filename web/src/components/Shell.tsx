@@ -3,17 +3,17 @@ import { NavLink } from 'react-router-dom';
 import { hasRole, useAuth } from '../lib/auth';
 import type { PkmRole } from '../lib/types';
 
-type NavItem = { to: string; label: string; roles: PkmRole[] };
+type NavItem = { to: string; label: string; icon: string; roles: PkmRole[] };
 
 const NAV: NavItem[] = [
-  { to: '/admin/orders', label: 'ออเดอร์', roles: ['admin'] },
-  { to: '/admin/slips', label: 'ตรวจสลิป', roles: ['admin'] },
-  { to: '/catalog', label: 'สินค้า/สต็อก', roles: ['admin', 'stock'] },
-  { to: '/packer', label: 'แพ็คของ', roles: ['admin', 'packer'] },
-  { to: '/rider', label: 'ไรเดอร์', roles: ['admin', 'rider'] },
-  { to: '/admin/payroll', label: 'เงินเดือน', roles: ['admin'] },
-  { to: '/admin/settings', label: 'ตั้งค่า', roles: ['admin'] },
-  { to: '/staff', label: 'เช็คอิน/แชท', roles: ['admin', 'stock', 'packer', 'rider', 'staff'] },
+  { to: '/admin/orders', label: 'ออเดอร์', icon: '🧾', roles: ['admin'] },
+  { to: '/admin/slips', label: 'ตรวจสลิป', icon: '💳', roles: ['admin'] },
+  { to: '/catalog', label: 'สินค้า', icon: '📦', roles: ['admin', 'stock'] },
+  { to: '/packer', label: 'แพ็ค', icon: '🎁', roles: ['admin', 'packer'] },
+  { to: '/rider', label: 'ไรเดอร์', icon: '🛵', roles: ['admin', 'rider'] },
+  { to: '/admin/payroll', label: 'เงินเดือน', icon: '💰', roles: ['admin'] },
+  { to: '/admin/settings', label: 'ตั้งค่า', icon: '⚙️', roles: ['admin'] },
+  { to: '/staff', label: 'เช็คอิน', icon: '👤', roles: ['admin', 'stock', 'packer', 'rider', 'staff'] },
 ];
 
 export function Shell({ children }: { children: ReactNode }) {
@@ -23,14 +23,14 @@ export function Shell({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen">
-      <header className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
+      <header className="safe-top sticky top-0 z-20 flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
         <div className="flex items-center gap-2">
           <span className="text-lg font-bold text-brand">PKM Shop</span>
-          <span className="text-xs text-slate-400">หลังบ้าน</span>
+          <span className="hidden text-xs text-slate-400 sm:inline">หลังบ้าน</span>
         </div>
         <div className="flex items-center gap-3 text-sm">
-          <span className="text-slate-500">{profile?.name || 'พนักงาน'}</span>
-          <button className="btn-ghost py-1" onClick={() => void signOut()}>ออกจากระบบ</button>
+          <span className="max-w-[8rem] truncate text-slate-500">{profile?.name || 'พนักงาน'}</span>
+          <button className="btn-ghost btn-sm" onClick={() => void signOut()}>ออก</button>
         </div>
       </header>
 
@@ -41,21 +41,28 @@ export function Shell({ children }: { children: ReactNode }) {
         </div>
       )}
 
-      <nav className="flex gap-1 overflow-x-auto border-b border-slate-200 bg-white px-2">
+      {/* Desktop / tablet: top nav */}
+      <nav className="hidden gap-1 overflow-x-auto border-b border-slate-200 bg-white px-2 sm:flex">
         {items.map((n) => (
-          <NavLink
-            key={n.to}
-            to={n.to}
-            className={({ isActive }) =>
-              `whitespace-nowrap px-3 py-2 text-sm font-medium ${isActive ? 'border-b-2 border-brand text-brand' : 'text-slate-500 hover:text-slate-800'}`
-            }
-          >
-            {n.label}
+          <NavLink key={n.to} to={n.to}
+            className={({ isActive }) => `whitespace-nowrap px-3 py-2 text-sm font-medium ${isActive ? 'border-b-2 border-brand text-brand' : 'text-slate-500 hover:text-slate-800'}`}>
+            {n.icon} {n.label}
           </NavLink>
         ))}
       </nav>
 
-      <main className="mx-auto max-w-5xl p-4">{children}</main>
+      <main className="mx-auto max-w-5xl p-4 pb-28 sm:pb-6">{children}</main>
+
+      {/* Mobile: fixed bottom tab bar (thumb reach, big targets) */}
+      <nav className="safe-bottom fixed inset-x-0 bottom-0 z-20 flex overflow-x-auto border-t border-slate-200 bg-white sm:hidden">
+        {items.map((n) => (
+          <NavLink key={n.to} to={n.to}
+            className={({ isActive }) => `flex min-h-[56px] min-w-[4.25rem] flex-1 flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-[11px] font-medium ${isActive ? 'text-brand' : 'text-slate-500'}`}>
+            <span className="text-xl leading-none">{n.icon}</span>
+            <span className="whitespace-nowrap">{n.label}</span>
+          </NavLink>
+        ))}
+      </nav>
     </div>
   );
 }

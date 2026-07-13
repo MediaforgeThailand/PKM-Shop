@@ -79,18 +79,18 @@ export function Catalog() {
       </div>
 
       {adding && (
-        <form onSubmit={addProduct} className="card grid grid-cols-2 gap-2">
-          <input name="name" placeholder="ชื่อสินค้า" className="input col-span-2" required />
+        <form onSubmit={addProduct} className="card grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <input name="name" placeholder="ชื่อสินค้า" className="input sm:col-span-2" required />
           <input name="catalog_key" placeholder="รหัส (a-z0-9-)" className="input" required />
-          <input name="price" type="number" placeholder="ราคา" className="input" required />
+          <input name="price" type="number" step="1" min="0" inputMode="numeric" placeholder="ราคา" className="input" required />
           <select name="category_id" className="input">
             <option value="">— หมวด —</option>
             {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
-          <input name="commission" type="number" placeholder="ค่าคอมแพ็ค/ชิ้น" className="input" />
-          <input name="weight" type="number" placeholder="น้ำหนัก (กรัม)" className="input" />
-          <input name="description" placeholder="รายละเอียด" className="input col-span-2" />
-          <button className="btn-primary col-span-2">บันทึก</button>
+          <input name="commission" type="number" step="1" min="0" inputMode="numeric" placeholder="ค่าคอมแพ็ค/ชิ้น" className="input" />
+          <input name="weight" type="number" step="1" min="0" inputMode="numeric" placeholder="น้ำหนัก (กรัม)" className="input" />
+          <input name="description" placeholder="รายละเอียด" className="input sm:col-span-2" />
+          <button className="btn-primary sm:col-span-2">บันทึก</button>
         </form>
       )}
 

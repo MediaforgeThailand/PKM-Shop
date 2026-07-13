@@ -12,25 +12,29 @@ export function StaffHome() {
   const tenantId = profile?.tenant_id ?? '';
   const [checkinMsg, setCheckinMsg] = useState<string | null>(null);
 
-  async function checkIn() {
-    setCheckinMsg('กำลังเช็คอิน…');
-    const coords = await new Promise<GeolocationCoordinates | null>((resolve) => {
-      if (!navigator.geolocation) return resolve(null);
-      navigator.geolocation.getCurrentPosition((p) => resolve(p.coords), () => resolve(null), { enableHighAccuracy: true, timeout: 8000 });
-    });
+  function checkIn() {
+    // Trigger the file/camera picker SYNCHRONOUSLY inside the tap (iOS drops the
+    // user-activation gesture if we await first). Geolocation is fetched in onchange.
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'image/*';
     input.capture = 'user';
     input.onchange = async () => {
-      let path: string | undefined;
       const file = input.files?.[0];
-      if (file) {
-        path = `${tenantId}/${crypto.randomUUID()}.jpg`;
+      if (!file) return; // cancelled — no stuck state
+      setCheckinMsg('กำลังเช็คอิน…');
+      try {
+        const coords = await new Promise<GeolocationCoordinates | null>((resolve) => {
+          if (!navigator.geolocation) return resolve(null);
+          navigator.geolocation.getCurrentPosition((p) => resolve(p.coords), () => resolve(null), { enableHighAccuracy: true, timeout: 8000 });
+        });
+        const path = `${tenantId}/${crypto.randomUUID()}.jpg`;
         await uploadToBucket('checkin', path, file);
+        const res = await invokeFn<{ geofence_pass: boolean | null }>('checkin', { lat: coords?.latitude, lng: coords?.longitude, photo_path: path });
+        setCheckinMsg(res.geofence_pass === false ? 'เช็คอินแล้ว (อยู่นอกรัศมี)' : 'เช็คอินสำเร็จ ✅');
+      } catch (e) {
+        setCheckinMsg(`เช็คอินไม่สำเร็จ: ${e instanceof Error ? e.message : ''}`);
       }
-      const res = await invokeFn<{ geofence_pass: boolean | null }>('checkin', { lat: coords?.latitude, lng: coords?.longitude, photo_path: path });
-      setCheckinMsg(res.geofence_pass === false ? 'เช็คอินแล้ว (อยู่นอกรัศมี)' : 'เช็คอินสำเร็จ ✅');
     };
     input.click();
   }

@@ -28,8 +28,8 @@ export function Login() {
           <div className="text-xl font-bold text-brand">PKM Shop</div>
           <div className="text-sm text-slate-400">เข้าสู่ระบบพนักงาน</div>
         </div>
-        <input className="input" type="email" placeholder="อีเมล" value={email} onChange={(e) => setEmail(e.target.value)} required />
-        <input className="input" type="password" placeholder="รหัสผ่าน" value={password} onChange={(e) => setPassword(e.target.value)} required />
+        <input className="input" type="email" inputMode="email" autoComplete="email" placeholder="อีเมล" value={email} onChange={(e) => setEmail(e.target.value)} required />
+        <input className="input" type="password" autoComplete="current-password" placeholder="รหัสผ่าน" value={password} onChange={(e) => setPassword(e.target.value)} required />
         {error && <p className="text-sm text-red-600">{error}</p>}
         <button className="btn-primary w-full" disabled={busy}>{busy ? 'กำลังเข้าสู่ระบบ…' : 'เข้าสู่ระบบ'}</button>
       </form>

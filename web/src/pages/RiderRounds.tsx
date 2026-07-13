@@ -96,14 +96,15 @@ function RoundCard({ round, tenantId, onClaim, time }: { round: DeliveryRound; t
       ) : (
         <div className="space-y-2">
           {orders.map((o) => (
-            <div key={o.id} className="rounded-lg border border-slate-200 p-2">
-              <div className="text-sm font-medium">จุด {o.stop_sequence ?? '-'} · {o.recipient_name || 'ลูกค้า'}</div>
-              <div className="text-xs text-slate-500">{o.address_text} · {o.recipient_phone}</div>
-              <div className="mt-2 flex gap-2">
-                {o.status === 'out_for_delivery' && <button className="btn-ghost py-1 text-xs" onClick={() => void act('start_stop', o.id)}>เริ่มส่งจุดนี้</button>}
-                {o.status === 'delivering' && <button className="btn-primary py-1 text-xs" onClick={() => void pod(o.id)}>ส่งสำเร็จ (POD)</button>}
-                {['out_for_delivery', 'delivering'].includes(o.status) && <button className="btn-ghost py-1 text-xs text-red-600" onClick={() => void ret(o.id)}>ตีกลับ</button>}
-                {['delivered', 'returned'].includes(o.status) && <span className="text-xs text-slate-400">{ORDER_STATUS_TH[o.status]}</span>}
+            <div key={o.id} className="rounded-lg border border-slate-200 p-3">
+              <div className="text-base font-semibold">จุด {o.stop_sequence ?? '-'} · {o.recipient_name || 'ลูกค้า'}</div>
+              <div className="mt-1 text-sm text-slate-700">{o.address_text || 'ไม่มีที่อยู่'}</div>
+              {o.recipient_phone && <a href={`tel:${o.recipient_phone}`} className="mt-1 inline-block text-sm font-medium text-brand">📞 {o.recipient_phone}</a>}
+              <div className="mt-3 flex flex-col gap-2">
+                {o.status === 'out_for_delivery' && <button className="btn-primary w-full" onClick={() => void act('start_stop', o.id)}>เริ่มส่งจุดนี้</button>}
+                {o.status === 'delivering' && <button className="btn-primary w-full" onClick={() => void pod(o.id)}>📷 ส่งสำเร็จ (POD)</button>}
+                {['out_for_delivery', 'delivering'].includes(o.status) && <button className="btn-ghost w-full text-red-600" onClick={() => void ret(o.id)}>ตีกลับ</button>}
+                {['delivered', 'returned'].includes(o.status) && <span className="badge bg-slate-100 text-slate-600">{ORDER_STATUS_TH[o.status]}</span>}
               </div>
             </div>
           ))}

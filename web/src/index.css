@@ -5,11 +5,15 @@
 :root { color-scheme: light; }
 body { @apply bg-slate-50 text-slate-900 antialiased; margin: 0; font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans Thai', sans-serif; }
 
+/* Mobile-first: ≥44px tap targets, 16px inputs (no iOS focus-zoom), safe-area aware. */
 @layer components {
-  .btn { @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition; }
+  .btn { @apply inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-base font-medium transition active:scale-[0.99]; }
   .btn-primary { @apply btn bg-brand text-white hover:bg-brand-dark disabled:opacity-50; }
   .btn-ghost { @apply btn border border-slate-300 bg-white hover:bg-slate-100; }
+  .btn-sm { @apply min-h-[38px] px-3 py-1.5 text-sm; }
   .card { @apply rounded-xl border border-slate-200 bg-white p-4 shadow-sm; }
-  .input { @apply w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand focus:outline-none; }
+  .input { @apply min-h-[44px] w-full rounded-lg border border-slate-300 px-3 py-2 text-base focus:border-brand focus:outline-none; }
   .badge { @apply inline-block rounded-full px-2 py-0.5 text-xs font-medium; }
+  .safe-top { padding-top: env(safe-area-inset-top); }
+  .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
 }
