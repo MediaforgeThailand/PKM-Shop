@@ -1,39 +1,23 @@
 import { HttpError } from './http.ts';
 
-// PKM-Shop reuses the MiraCare OpenAI Responses-API contract UNCHANGED (AGENTS.md §2):
-// prompt referenced by id only, exactly five variables, store:false. Only the published
-// prompt id differs — it comes from PKM_PROMPT_ID (owner-published goods-selling prompt),
-// falling back to MIRACARE_PROMPT_ID for compatibility. The owner publishes the prompt.
+// PKM-Shop AI sales caller. The shop uses GOOGLE GEMINI (owner directive 2026-07-14) — the
+// generateContent API with a system_instruction (fixed store rules) + user contents (untrusted
+// catalog/customer data), which keeps injection out of the trust channel. The exported name
+// callMiraPrompt is kept so pkmOrchestrate needs no change. Config: GEMINI_API_KEY (required),
+// GEMINI_MODEL (default gemini-2.0-flash), GEMINI_API_BASE_URL, AI_REQUEST_TIMEOUT_MS.
 
-type RuntimeDeno = {
-  env: {
-    get: (key: string) => string | undefined;
-  };
-};
+type RuntimeDeno = { env: { get: (key: string) => string | undefined } };
 
-type OpenAIOutputContent = {
-  text?: string;
-  type?: string;
-};
-
-type OpenAIOutputItem = {
-  content?: OpenAIOutputContent[];
-  id?: string;
-  type?: string;
-};
-
-type OpenAIResponse = {
-  error?: {
-    message?: string;
-  };
-  id?: string;
-  output?: OpenAIOutputItem[];
-  output_text?: string;
+type GeminiPart = { text?: string };
+type GeminiResponse = {
+  error?: { message?: string };
+  responseId?: string;
+  candidates?: { content?: { parts?: GeminiPart[] }; finishReason?: string }[];
+  promptFeedback?: { blockReason?: string };
 };
 
 function readEnv(key: string) {
   const runtime = globalThis as typeof globalThis & { Deno?: RuntimeDeno };
-
   return runtime.Deno?.env.get(key);
 }
 
@@ -41,28 +25,16 @@ function envOrDefault(key: string, fallback: string) {
   return readEnv(key)?.trim() || fallback;
 }
 
-function requireOpenAIKey() {
-  const apiKey = readEnv('OPENAI_API_KEY')?.trim();
-
+function requireGeminiKey() {
+  const apiKey = readEnv('GEMINI_API_KEY')?.trim();
   if (!apiKey) {
-    throw new HttpError('UPSTREAM', 'Missing OPENAI_API_KEY.', 500);
+    throw new HttpError('UPSTREAM', 'Missing GEMINI_API_KEY.', 500);
   }
-
   return apiKey;
 }
 
-// The owner-published PKM sales prompt (by id) is preferred. Until it exists we fall back to
-// inline instructions below so the AI still sells PKM goods with the existing OPENAI_API_KEY
-// (MIRACARE_PROMPT_ID is a health-clinic prompt — wrong for a shop — so we do NOT fall back to it).
-function optionalPromptId(): string | null {
-  return readEnv('PKM_PROMPT_ID')?.trim() || null;
-}
-
-// Inline PKM goods-selling system prompt (Thai). SECURITY: only fixed store rules + the
-// brand name (tenant config) live in `instructions`. All customer-controlled data (nickname,
-// address/profile, chat history, catalog) goes into `input` as clearly-labelled DATA so it
-// cannot act as instructions (audit: prompt injection). The AI ends its reply with a marker to
-// render UI cards (see marker.ts): [[categories]], [[order_status]], or [[products: k1,k2]].
+// Only fixed store rules + brand (tenant config) go in the system channel; all customer-
+// controlled data goes into the user content (buildPkmInput), so it can't act as instructions.
 function buildPkmInstructions(brandName: string): string {
   return [
     `คุณคือแอดมินร้าน "${brandName}" ผู้ช่วยขายของทาง LINE พูดไทยสุภาพ กระชับ เป็นกันเอง`,
@@ -77,7 +49,6 @@ function buildPkmInstructions(brandName: string): string {
   ].join('\n');
 }
 
-// Compose the untrusted, labelled data + the customer's latest message into the user `input`.
 function buildPkmInput(vars: { personal_context: string; product_catalog: string; recent_chat: string; user_nickname: string }, message: string): string {
   const nick = (vars.user_nickname || 'ลูกค้า').replace(/[\[\]]/g, '').slice(0, 40);
   return [
@@ -88,47 +59,40 @@ function buildPkmInput(vars: { personal_context: string; product_catalog: string
   ].join('\n');
 }
 
-function extractText(data: OpenAIResponse) {
-  if (data.output_text?.trim()) {
-    return data.output_text.trim();
-  }
-
-  const contentText = data.output
-    ?.flatMap((item) => item.content ?? [])
-    .map((content) => content.text)
-    .find((text) => text?.trim());
-
-  return contentText?.trim() ?? '';
-}
-
-async function postResponses(body: Record<string, unknown>, timeoutMs: number) {
-  const apiKey = requireOpenAIKey();
-  const apiBaseUrl = envOrDefault('OPENAI_API_BASE_URL', 'https://api.openai.com/v1').replace(/\/$/, '');
+async function postGemini(systemText: string, userText: string, timeoutMs: number): Promise<GeminiResponse> {
+  const apiKey = requireGeminiKey();
+  const model = envOrDefault('GEMINI_MODEL', 'gemini-2.0-flash');
+  const base = envOrDefault('GEMINI_API_BASE_URL', 'https://generativelanguage.googleapis.com/v1beta').replace(/\/$/, '');
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
-
   try {
-    const response = await fetch(`${apiBaseUrl}/responses`, {
-      body: JSON.stringify(body),
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
+    const response = await fetch(`${base}/models/${encodeURIComponent(model)}:generateContent`, {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: systemText }] },
+        contents: [{ role: 'user', parts: [{ text: userText }] }],
+        generationConfig: { temperature: 0.4, maxOutputTokens: 600 },
+      }),
       signal: controller.signal,
     });
-    const payload = (await response.json()) as OpenAIResponse;
-
+    const payload = (await response.json()) as GeminiResponse;
     if (!response.ok || payload.error) {
       const status = response.ok || response.status >= 500 ? 502 : response.status;
-
-      throw new HttpError('UPSTREAM', payload.error?.message ?? `OpenAI request failed with ${response.status}.`, status);
+      throw new HttpError('UPSTREAM', payload.error?.message ?? `Gemini request failed with ${response.status}.`, status);
     }
-
     return payload;
   } finally {
     clearTimeout(timeout);
   }
+}
+
+function extractText(data: GeminiResponse): string {
+  const parts = data.candidates?.[0]?.content?.parts;
+  if (Array.isArray(parts)) {
+    return parts.map((p) => p.text ?? '').join('').trim();
+  }
+  return '';
 }
 
 export async function callMiraPrompt(
@@ -141,40 +105,30 @@ export async function callMiraPrompt(
   },
   input: string,
 ) {
-  const promptId = optionalPromptId();
-  const promptVersion = readEnv('MIRA_PROMPT_VERSION')?.trim();
-  const timeoutMs = Number(envOrDefault('OPENAI_REQUEST_TIMEOUT_MS', '30000'));
-  // Prompt-by-id when the owner has published one; otherwise inline PKM sales instructions.
-  const body: Record<string, unknown> = promptId
-    ? { input, prompt: { id: promptId, ...(promptVersion ? { version: promptVersion } : {}), variables: vars }, store: false }
-    : { input: buildPkmInput(vars, input), instructions: buildPkmInstructions(vars.brand_name), model: envOrDefault('PKM_OPENAI_MODEL', 'gpt-4o-mini'), store: false };
+  const systemText = buildPkmInstructions(vars.brand_name);
+  const userText = buildPkmInput(vars, input);
+  const timeoutMs = Number(envOrDefault('AI_REQUEST_TIMEOUT_MS', '30000'));
   let lastError: unknown = null;
 
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
-      const payload = await postResponses(body, timeoutMs);
+      const payload = await postGemini(systemText, userText, timeoutMs);
       const text = extractText(payload);
-
       if (!text) {
-        throw new HttpError('UPSTREAM', 'OpenAI returned an empty response.', 502);
+        const reason = payload.promptFeedback?.blockReason ?? payload.candidates?.[0]?.finishReason;
+        throw new HttpError('UPSTREAM', `Gemini returned no text${reason ? ` (${reason})` : ''}.`, 502);
       }
-
-      return {
-        responseId: payload.id ?? null,
-        text,
-      };
+      return { responseId: payload.responseId ?? null, text };
     } catch (error) {
       lastError = error;
-
       if (error instanceof HttpError && error.status < 500 && error.status !== 429) {
         throw error;
       }
-
       if (attempt === 0) {
         await new Promise((resolve) => setTimeout(resolve, 500));
       }
     }
   }
 
-  throw lastError instanceof Error ? lastError : new HttpError('UPSTREAM', 'OpenAI request failed.', 502);
+  throw lastError instanceof Error ? lastError : new HttpError('UPSTREAM', 'Gemini request failed.', 502);
 }
