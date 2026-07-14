@@ -6,6 +6,8 @@ import { Shell } from './components/Shell';
 import { Login } from './pages/Login';
 import { AdminOrders } from './pages/admin/AdminOrders';
 import { SlipQueue } from './pages/admin/SlipQueue';
+import { AdminChat } from './pages/admin/AdminChat';
+import { Analytics } from './pages/admin/Analytics';
 import { Catalog } from './pages/admin/Catalog';
 import { Settings } from './pages/admin/Settings';
 import { Payroll } from './pages/admin/Payroll';
@@ -67,6 +69,8 @@ export function App() {
       <Routes>
         <Route path="/admin/orders" element={<Guard need={['admin']}><AdminOrders /></Guard>} />
         <Route path="/admin/slips" element={<Guard need={['admin']}><SlipQueue /></Guard>} />
+        <Route path="/admin/chats" element={<Guard need={['admin']}><AdminChat /></Guard>} />
+        <Route path="/admin/analytics" element={<Guard need={['admin']}><Analytics /></Guard>} />
         <Route path="/admin/settings" element={<Guard need={['admin']}><Settings /></Guard>} />
         <Route path="/admin/payroll" element={<Guard need={['admin']}><Payroll /></Guard>} />
         <Route path="/admin/staff" element={<Guard need={['admin']}><Staff /></Guard>} />

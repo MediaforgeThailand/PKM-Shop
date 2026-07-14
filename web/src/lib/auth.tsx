@@ -16,13 +16,22 @@ type AuthState = {
 
 const AuthContext = createContext<AuthState | null>(null);
 
+// link_code is column-restricted (only the server hands it out), so the profile always
+// comes from staff-admin ensure_self (service role), which also bootstraps nothing and is
+// safe to call on every login.
 async function loadProfile(): Promise<Profile | null> {
-  const { data } = await supabase
-    .from('profiles')
-    .select('id,tenant_id,user_id,name,phone,roles,line_user_id,link_code,active')
-    .eq('user_id', (await supabase.auth.getUser()).data.user?.id ?? '')
-    .maybeSingle();
-  return (data as Profile) ?? null;
+  try {
+    const res = await invokeFn<{ profile: Profile | null }>('staff-admin', { action: 'ensure_self' });
+    return res.profile ?? null;
+  } catch {
+    // Fallback: direct read without link_code (e.g. transient function outage).
+    const { data } = await supabase
+      .from('profiles')
+      .select('id,tenant_id,user_id,name,phone,roles,line_user_id,active')
+      .eq('user_id', (await supabase.auth.getUser()).data.user?.id ?? '')
+      .maybeSingle();
+    return data ? ({ ...(data as Omit<Profile, 'link_code'>), link_code: null } as Profile) : null;
+  }
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -33,18 +42,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function hydrate(nextSession: Session | null) {
     setSession(nextSession);
     if (nextSession) {
-      let p = await loadProfile();
-      // No profile bound yet → let the server bootstrap the owner (first login) or report
-      // that an admin must add this user. Then re-read.
-      if (!p) {
-        try {
-          await invokeFn('staff-admin', { action: 'ensure_self' });
-          p = await loadProfile();
-        } catch {
-          // leave p null; UI shows the pending-access state
-        }
-      }
-      setProfile(p);
+      // ensure_self reports null for a user no admin has added yet → pending-access state.
+      setProfile(await loadProfile());
     } else {
       setProfile(null);
     }

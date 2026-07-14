@@ -1,0 +1,13 @@
+{
+  "name": "pkm-shop",
+  "private": true,
+  "version": "1.1.0",
+  "scripts": {
+    "web:typecheck": "cd web && npx tsc --noEmit",
+    "web:build": "cd web && npm run build",
+    "functions:check": "npx -y deno@2.8.2 check --node-modules-dir=none --import-map=supabase/functions/import_map.json supabase/functions/chat-orchestrator/index.ts supabase/functions/line-webhook/index.ts supabase/functions/slip-verify/index.ts supabase/functions/notify/index.ts supabase/functions/round-lock/index.ts supabase/functions/payroll-cutoff/index.ts supabase/functions/fare-calc/index.ts supabase/functions/checkin/index.ts supabase/functions/rider-action/index.ts supabase/functions/packer-action/index.ts supabase/functions/stock-action/index.ts supabase/functions/admin-action/index.ts supabase/functions/catalog-action/index.ts supabase/functions/staff-admin/index.ts",
+    "functions:test": "npx -y deno@2.8.2 test --allow-env --allow-net --node-modules-dir=none --import-map=supabase/functions/import_map.json supabase/functions/_shared/__tests__/",
+    "e2e:smoke": "node scripts/e2e-smoke.mjs",
+    "verify": "npm run web:typecheck && npm run functions:check && npm run functions:test"
+  }
+}

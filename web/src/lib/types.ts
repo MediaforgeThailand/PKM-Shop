@@ -62,6 +62,57 @@ export type DeliveryRound = {
   rider_id: string | null;
 };
 
+export type Payment = {
+  id: string;
+  order_id: string;
+  amount: number;
+  kind: 'goods' | 'delivery' | 'redelivery';
+  method: string;
+  slip_photo_url: string | null;
+  status: PaymentStatus;
+  auto_verified: boolean;
+  note: string | null;
+  created_at: string;
+};
+
+export type ChatSession = {
+  id: string;
+  tenant_id: string;
+  customer_id: string;
+  channel: string;
+  agent_mode: 'ai' | 'human';
+  flagged: 'emergency' | 'complaint' | null;
+  last_message_at: string | null;
+};
+
+export type ChatMessage = {
+  id: string;
+  session_id: string;
+  role: 'user' | 'assistant' | 'admin' | 'system_notice';
+  content: string;
+  created_at: string;
+};
+
+export type Customer = {
+  id: string;
+  nickname: string | null;
+  phone: string | null;
+  line_user_id: string | null;
+  zone_override: 'in_zone' | 'out_zone' | null;
+};
+
+export type Shift = { id: string; name: string; start_time: string; end_time: string; active: boolean };
+
+export type PayrollItem = { id: string; period_id: string; profile_id: string; kind: string; amount: number; created_at: string };
+export type PayrollPayout = { id: string; period_id: string; profile_id: string; total: number; slip_photo_url: string | null; confirmed_by: string | null; paid_at: string | null };
+
+export const DELIVERY_TYPE_TH: Record<DeliveryType, string> = {
+  rider: 'ส่งปกติ (ไรเดอร์)',
+  express_grab: 'ด่วน (Grab)',
+  lalamove: 'นอกเขต (Lalamove)',
+  parcel_kerry: 'พัสดุ (Kerry)',
+};
+
 export const ORDER_STATUS_TH: Record<OrderStatus, string> = {
   pending: 'รอชำระ',
   paid: 'ชำระแล้ว',

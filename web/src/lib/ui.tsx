@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 // Shared UX primitives so no screen ever falls back to prompt()/alert()/confirm().
 // Mobile-first: toasts sit above the bottom tab bar; modals are bottom sheets on phones.
@@ -153,6 +153,128 @@ export function PageHeader({ title, action }: { title: string; action?: ReactNod
     <div className="flex items-center justify-between gap-2">
       <h1 className="text-lg font-bold">{title}</h1>
       {action}
+    </div>
+  );
+}
+
+export function baht(n: number): string {
+  return `฿${n.toLocaleString('th-TH')}`;
+}
+
+// Segmented tab bar (mobile-friendly, large targets).
+export function Tabs<T extends string>({ value, onChange, options }: {
+  value: T;
+  onChange: (v: T) => void;
+  options: { value: T; label: string; badge?: number }[];
+}) {
+  return (
+    <div className="flex gap-1 overflow-x-auto rounded-xl bg-slate-100 p-1">
+      {options.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          onClick={() => onChange(o.value)}
+          className={`flex min-h-[40px] flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3 text-sm font-medium transition-colors ${
+            value === o.value ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'
+          }`}
+        >
+          {o.label}
+          {typeof o.badge === 'number' && o.badge > 0 && (
+            <span className="rounded-full bg-brand px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">{o.badge}</span>
+          )}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// Quantity stepper: big +/- targets plus a typeable field (no bare browser number input).
+export function Stepper({ value, onChange, min = 1, max = 999999, quick }: {
+  value: number;
+  onChange: (v: number) => void;
+  min?: number;
+  max?: number;
+  quick?: number[];
+}) {
+  const clamp = (n: number) => Math.min(max, Math.max(min, Number.isFinite(n) ? Math.trunc(n) : min));
+  return (
+    <div className="space-y-2">
+      <div className="flex items-stretch gap-2">
+        <button type="button" className="min-h-[48px] w-14 rounded-xl bg-slate-100 text-2xl font-bold text-slate-600 active:bg-slate-200" onClick={() => onChange(clamp(value - 1))} aria-label="ลด">−</button>
+        <input
+          className="input min-h-[48px] flex-1 text-center text-xl font-bold"
+          inputMode="numeric"
+          value={String(value)}
+          onChange={(e) => {
+            const n = parseInt(e.target.value.replace(/\D/g, ''), 10);
+            onChange(Number.isFinite(n) ? clamp(n) : min);
+          }}
+        />
+        <button type="button" className="min-h-[48px] w-14 rounded-xl bg-brand text-2xl font-bold text-white active:opacity-80" onClick={() => onChange(clamp(value + 1))} aria-label="เพิ่ม">+</button>
+      </div>
+      {quick && quick.length > 0 && (
+        <div className="flex gap-2">
+          {quick.map((q) => (
+            <button key={q} type="button" className="btn-ghost btn-sm flex-1" onClick={() => onChange(clamp(value + q))}>+{q}</button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Photo capture with inline preview + retake (mobile camera first).
+export function PhotoPicker({ file, onPick, label = 'ถ่ายรูป', required = false }: {
+  file: File | null;
+  onPick: (f: File | null) => void;
+  label?: string;
+  required?: boolean;
+}) {
+  const [preview, setPreview] = useState<string | null>(null);
+  useEffect(() => {
+    if (!file) {
+      setPreview(null);
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    setPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+
+  return (
+    <div>
+      {preview ? (
+        <div className="relative overflow-hidden rounded-xl">
+          <img src={preview} alt="ตัวอย่างรูป" className="max-h-56 w-full object-cover" />
+          <div className="absolute inset-x-0 bottom-0 flex justify-end gap-2 bg-gradient-to-t from-black/50 to-transparent p-2">
+            <label className="btn-ghost btn-sm cursor-pointer bg-white/90">
+              ถ่ายใหม่
+              <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => onPick(e.target.files?.[0] ?? null)} />
+            </label>
+          </div>
+        </div>
+      ) : (
+        <label className="flex min-h-[96px] cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 py-4 text-slate-500 active:bg-slate-100">
+          <span className="text-3xl">📷</span>
+          <span className="text-sm font-medium">{label}{required ? ' (บังคับ)' : ''}</span>
+          <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => onPick(e.target.files?.[0] ?? null)} />
+        </label>
+      )}
+    </div>
+  );
+}
+
+export function StatCard({ label, value, hint, tone = 'default' }: {
+  label: string;
+  value: string;
+  hint?: string;
+  tone?: 'default' | 'brand' | 'warn';
+}) {
+  return (
+    <div className={`card ${tone === 'brand' ? 'border-brand/30 bg-brand/5' : tone === 'warn' ? 'border-amber-300 bg-amber-50' : ''}`}>
+      <div className="text-xs text-slate-500">{label}</div>
+      <div className={`mt-1 text-xl font-bold ${tone === 'brand' ? 'text-brand' : ''}`}>{value}</div>
+      {hint && <div className="mt-0.5 text-xs text-slate-400">{hint}</div>}
     </div>
   );
 }

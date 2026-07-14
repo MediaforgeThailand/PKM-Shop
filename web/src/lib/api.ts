@@ -7,25 +7,22 @@ export async function invokeFn<T = unknown>(name: string, body: Record<string, u
     body: { tenant_slug: TENANT_SLUG, ...body },
   });
   if (error) {
-    // Surface the function's own error message (edge returns { ok:false, error:{message} }).
-    const ctx = (error as { context?: { body?: unknown } }).context?.body;
-    const msg = typeof ctx === 'string' ? safeErr(ctx) : null;
-    throw new Error(msg ?? error.message);
+    // FunctionsHttpError.context is the raw Response — read its JSON body to surface the
+    // function's own Thai error message instead of the generic "non-2xx status code".
+    const ctx = (error as { context?: unknown }).context;
+    if (ctx instanceof Response) {
+      const parsed = await ctx.json().catch(() => null) as { error?: { message?: string } } | null;
+      if (parsed?.error?.message) {
+        throw new Error(parsed.error.message);
+      }
+    }
+    throw new Error(error.message || 'ทำรายการไม่สำเร็จ');
   }
   const envelope = data as { ok?: boolean; data?: T; error?: { message?: string } };
   if (envelope && envelope.ok === false) {
     throw new Error(envelope.error?.message ?? 'ทำรายการไม่สำเร็จ');
   }
   return (envelope?.data ?? envelope) as T;
-}
-
-function safeErr(body: string): string | null {
-  try {
-    const parsed = JSON.parse(body) as { error?: { message?: string } };
-    return parsed?.error?.message ?? null;
-  } catch {
-    return null;
-  }
 }
 
 // Convenience wrapper for the catalog management function.

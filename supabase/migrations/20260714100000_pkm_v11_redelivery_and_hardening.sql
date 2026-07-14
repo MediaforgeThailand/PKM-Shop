@@ -36,12 +36,33 @@ end;
 $$;
 
 -- Admin console replies land in the same transcript (Ready.md §4: admin ตอบแทน AI).
-alter table public.chat_messages drop constraint if exists chat_messages_role_check;
+-- Drop whatever CHECK currently guards the column (name may vary), then re-add.
+do $$
+declare c record;
+begin
+  for c in select conname from pg_constraint
+    where conrelid = 'public.chat_messages'::regclass and contype = 'c'
+      and pg_get_constraintdef(oid) like '%role%'
+  loop
+    execute format('alter table public.chat_messages drop constraint %I', c.conname);
+  end loop;
+end;
+$$;
 alter table public.chat_messages add constraint chat_messages_role_check
   check (role in ('user', 'assistant', 'admin', 'system_notice'));
 
 -- New notification events: handoff + manual queue + SlipOK quota + per-staff payroll.
-alter table public.notifications drop constraint if exists notifications_event_type_check;
+do $$
+declare c record;
+begin
+  for c in select conname from pg_constraint
+    where conrelid = 'public.notifications'::regclass and contype = 'c'
+      and pg_get_constraintdef(oid) like '%event_type%'
+  loop
+    execute format('alter table public.notifications drop constraint %I', c.conname);
+  end loop;
+end;
+$$;
 alter table public.notifications add constraint notifications_event_type_check
   check (event_type in (
     'order_created','slip_received','paid','round_locked','packed',
@@ -49,6 +70,9 @@ alter table public.notifications add constraint notifications_event_type_check
     'express_paid','payroll_cutoff','payroll_self','payout_confirmed','kerry_handover',
     'handoff','slip_manual_queue','slipok_quota','payment_rejected'
   ));
+
+-- The manual queue shows WHY a slip failed (slip-verify passes the SlipOK reason).
+alter table public.payments add column if not exists note text;
 
 -- Ready.md §2: Anthropic API, starting at claude-sonnet-4-6 (model stays editable in settings).
 update public.app_settings set value = to_jsonb('claude-sonnet-4-6'::text)
@@ -419,8 +443,8 @@ begin
   select * into v_order from public.orders where id = p_order_id for update;
   if not found then raise exception 'order % not found', p_order_id; end if;
 
-  insert into public.payments (tenant_id, order_id, amount, kind, slip_photo_url, status)
-  values (v_order.tenant_id, p_order_id, p_amount, p_kind, p_slip_url, 'pending_verify')
+  insert into public.payments (tenant_id, order_id, amount, kind, slip_photo_url, status, note)
+  values (v_order.tenant_id, p_order_id, p_amount, p_kind, p_slip_url, 'pending_verify', p_note)
   returning * into v_pay;
 
   update public.orders set payment_status = 'pending_verify', updated_at = now()

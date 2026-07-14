@@ -8,10 +8,12 @@ type NavItem = { to: string; label: string; icon: string; roles: PkmRole[] };
 const NAV: NavItem[] = [
   { to: '/admin/orders', label: 'ออเดอร์', icon: '🧾', roles: ['admin'] },
   { to: '/admin/slips', label: 'ตรวจสลิป', icon: '💳', roles: ['admin'] },
+  { to: '/admin/chats', label: 'แชทลูกค้า', icon: '💬', roles: ['admin'] },
   { to: '/catalog', label: 'สินค้า', icon: '📦', roles: ['admin', 'stock'] },
   { to: '/packer', label: 'แพ็ค', icon: '🎁', roles: ['admin', 'packer'] },
   { to: '/rider', label: 'ไรเดอร์', icon: '🛵', roles: ['admin', 'rider'] },
   { to: '/admin/payroll', label: 'เงินเดือน', icon: '💰', roles: ['admin'] },
+  { to: '/admin/analytics', label: 'สถิติ', icon: '📈', roles: ['admin'] },
   { to: '/admin/staff', label: 'ทีม', icon: '👥', roles: ['admin'] },
   { to: '/admin/settings', label: 'ตั้งค่า', icon: '⚙️', roles: ['admin'] },
   { to: '/staff', label: 'เช็คอิน', icon: '👤', roles: ['admin', 'stock', 'packer', 'rider', 'staff'] },

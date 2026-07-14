@@ -16,15 +16,16 @@ account/project and is untouched. The owner authorized a **full pivot** of this 
 | D1 | Frontend | **New Vite + React 18 + TS + Tailwind + React Router + light PWA** web app for the 5 staff roles. Customers use **LINE only**. |
 | D2 | Backend / data | This cloned Supabase project **is** PKM-Shop. Build fresh; **delete MiraCare-specific parts** that don't serve PKM. No shared data with MiraCare. |
 | D3 | Order lifecycle / domain | **Full pivot**: replace the health appointment state machine with the fulfilment lifecycle. Remove health tables/functions/audits that don't apply. |
-| D4 | AI provider | **Keep the existing OpenAI Responses-API chat engine** (not Anthropic). Swap the published prompt id via env; the owner publishes the goods-selling prompt. |
+| D4 | AI provider | ~~Keep OpenAI~~ → **Anthropic Messages API** per Ready.md §2 (owner directive 2026-07-14: follow Ready.md; details delegated). `_shared/ai.ts::callSalesModel`, default `claude-sonnet-4-6`, model editable via `app_settings.ai_model` / env `AI_MODEL`. The interim Gemini switch (2026-07-14 morning) is reverted. |
 | D5 | SlipOK + LINE OA | **Access not yet obtained.** Build the structure (columns, `system` actor, edge-function skeletons, env keys) **stubbed**; wire live when keys arrive. Payment stays **staff-confirmed** until SlipOK auto-verify is switched on. |
 
 ## 1. Strategy — reuse the engine, replace the domain
 
 **Reuse as-is / light-adapt (the crown jewels):**
-- AI chat engine: `_shared/openai.ts::callMiraPrompt` (OpenAI Responses API, prompt-by-id,
-  5 vars, `store:false`, retry), `_shared/marker.ts` (marker → cards), `_shared/orchestrate.ts`
-  turn pipeline (dedup, rate-limit, context assembly, human-handover), `_shared/context.ts`
+- AI chat engine: `_shared/ai.ts::callSalesModel` (Anthropic Messages API — see D4; fixed
+  store-rules system prompt, customer data isolated in user content, retry),
+  `_shared/marker.ts` (marker → cards, incl. `[[handoff]]`), `_shared/pkmOrchestrate.ts`
+  turn pipeline (dedup, rate-limit, context assembly, human handoff), `_shared/pkmContext.ts`
   (`buildRecentChat`, `buildCatalogJson`).
 - LINE transport: `_shared/line.ts` (verify signature, push/reply, Flex builders, per-tenant
   token/secret, postback encode/decode), `line-webhook` shell + `line_webhook_events` dedup.
@@ -111,24 +112,27 @@ cache). Auth = Supabase email/password (staff). Reuse `lib/api/client.ts` + `lib
 
 Legend: ☐ todo · ⏳ in progress · ✅ done (with date).
 
-> **Status 2026-07-13:** BACKEND + WEB APP COMPLETE & VERIFIED.
-> - Backend: 9 migrations + 12 edge functions (`deno check` clean), 31 deno tests pass,
->   delivery-math + PromptPay tested. Full schema, RPCs, ops layer, staff API, AI sales
->   agent + LINE loop, staff LINE binding. MiraCare removed.
-> - Web app (`web/`): Vite + React 18 + Tailwind + Router + PWA — `tsc` clean, prod build OK.
->   Login + 5-role routing; admin order board / slip queue / catalog+stock / settings /
->   payroll; packer; rider multi-stop; staff check-in + team chat.
+> **Status 2026-07-14 (v1.1):** backend + web rebuilt/hardened and DEPLOYED to the dev
+> project `mrygwthvyzrkxghgjimh`; all gates green (`npm run verify`: web tsc + build, deno
+> check on 14 functions, 31 unit tests) and an end-to-end DB smoke passed on the live dev DB
+> (goods → round → pack → deliver → return → **redelivery child order** → payroll item;
+> manual-queue confirm/reject; wrong-amount + duplicate-slip rejection).
+> - AI seller = Anthropic Messages API (D4). Handoff (keyword + `[[handoff]]`) → admin chat
+>   console → close case, end-to-end.
+> - 18 migrations incl. v1.1 hardening, pg_cron schedules, MiraCare residue cleanup.
+> - Web: professional UX pass on every page — stock-in stepper+photo flow, slip queue
+>   confirm/reject + reasons + zoom, rider stats, kerry board + external refs, admin
+>   customer-chat console, analytics, shifts CRUD, realtime team chat.
 >
-> **Known remaining (trackable, non-blocking):** analytics dashboard (Ready.md: first to
-> cut) · shifts-CRUD admin UI (table + check-in exist) · Grab/Lalamove customer deeplinks &
-> Kerry-round admin UI polish · multi-item cart recipient name/phone capture · PWA icon PNGs.
+> **Known remaining (trackable, non-blocking):** PWA icon PNGs · Grab/Lalamove customer
+> deeplink buttons in LINE (refs are recordable by admin already) · delete 2 empty legacy
+> buckets from the dashboard (SQL deletion is blocked by Supabase).
 >
-> **To go live (owner):** apply migrations + deploy the 12 functions to the PKM Supabase
-> project (clone runbook) · set secrets (OPENAI_API_KEY, PKM_PROMPT_ID, SUPABASE_*, and —
-> when obtained — LINE_CHANNEL_*, SLIPOK_*) · publish the goods-selling OpenAI prompt · run
-> `supabase/seed.sql` + set store lat/lng + create the first admin profile · schedule
-> `round-lock` (hourly :30) and `payroll-cutoff` (Mon 00:00) in Asia/Bangkok · point the LINE
-> webhook at `line-webhook?tenant=pkm-shop` · `cd web && npm i && npm run build` + host.
+> **To go live (owner):** set secrets (ANTHROPIC_API_KEY + AI_MODEL, and — when obtained —
+> LINE_CHANNEL_*, SLIPOK_*) · create the 2 Vault secrets so cron ticks also notify (see
+> README) · seed real catalog + store lat/lng + `store_receiver_account` · create the first
+> admin profile · point the LINE webhook at `line-webhook?tenant=pkm-shop` ·
+> `cd web && npm i && npm run build` + host.
 
 ### Backend edge functions — done (2026-07-13, `deno check` + tests green)
 - ✅ `chat-orchestrator` (AI sales agent, app entry) + `line-webhook` (LINE: text/postback/location/image→slip, QR)
@@ -145,54 +149,49 @@ Legend: ☐ todo · ⏳ in progress · ✅ done (with date).
 - ✅ `20260713040000_pkm_phase5_notify_teamchat` — `notifications` outbox · `team_channels`/`team_messages` · realtime
 - ✅ `20260713050000_pkm_phase6_payroll_hr` — payroll periods/items/payouts (rider-round + packer-piece, idempotent) · `pkm_close_payroll_period` · `shifts`/`attendance`
 
-### Week 1 — Foundation & Catalog
+### Week 1 — Foundation & Catalog — ✅ done 2026-07-13/14
 - ✅ Plan doc + rules updated for PKM (this doc, AGENTS.md, CLAUDE.md) — 2026-07-13
 - ✅ Foundation + catalog + stock schema (phase0–1) — 2026-07-13
-- ☐ Shared libs: `_shared/settings.ts`, adapt `context.ts`/`types.ts`; `notify` edge function + `_shared/notify.ts`; staff LINE link-code binding in `line-webhook`
-- ☐ Vite app scaffold: auth + 5 role routing + PWA + Settings UI + catalog/stock CRUD (+stock-in photo)
-- ☐ Delete MiraCare edge functions + `_shared` libs (code cleanup) + rebuild green gates
+- ✅ Shared libs (settings/notify/templates) + staff LINE link-code binding — 2026-07-13
+- ✅ Vite app: auth + 5-role routing + PWA + Settings UI + catalog/stock CRUD (+stock-in photo, stepper UX) — 2026-07-14
+- ✅ MiraCare code removed; gates rebuilt (`npm run verify` at root) — 2026-07-14
 
-### Week 2 — Orders, Rounds & Packing
-- ✅ Rounds + orders + payments **schema/RPCs** (phase2–4) — 2026-07-13
-- ☐ `fare-calc` + `_shared/fare.ts` (4 types, from `app_settings`) + cutoff/fare tests
-- ☐ `round-lock` cron edge function (`pkm_lock_due_rounds` → notify packer/rider)
-- ☐ `slip-verify` edge function (SlipOK **stubbed** → `pkm_confirm_payment`) + admin manual-verify queue
-- ☐ Packing station UI (~30 min/round) + photo → notify customer · admin order board
+### Week 2 — Orders, Rounds & Packing — ✅ done 2026-07-14
+- ✅ `fare-calc` + `_shared/fare.ts` (4 types, from `app_settings`) + cutoff/fare tests
+- ✅ `round-lock` cron (pg_cron :30 + catch-up + notify sweep)
+- ✅ `slip-verify` (SlipOK live-shaped, stubbed w/o keys) + manual queue w/ confirm+REJECT + reasons
+- ✅ Packing station UI (items checklist + photo) → notify customer · admin order board
 
-### Week 3 — Rider & Delivery
-- ✅ Rider/return/multi-stop **schema/RPCs** (phase2–3) — 2026-07-13
-- ☐ Rider mobile UI: claim round → multi-stop → POD/return+reason → redelivery (new order)
-- ☐ Express Grab + Lalamove deeplink + daily Kerry round
+### Week 3 — Rider & Delivery — ✅ done 2026-07-14
+- ✅ Rider mobile UI: claim round → pre-planned multi-stop → POD/return+reason → **redelivery child order** (paid fee → parent_order_id → next round) — E2E verified on the dev DB
+- ✅ Express Grab / Lalamove external refs (admin records the ref no.) + daily Kerry round board
 
-### Week 4 — AI + Ops + close
-- ✅ Payroll/HR **schema/RPCs** (phase6) — 2026-07-13
-- ☐ `ai-sales-agent` (rewrite `orchestrate.ts`: goods prompt via env, address capture, fare quote, order create) + handoff
-- ☐ `payroll-cutoff` cron + payout UI (confirm + slip) + rider stats
-- ☐ Check-in + geofence + shifts CRUD · team chat · analytics · seed + hardening + UAT
+### Week 4 — AI + Ops + close — ✅ done 2026-07-14
+- ✅ AI sales agent on Anthropic (D4) + handoff → admin chat console (send as admin, close case)
+- ✅ `payroll-cutoff` cron (pg_cron Mon 00:00 BKK) + payout UI (confirm + slip) + rider stats + per-staff LINE totals
+- ✅ Check-in (photo+GPS required) + geofence + shifts CRUD · realtime team chat · analytics (สถิติคร่าวๆ §3.9)
+- ⏳ UAT with real LINE OA + SlipOK keys — blocked on owner obtaining API access (D5)
 
-Cut order if short on time (from the tail): analytics → team chat → check-in.
-**Never cut AI or payroll.**
+## 6. Gates (real, run them)
 
-## 6. Gates
-
-Replace the health-tuned `v2:verify` chain with PKM-appropriate checks: keep `typecheck`,
-`orders:status-audit` (no direct status writes — retarget to the new RPC), `rls-check`,
-`deno-check`/`deno-test`, `types:mirror-audit`. Add: round cutoff edge tests
-(12:29/12:30/12:31, cross-midnight), fare-engine tests, RLS-per-role tests. Remove health
-audits (`v2:health-safety-audit`, `v2:pdpa-coverage-audit`) and rewrite `chat:regression`
-for the goods vertical. Never weaken an assertion to make a build pass.
+Root `package.json`: `npm run verify` = `web:typecheck` (tsc strict) + `functions:check`
+(deno check on all 14 edge functions) + `functions:test` (31 Deno unit tests incl. cutoff
+edges 12:29/12:30/12:31 + cross-midnight and PromptPay payloads). `npm run e2e:smoke`
+(scripts/e2e-smoke.mjs, needs a dev project's service key) exercises the money/fulfilment
+spine end-to-end. Never weaken an assertion to make a build pass.
 
 ## 7. Deferred / needs owner (do not guess)
 
-- **SlipOK API key + branch id** → `slip-verify` live auto-verify (§7.1). Until then: staff-confirm.
+- **SlipOK API key + branch id** → `slip-verify` live auto-verify (§7.1). Until then: manual queue.
 - **LINE OA channel secret + access token** → live push/webhook. Until then: `notify` logs to
-  `notifications` and no-ops the send (or uses a global test channel if provided).
-- **Goods-selling OpenAI prompt id** → owner publishes; set `PKM_PROMPT_ID` env.
-- Service radius / zone rules, exact fare rates, commission rates → seed into `app_settings`
-  from owner-confirmed values (Ready.md §3.3 defaults used as placeholders, editable in UI).
+  `notifications` as `skipped`.
+- **ANTHROPIC_API_KEY** → the AI seller answers free-text turns; deterministic buttons work without it.
+- Vault secrets `pkm_service_role_key` + `pkm_functions_base_url` → cron ticks also send LINE
+  notifications (state changes work without them).
+- Real fare/commission/zone values → edit in Settings UI (`app_settings`), seeded with §3.3 defaults.
 
-## 8. Env (added to `.env.example`)
+## 8. Env (see `.env.example`)
 
-`SLIPOK_API_KEY`, `SLIPOK_BRANCH_ID`, `LINE_CHANNEL_SECRET`, `LINE_CHANNEL_ACCESS_TOKEN`,
-`ANTHROPIC_API_KEY` (unused unless D4 changes), `AI_MODEL`/`PKM_PROMPT_ID`, plus existing
-`OPENAI_API_KEY`, Supabase URL/keys. Client web env via `VITE_*`.
+`ANTHROPIC_API_KEY`, `AI_MODEL` (default claude-sonnet-4-6), `SLIPOK_API_KEY`,
+`SLIPOK_BRANCH_ID`, `LINE_CHANNEL_SECRET`, `LINE_CHANNEL_ACCESS_TOKEN`,
+`PKM_DEFAULT_TENANT_SLUG`, Supabase URL/keys. Client web env via `VITE_*`.

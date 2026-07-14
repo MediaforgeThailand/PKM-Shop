@@ -3,31 +3,21 @@
 # dependencies
 node_modules/
 
-# Expo
-.expo/
-.expo-preview-logs/
+# build output
 dist/
-web-build/
-expo-env.d.ts
 supabase/.temp/
 
-# Native
-.kotlin/
-*.orig.*
+# secrets / certs
 *.jks
 *.p8
 *.p12
 *.key
 *.mobileprovision
 
-# Metro
-.metro-health-check*
-
 # debug
 npm-debug.*
 yarn-debug.*
 yarn-error.*
-expo-*.log
 
 # macOS
 .DS_Store
@@ -38,21 +28,11 @@ expo-*.log
 .env.*
 !.env.example
 
-# supabase clone toolkit output (DB dumps contain full data — never commit)
-.supabase-clone/
-
 # typescript
 *.tsbuildinfo
 
-# generated native folders
-/ios
-/android
 .vercel
 
-# codex / tooling artifacts
+# tooling artifacts
 .codex-*.log
 .codex-logs/
-.expo-preview-logs/
-.understand-anything/
-.chrome-profile-*/
-.codex-mira-landing-*.png
