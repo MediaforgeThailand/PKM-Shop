@@ -191,7 +191,9 @@ export async function notifyEvent(params: NotifyParams): Promise<void> {
         await sendOne({
           audience: 'customer',
           body: fn({ ...baseCtx, order_no: o.order_no }),
-          dedupKey: `rider_accepted:${roundId}:${o.customer_id}`,
+          // per ORDER, not per customer — a customer with two orders in the round must
+          // hear about both.
+          dedupKey: `rider_accepted:${roundId}:${o.id}`,
           eventType,
           lineUserId: o.customers?.line_user_id ?? null,
           orderId: o.id,
@@ -276,9 +278,12 @@ export async function notifyEvent(params: NotifyParams): Promise<void> {
       break;
     }
     case 'handoff': {
+      // Hour-scoped dedup: retries within the hour collapse, but a NEW handoff on the
+      // same session days later still alerts the admins.
+      const handoffHour = new Date().toISOString().slice(0, 13);
       const admins = await staffByRoles(tenantId, ['admin']);
       for (const a of admins) {
-        await sendOne({ audience: 'staff', body: staffText['handoff']!(baseCtx), dedupKey: `handoff:${extra.session_key ?? orderId ?? 'x'}:${a.id}`, eventType, lineUserId: a.line_user_id, recipientProfileId: a.id, tenantId, tenantSlug });
+        await sendOne({ audience: 'staff', body: staffText['handoff']!(baseCtx), dedupKey: `handoff:${extra.session_key ?? orderId ?? 'x'}:${handoffHour}:${a.id}`, eventType, lineUserId: a.line_user_id, recipientProfileId: a.id, tenantId, tenantSlug });
       }
       break;
     }

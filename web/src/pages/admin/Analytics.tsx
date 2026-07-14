@@ -23,6 +23,12 @@ function ymd(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+// Bucket by the THAI business day (the query filters on +07:00 boundaries too) —
+// a browser in another timezone must not shift sales across days.
+function bkkDay(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' });
+}
+
 function parseYmd(s: string): Date {
   const [y, m, d] = s.split('-').map((n) => parseInt(n, 10));
   return new Date(y || 2026, (m || 1) - 1, d || 1);
@@ -76,7 +82,7 @@ export function Analytics() {
     const byDay = new Map<string, number>();
     const byType = new Map<DeliveryType, { count: number; total: number }>();
     for (const o of orders) {
-      const key = ymd(new Date(o.created_at));
+      const key = bkkDay(o.created_at);
       byDay.set(key, (byDay.get(key) ?? 0) + o.grand_total);
       const cur = byType.get(o.delivery_type) ?? { count: 0, total: 0 };
       byType.set(o.delivery_type, { count: cur.count + 1, total: cur.total + o.grand_total });
@@ -124,6 +130,11 @@ export function Analytics() {
         <ErrorState onRetry={() => void refetch()} />
       ) : validRange ? (
         <>
+          {orders.length >= 1000 && (
+            <div className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              ⚠️ ช่วงนี้มีออเดอร์จำนวนมาก ตัวเลขอาจแสดงไม่ครบ — ลองย่อช่วงวันที่ให้แคบลง
+            </div>
+          )}
           {/* Stat cards */}
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             <div className="col-span-2 sm:col-span-1">

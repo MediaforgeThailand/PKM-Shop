@@ -30,16 +30,20 @@ function Guard({ need, children }: { need: PkmRole[]; children: ReactElement }) 
 }
 
 // Logged in but no staff profile bound yet (and not the bootstrap owner) — awaiting admin.
-function PendingAccess() {
+function PendingAccess({ deactivated = false }: { deactivated?: boolean }) {
   const { profile, signOut } = useAuth();
   const { link_code } = profile ?? {};
   return (
     <div className="grid min-h-screen place-items-center p-6 text-center">
       <div className="card max-w-sm space-y-3">
-        <div className="text-3xl">🕓</div>
-        <h1 className="text-lg font-bold">รอผู้ดูแลเพิ่มสิทธิ์</h1>
-        <p className="text-sm text-slate-500">บัญชีนี้ยังไม่ได้ถูกกำหนดหน้าที่ในระบบ กรุณาให้แอดมินเพิ่มคุณเข้าทีมก่อน</p>
-        {link_code && <p className="text-xs text-slate-400">รหัสของคุณ: <b className="font-mono">{link_code}</b></p>}
+        <div className="text-3xl">{deactivated ? '🚫' : '🕓'}</div>
+        <h1 className="text-lg font-bold">{deactivated ? 'บัญชีถูกปิดใช้งาน' : 'รอผู้ดูแลเพิ่มสิทธิ์'}</h1>
+        <p className="text-sm text-slate-500">
+          {deactivated
+            ? 'บัญชีนี้ถูกปิดใช้งานโดยผู้ดูแล หากคิดว่าเป็นความผิดพลาด ติดต่อแอดมินของร้าน'
+            : 'บัญชีนี้ยังไม่ได้ถูกกำหนดหน้าที่ในระบบ กรุณาให้แอดมินเพิ่มคุณเข้าทีมก่อน'}
+        </p>
+        {!deactivated && link_code && <p className="text-xs text-slate-400">รหัสของคุณ: <b className="font-mono">{link_code}</b></p>}
         <button className="btn-ghost w-full" onClick={() => void signOut()}>ออกจากระบบ</button>
       </div>
     </div>
@@ -62,6 +66,11 @@ export function App() {
   }
   if (!profile || roles.length === 0) {
     return <PendingAccess />;
+  }
+  if (!profile.active) {
+    // A deactivated account would otherwise render a fully working shell over
+    // silently-empty RLS reads.
+    return <PendingAccess deactivated />;
   }
 
   return (

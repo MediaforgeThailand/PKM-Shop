@@ -13,7 +13,7 @@ type PackItem = { qty: number; products: { name: string } | null };
 type QueueOrder = Order & {
   packer_id: string | null;
   order_items: PackItem[];
-  round: { round_at: string } | null;
+  round: { round_at: string; status: string } | null;
 };
 
 function bkkTime(iso: string) {
@@ -104,7 +104,7 @@ export function PackerQueue() {
     queryFn: async (): Promise<QueueOrder[]> => {
       const { data, error } = await supabase
         .from('orders')
-        .select('id,order_no,status,payment_status,delivery_type,goods_total,delivery_fee,grand_total,recipient_name,recipient_phone,address_text,round_id,stop_sequence,external_ref,created_at,packer_id,order_items(qty,products(name)),round:delivery_rounds(round_at)')
+        .select('id,order_no,status,payment_status,delivery_type,goods_total,delivery_fee,grand_total,recipient_name,recipient_phone,address_text,round_id,stop_sequence,external_ref,created_at,packer_id,order_items(qty,products(name)),round:delivery_rounds(round_at,status)')
         .in('status', ['confirmed', 'packing'])
         .order('created_at');
       if (error) throw new Error(error.message);
@@ -112,7 +112,10 @@ export function PackerQueue() {
     },
   });
 
-  const waiting = orders.filter((o) => o.status === 'confirmed');
+  // Ready.md §3.1: rider-round orders enter the pack queue when their round LOCKS (:30).
+  // Express/Lalamove/Kerry pack immediately; a rider order in a still-open round waits.
+  const waiting = orders.filter((o) =>
+    o.status === 'confirmed' && (o.delivery_type !== 'rider' || !o.round || o.round.status !== 'open'));
   const mine = orders.filter((o) => o.status === 'packing' && (o.packer_id === myId || isAdmin));
   const othersPacking = orders.filter((o) => o.status === 'packing' && o.packer_id !== myId && !isAdmin);
 

@@ -83,8 +83,10 @@ async function postMessages(model: string, systemText: string, userText: string,
     });
     const payload = (await response.json()) as AnthropicResponse;
     if (!response.ok || payload.error) {
-      const status = response.status >= 500 || response.status === 429 ? response.status : 502;
-      throw new HttpError('UPSTREAM', payload.error?.message ?? `Anthropic request failed with ${response.status}.`, response.ok ? 502 : status);
+      // Preserve 4xx statuses so the caller's retry logic skips non-retryable errors
+      // (400 invalid request / 401 bad key must NOT be retried as if they were 5xx).
+      const status = response.ok ? 502 : response.status;
+      throw new HttpError('UPSTREAM', payload.error?.message ?? `Anthropic request failed with ${response.status}.`, status);
     }
     return payload;
   } finally {

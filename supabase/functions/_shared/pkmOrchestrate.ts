@@ -9,6 +9,7 @@ import {
   invokeInternalFunction,
   resolveAuthUserId,
   resolveOrCreateCustomer,
+  rpc,
   selectMany,
   selectOne,
   updateRows,
@@ -259,9 +260,9 @@ async function handleAction(action: PkmChatAction, tenant: TenantRow, customer: 
       if (!target) {
         return { cards: [], order: null, products: [], text: 'ยังไม่มีออเดอร์ที่รอชำระค่ะ' };
       }
-      // Slip paths are server-issued (request_slip_upload) — reject anything outside this
-      // customer's own order folder so one order's slip can't settle another.
-      if (!action.slip_path.startsWith(`${tenant.id}/${target.order.id}/`)) {
+      // Slip paths are server-issued (request_slip_upload) — enforce the exact shape so a
+      // crafted path ('../', extra segments) can't point at another order's slip.
+      if (!new RegExp(`^${tenant.id}/${target.order.id}/[0-9a-f-]{36}\\.(jpg|png)$`).test(action.slip_path)) {
         throw new HttpError('VALIDATION', 'Invalid slip path.', 400);
       }
       const text = await verifySlipAndReply(tenant, target.order.id, action.slip_path);
@@ -286,6 +287,7 @@ async function modelTurn(tenant: TenantRow, customer: CustomerRow, session: Sess
   let responseId: string | null = null;
   let parsedType: ReturnType<typeof parseChatMarker>['type'] = null;
   let catalogKeys: string[] = [];
+  let sawHandoff = false;
   try {
     const result = await callSalesModel(
       { brand_name: tenant.display_name, personal_context: personalContext, product_catalog: productCatalog, recent_chat: recentChat, user_nickname: customer.nickname ?? 'ลูกค้า' },
@@ -297,6 +299,9 @@ async function modelTurn(tenant: TenantRow, customer: CustomerRow, session: Sess
     parsedType = parsed.type;
     catalogKeys = parsed.catalogKeys;
     responseId = result.responseId;
+    // The end-anchored parser misses [[handoff]] when the model appends text after it —
+    // a handoff request must never be silently dropped, so also match mid-message.
+    sawHandoff = parsed.type === 'handoff' || /\[\[handoff\]\]/.test(result.text);
   } catch (error) {
     // Model outage must not strand the customer: reply with a safe fallback and keep the
     // deterministic buttons usable. (Payment authority is unaffected — it never runs here.)
@@ -307,7 +312,7 @@ async function modelTurn(tenant: TenantRow, customer: CustomerRow, session: Sess
     return { cards: [], order: activeOrder ? await loadOrderPanel(activeOrder.id, tenant.id, tenant.promptpay_id) : null, products: [], text };
   }
 
-  if (parsedType === 'handoff') {
+  if (sawHandoff) {
     await startHandoff(tenant, session, 'ai_handoff');
     const ack = text || HANDOFF_ACK;
     await persistAssistant(session.id, ack, [], responseId);
@@ -424,12 +429,38 @@ async function verifySlipAndReply(tenant: TenantRow, orderId: string, slipPath: 
     const envelope = (await response.json()) as { ok?: boolean; data?: SlipVerifyOutcome; error?: { message?: string } };
     if (!envelope.ok || !envelope.data) {
       console.error('slip_verify_failed', envelope.error?.message);
-      return 'รับสลิปแล้วค่ะ ระบบตรวจสอบอัตโนมัติขัดข้อง เดี๋ยวเจ้าหน้าที่ตรวจสอบให้เร็วที่สุดนะคะ';
+      return await queueUnverifiedSlip(tenant, orderId, slipPath);
     }
     return slipReplyText(envelope.data);
   } catch (error) {
     console.error('slip_verify_error', error instanceof Error ? error.message : error);
-    return 'รับสลิปแล้วค่ะ ระบบตรวจสอบอัตโนมัติขัดข้อง เดี๋ยวเจ้าหน้าที่ตรวจสอบให้เร็วที่สุดนะคะ';
+    return await queueUnverifiedSlip(tenant, orderId, slipPath);
+  }
+}
+
+// slip-verify itself failed (outage/bug): the reply promises staff review, so make that
+// true — record the slip in the manual queue + alert the admins.
+async function queueUnverifiedSlip(tenant: TenantRow, orderId: string, slipPath: string): Promise<string> {
+  try {
+    const order = await selectOne<{ grand_total: number; delivery_fee: number; status: string }>('orders', {
+      id: `eq.${orderId}`,
+      select: 'grand_total,delivery_fee,status',
+      tenant_id: `eq.${tenant.id}`,
+    });
+    const kind = order?.status === 'awaiting_redelivery_fee' ? 'redelivery' : 'goods';
+    const amount = kind === 'redelivery' ? order?.delivery_fee ?? 0 : order?.grand_total ?? 0;
+    await rpc('pkm_record_pending_payment', {
+      p_amount: amount,
+      p_kind: kind,
+      p_note: 'verify_error',
+      p_order_id: orderId,
+      p_slip_url: slipPath,
+    });
+    await notifyEvent({ eventType: 'slip_manual_queue', extra: { reason: 'verify_error' }, orderId, tenantId: tenant.id, tenantSlug: tenant.slug }).catch(() => {});
+    return 'รับสลิปแล้วค่ะ ระบบตรวจสอบอัตโนมัติขัดข้อง ส่งให้เจ้าหน้าที่ตรวจสอบแล้ว จะยืนยันให้เร็วที่สุดนะคะ 🙏';
+  } catch (error) {
+    console.error('queue_unverified_slip_failed', error instanceof Error ? error.message : error);
+    return 'รับสลิปแล้วค่ะ ระบบขัดข้องชั่วคราว หากยังไม่ได้รับการยืนยันใน 15 นาที รบกวนส่งสลิปอีกครั้งนะคะ';
   }
 }
 

@@ -1,7 +1,7 @@
 // PKM-Shop — stock movements (Ready.md §3.5). Role: stock or admin. Inbound (qty > 0) must
 // carry a photo. Adjusts products.stock_qty transactionally via pkm_apply_stock_movement.
 import { assertTenant, rpc } from '../_shared/db.ts';
-import { handleOptions, json, toErrorResponse, validateJson, z } from '../_shared/http.ts';
+import { handleOptions, HttpError, json, toErrorResponse, validateJson, z } from '../_shared/http.ts';
 import { assertRole, resolveStaffProfile } from '../_shared/pkmAuth.ts';
 
 declare const Deno: {
@@ -26,6 +26,10 @@ Deno.serve(async (req) => {
     const tenant = await assertTenant(body.tenant_slug);
     const profile = await resolveStaffProfile(req.headers.get('authorization'), tenant.id);
     assertRole(profile, ['stock']);
+
+    if (body.photo_path && !body.photo_path.startsWith(`${tenant.id}/`)) {
+      throw new HttpError('VALIDATION', 'Invalid photo path.', 400);
+    }
 
     const movement = await rpc('pkm_apply_stock_movement', {
       p_actor: profile.user_id,

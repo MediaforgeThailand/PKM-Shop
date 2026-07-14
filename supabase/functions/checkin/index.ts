@@ -1,7 +1,7 @@
 // PKM-Shop — HR check-in (Ready.md §3.8). Any active staff. Records photo + GPS and whether
 // the location is within the check-in radius (records pass/fail; never blocks work).
-import { assertTenant, insertRow } from '../_shared/db.ts';
-import { handleOptions, json, toErrorResponse, validateJson, z } from '../_shared/http.ts';
+import { assertTenant, insertRow, selectOne } from '../_shared/db.ts';
+import { handleOptions, HttpError, json, toErrorResponse, validateJson, z } from '../_shared/http.ts';
 import { resolveStaffProfile } from '../_shared/pkmAuth.ts';
 import { haversineKm } from '../_shared/fare.ts';
 import { loadSettings, settingNumber, storeLatLng } from '../_shared/settings.ts';
@@ -29,6 +29,14 @@ Deno.serve(async (req) => {
     const body = await validateJson(req, schema);
     const tenant = await assertTenant(body.tenant_slug);
     const profile = await resolveStaffProfile(req.headers.get('authorization'), tenant.id);
+
+    // shift_id must be one of THIS tenant's shifts (arbitrary UUIDs pollute reports).
+    if (body.shift_id) {
+      const shift = await selectOne<{ id: string }>('shifts', { id: `eq.${body.shift_id}`, select: 'id', tenant_id: `eq.${tenant.id}` });
+      if (!shift) {
+        throw new HttpError('VALIDATION', 'ไม่พบกะที่เลือก', 400);
+      }
+    }
 
     const settingsMap = await loadSettings(tenant.id);
     const store = storeLatLng(settingsMap);

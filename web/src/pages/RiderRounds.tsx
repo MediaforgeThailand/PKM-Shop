@@ -383,6 +383,7 @@ function ReturnModal({ order, onClose, onDone }: { order: Order; onClose: () => 
           <textarea
             className="input min-h-[88px]"
             value={reason}
+            maxLength={300}
             onChange={(e) => setReason(e.target.value)}
             placeholder="ระบุเหตุผล เช่น โทร 2 ครั้งไม่รับสาย รอหน้าบ้าน 5 นาที"
             required

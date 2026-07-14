@@ -83,11 +83,18 @@ Deno.serve(async (req) => {
         return json({ ok: true, profile: created });
       }
       case 'set_roles': {
+        // Self-demotion protection: the last reachable admin must not brick the tenant.
+        if (body.profile_id === profile.id && !body.roles.includes('admin')) {
+          throw new HttpError('VALIDATION', 'ถอดสิทธิ์แอดมินของตัวเองไม่ได้ — ให้แอดมินคนอื่นเป็นคนแก้', 400);
+        }
         const rows = await updateRows<Profile>('profiles', { roles: body.roles }, { id: `eq.${body.profile_id}`, tenant_id: `eq.${tenant.id}`, select: PROFILE_SELECT });
         if (!rows[0]) throw new HttpError('VALIDATION', 'ไม่พบพนักงาน', 404);
         return json({ ok: true, profile: rows[0] });
       }
       case 'set_active': {
+        if (body.profile_id === profile.id && !body.active) {
+          throw new HttpError('VALIDATION', 'ปิดใช้งานบัญชีของตัวเองไม่ได้ — ให้แอดมินคนอื่นเป็นคนปิด', 400);
+        }
         const rows = await updateRows<Profile>('profiles', { active: body.active }, { id: `eq.${body.profile_id}`, tenant_id: `eq.${tenant.id}`, select: PROFILE_SELECT });
         if (!rows[0]) throw new HttpError('VALIDATION', 'ไม่พบพนักงาน', 404);
         return json({ ok: true, profile: rows[0] });

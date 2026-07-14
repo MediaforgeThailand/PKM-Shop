@@ -84,6 +84,12 @@ Deno.serve(async (req) => {
         const order = await rpc<OrderRow>('pkm_confirm_pending_payment', {
           p_actor: actor, p_payment_id: body.payment_id, p_verified_by: profile.user_id,
         });
+        // The RPC no-ops (returns the untouched order) when the order raced past the
+        // confirmable state — surface that instead of toasting a false success.
+        const after = await requirePayment(body.payment_id, tenant.id);
+        if (after.status === 'pending_verify') {
+          throw new HttpError('CONFLICT', `ยืนยันไม่ได้ — ออเดอร์อยู่สถานะ "${order.status}" แล้ว ตรวจสอบหรือปฏิเสธสลิปนี้แทน`, 409);
+        }
         await notifyEvent({ eventType: 'paid', orderId: order.id, tenantId: tenant.id, tenantSlug: tenant.slug }).catch(() => {});
         if (order.delivery_type === 'express_grab') {
           await notifyEvent({ eventType: 'express_paid', orderId: order.id, tenantId: tenant.id, tenantSlug: tenant.slug }).catch(() => {});
@@ -160,7 +166,13 @@ Deno.serve(async (req) => {
       case 'confirm_payout': {
         const payout = await selectOne<PayoutRow>('payroll_payouts', { id: `eq.${body.payout_id}`, select: 'id,profile_id,total', tenant_id: `eq.${tenant.id}` });
         if (!payout) throw new HttpError('VALIDATION', 'Payout not found.', 404);
-        await updateRows('payroll_payouts', { confirmed_by: profile.user_id, paid_at: new Date().toISOString(), slip_photo_url: body.slip_path }, { id: `eq.${body.payout_id}`, tenant_id: `eq.${tenant.id}` });
+        // Guard against a second admin confirming the same payout (= a second bank transfer).
+        const rows = await updateRows<{ id: string }>('payroll_payouts',
+          { confirmed_by: profile.user_id, paid_at: new Date().toISOString(), slip_photo_url: body.slip_path },
+          { id: `eq.${body.payout_id}`, paid_at: 'is.null', select: 'id', tenant_id: `eq.${tenant.id}` });
+        if (!rows || rows.length === 0) {
+          throw new HttpError('CONFLICT', 'รายการนี้ถูกยืนยันโอนไปแล้ว', 409);
+        }
         await notifyEvent({ eventType: 'payout_confirmed', extra: { amount: payout.total, profileId: payout.profile_id }, tenantId: tenant.id, tenantSlug: tenant.slug }).catch(() => {});
         return json({ ok: true });
       }

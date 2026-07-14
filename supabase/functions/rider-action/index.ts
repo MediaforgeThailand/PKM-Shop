@@ -86,12 +86,21 @@ async function handleClaimRound(roundId: string, tenant: { id: string; slug: str
   for (const o of packed) {
     seq += 1;
     await updateRows('orders', { stop_sequence: seq, updated_at: new Date().toISOString() }, { id: `eq.${o.id}`, tenant_id: `eq.${tenant.id}` });
-    await rpc('pkm_transition_order', { p_actor: actor, p_meta: { stop_sequence: seq }, p_order_id: o.id, p_to_status: 'out_for_delivery' }).catch(() => {});
+    try {
+      await rpc('pkm_transition_order', { p_actor: actor, p_meta: { stop_sequence: seq }, p_order_id: o.id, p_to_status: 'out_for_delivery' });
+    } catch (error) {
+      // A stop that fails to dispatch must never strand in this claimed round — push it
+      // to the next round so it stays deliverable (and this round can still complete).
+      console.error('claim_dispatch_failed', o.id, error instanceof Error ? error.message : error);
+      await rpc('pkm_reassign_order_next_round', { p_order_id: o.id }).catch((e) =>
+        console.error('claim_reassign_failed', o.id, e instanceof Error ? e.message : e));
+    }
   }
   for (const o of orders) {
     if (['confirmed', 'packing'].includes(o.status)) {
       // Not packed in time — bump to the next round so this claimed round can complete.
-      await rpc('pkm_reassign_order_next_round', { p_order_id: o.id }).catch(() => {});
+      await rpc('pkm_reassign_order_next_round', { p_order_id: o.id }).catch((e) =>
+        console.error('claim_bump_failed', o.id, e instanceof Error ? e.message : e));
     }
   }
   await notifyEvent({ eventType: 'rider_accepted', roundId, tenantId: tenant.id, tenantSlug: tenant.slug }).catch(() => {});
