@@ -369,7 +369,8 @@ async function runTurn(tenant: TenantRow, customer: CustomerRow, session: Sessio
 
   // Explicit "I want a human" / complaint beats the model turn (Ready.md §7 DEFAULT).
   if (wantsHuman(message)) {
-    await startHandoff(tenant, session, 'customer_request');
+    const isComplaint = message.replace(/\s+/g, '').includes('ร้องเรียน');
+    await startHandoff(tenant, session, isComplaint ? 'complaint' : 'customer_request');
     await persistAssistant(session.id, HANDOFF_ACK, [], null).catch(() => {});
     return { cards: [], order: null, products: [], session_id: session.id, text: HANDOFF_ACK };
   }
@@ -476,23 +477,41 @@ export async function bindStaffLinkCode(tenantSlug: string, lineUserId: string, 
   return `ผูกบัญชีพนักงานสำเร็จ ✅ คุณ${profile.name || ''} จะได้รับแจ้งเตือนงานทาง LINE นี้ค่ะ`;
 }
 
-// A customer sent a slip image in LINE: upload it to the private bucket against the order
-// they actually owe (pending cart, or a returned order awaiting its redelivery fee), verify
-// synchronously, and return the outcome-specific Thai reply.
-export async function handleLineSlip(tenantSlug: string, lineUserId: string, bytes: Uint8Array, contentType: string): Promise<string> {
+// A customer sent an image in LINE. During a human handoff the bot must stay silent —
+// the image is logged for the admin console and NOT treated as a slip. Otherwise: upload
+// against the order they actually owe (payable cart, or a returned order awaiting its
+// redelivery fee), verify synchronously, and return the outcome-specific Thai reply.
+// Returns null when the bot should not reply at all.
+export async function handleLineSlip(tenantSlug: string, lineUserId: string, bytes: Uint8Array, contentType: string): Promise<string | null> {
   const tenant = await assertTenant(tenantSlug);
   const customer = await resolveOrCreateLineCustomer(tenant, lineUserId);
+  const session = await resolveLatestSession(tenant.id, customer.id, 'line');
+
+  const ext = contentType.includes('png') ? 'png' : 'jpg';
+  if (session.agent_mode === 'human') {
+    // Store it so the admin can view it, say nothing (the admin owns this conversation).
+    const path = `${tenant.id}/handoff/${customer.id}/${crypto.randomUUID()}.${ext}`;
+    await uploadStorageObject('payment-slips', path, bytes, contentType).catch(() => {});
+    await persistUser(session.id, crypto.randomUUID(), `[ลูกค้าส่งรูปภาพระหว่างคุยกับเจ้าหน้าที่: ${path}]`).catch(() => {});
+    return null;
+  }
+
+  // Slip images trigger billed SlipOK calls — throttle tighter than free chat.
+  try {
+    await enforceRateLimit(customer.id, 10);
+  } catch {
+    return 'ส่งสลิปถี่เกินไปค่ะ รอสักครู่แล้วส่งอีกครั้งนะคะ 🙏';
+  }
+
   const target = await getOrderAwaitingPayment(tenant.id, customer.id);
   if (!target) {
     return 'ยังไม่มีออเดอร์ที่รอชำระค่ะ เลือกสินค้าก่อนนะคะ';
   }
-  const ext = contentType.includes('png') ? 'png' : 'jpg';
   const path = `${tenant.id}/${target.order.id}/${crypto.randomUUID()}.${ext}`;
   await uploadStorageObject('payment-slips', path, bytes, contentType);
   const reply = await verifySlipAndReply(tenant, target.order.id, path);
   // Keep the transcript complete for the admin console (slip receipt + our reply).
   try {
-    const session = await resolveLatestSession(tenant.id, customer.id, 'line');
     await persistUser(session.id, crypto.randomUUID(), `[ส่งสลิปโอนเงิน — ออเดอร์ ${target.order.order_no}]`);
     await persistAssistant(session.id, reply, [], null);
   } catch (error) {

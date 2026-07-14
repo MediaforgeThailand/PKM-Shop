@@ -103,11 +103,13 @@ async function handleEvent(event: LineEvent, tenantSlug: string) {
     console.warn('line_loading_failed', error);
   }
 
-  // Slip image → verify (no model turn).
+  // Slip image → verify (no model turn). null reply = human handoff in progress → stay silent.
   if (event.type === 'message' && event.message?.type === 'image' && event.message.id) {
     const image = await downloadLineImage(tenantSlug, event.message.id);
     const reply = await handleLineSlip(tenantSlug, lineUserId, image.bytes, image.contentType);
-    await replyLineMessages(replyToken, [textLineMessage(reply)], tenantSlug);
+    if (reply !== null) {
+      await replyLineMessages(replyToken, [textLineMessage(reply)], tenantSlug);
+    }
     return;
   }
 

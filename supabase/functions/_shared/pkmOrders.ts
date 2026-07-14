@@ -30,34 +30,41 @@ export type PendingOrderRow = {
   round_id: string | null;
 };
 
-// The order a newly-sent slip should verify against: the active pending cart first,
-// otherwise a returned order still owing its redelivery fee (Ready.md §3.4).
+// The order a newly-sent slip should verify against, in priority order:
+//   1. a pending cart that is actually payable (items + address + chosen delivery type),
+//   2. a returned order still owing its redelivery fee (Ready.md §3.4),
+//   3. an incomplete pending cart (so the mismatch reply can guide the customer).
+// An unpayable cart must NOT shadow an owed redelivery fee.
 export type PaymentTarget = { order: PendingOrderRow; kind: 'goods' | 'redelivery'; expected_amount: number };
 
 export async function getOrderAwaitingPayment(tenantId: string, customerId: string): Promise<PaymentTarget | null> {
   const pending = await getActivePendingOrder(tenantId, customerId);
-  if (pending) {
+  const cartReady = Boolean(pending && pending.grand_total > 0 && pending.address_text && pending.delivery_chosen);
+  if (pending && cartReady) {
     return { expected_amount: pending.grand_total, kind: 'goods', order: pending };
   }
-  const returned = await selectOne<PendingOrderRow>('orders', {
+  // Walk recent returned orders until one still owes its fee (the newest may already be rebooked).
+  const returnedOrders = await selectMany<PendingOrderRow>('orders', {
     customer_id: `eq.${customerId}`,
-    limit: '1',
+    limit: '10',
     order: 'created_at.desc',
     select: ORDER_SELECT,
     status: 'eq.awaiting_redelivery_fee',
     tenant_id: `eq.${tenantId}`,
   });
-  if (!returned) {
-    return null;
+  for (const returned of returnedOrders) {
+    const ret = await selectOne<{ new_order_id: string | null }>('returns', {
+      order_id: `eq.${returned.id}`,
+      select: 'new_order_id',
+    });
+    if (!ret?.new_order_id) {
+      return { expected_amount: returned.delivery_fee, kind: 'redelivery', order: returned };
+    }
   }
-  const ret = await selectOne<{ new_order_id: string | null }>('returns', {
-    order_id: `eq.${returned.id}`,
-    select: 'new_order_id',
-  });
-  if (ret?.new_order_id) {
-    return null; // redelivery already paid & rebooked
+  if (pending) {
+    return { expected_amount: pending.grand_total, kind: 'goods', order: pending };
   }
-  return { expected_amount: returned.delivery_fee, kind: 'redelivery', order: returned };
+  return null;
 }
 
 export async function getActivePendingOrder(tenantId: string, customerId: string): Promise<PendingOrderRow | null> {

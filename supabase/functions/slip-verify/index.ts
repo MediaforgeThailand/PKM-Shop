@@ -173,6 +173,12 @@ Deno.serve(async (req) => {
           p_trans_ref: result.transRef,
           p_verified_by: null,
         });
+        // The RPC's idempotent replay path returns the existing child WITHOUT recording
+        // this transfer — never tell the customer "paid" for money we didn't book.
+        const recorded = await selectOne<{ id: string }>('payments', { select: 'id', slipok_trans_ref: `eq.${result.transRef}` });
+        if (!recorded) {
+          return json(await queueForManualReview({ expected, kind, order, reason: 'transfer_not_recorded', slipPath: body.slip_path, tenantSlug: tenant.slug }));
+        }
         await notifyEvent({ eventType: 'paid', orderId: child.id, tenantId: tenant.id, tenantSlug: tenant.slug }).catch(() => {});
         if (child.delivery_type === 'express_grab') {
           await notifyEvent({ eventType: 'express_paid', orderId: child.id, tenantId: tenant.id, tenantSlug: tenant.slug }).catch(() => {});
@@ -180,7 +186,7 @@ Deno.serve(async (req) => {
         return json({ ...base, order_no: child.order_no, status: 'paid' } satisfies SlipVerifyResponse);
       }
 
-      await rpc('pkm_confirm_payment', {
+      const confirmed = await rpc<OrderRow>('pkm_confirm_payment', {
         p_actor: 'system',
         p_amount: expected,
         p_auto: true,
@@ -192,6 +198,12 @@ Deno.serve(async (req) => {
         p_trans_ref: result.transRef,
         p_verified_by: null,
       });
+      // pkm_confirm_payment no-ops when the order raced past 'pending' — verify the money
+      // was actually booked before replying "paid"; otherwise route to the manual queue.
+      const booked = await selectOne<{ id: string }>('payments', { select: 'id', slipok_trans_ref: `eq.${result.transRef}` });
+      if (confirmed.payment_status !== 'paid' || !booked) {
+        return json(await queueForManualReview({ expected, kind, order, reason: `order_${confirmed.status}`, slipPath: body.slip_path, tenantSlug: tenant.slug }));
+      }
       await notifyEvent({ eventType: 'paid', orderId: order.id, tenantId: tenant.id, tenantSlug: tenant.slug }).catch(() => {});
       if (order.delivery_type === 'express_grab') {
         await notifyEvent({ eventType: 'express_paid', orderId: order.id, tenantId: tenant.id, tenantSlug: tenant.slug }).catch(() => {});

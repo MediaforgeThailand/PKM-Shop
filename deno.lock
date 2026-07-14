@@ -155,43 +155,5 @@
     "zod@4.4.3": {
       "integrity": "sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ=="
     }
-  },
-  "workspace": {
-    "packageJson": {
-      "dependencies": [
-        "npm:@supabase/supabase-js@^2.107.0",
-        "npm:@tanstack/react-query@^5.101.0",
-        "npm:@types/qrcode@^1.5.6",
-        "npm:@types/react@~19.2.2",
-        "npm:expo-blur@~56.0.3",
-        "npm:expo-constants@~56.0.16",
-        "npm:expo-font@~56.0.5",
-        "npm:expo-linear-gradient@~56.0.4",
-        "npm:expo-linking@~56.0.13",
-        "npm:expo-router@~56.2.8",
-        "npm:expo-secure-store@~56.0.4",
-        "npm:expo-splash-screen@~56.0.10",
-        "npm:expo-status-bar@~56.0.4",
-        "npm:expo-symbols@~56.0.5",
-        "npm:expo-web-browser@~56.0.5",
-        "npm:expo@~56.0.8",
-        "npm:fflate@~0.8.2",
-        "npm:qrcode@^1.5.4",
-        "npm:react-dom@19.2.3",
-        "npm:react-native-paper@^5.15.3",
-        "npm:react-native-qrcode-svg@^6.3.21",
-        "npm:react-native-reanimated@4.3.1",
-        "npm:react-native-safe-area-context@5.7",
-        "npm:react-native-screens@4.25.2",
-        "npm:react-native-svg@15.15.4",
-        "npm:react-native-url-polyfill@3",
-        "npm:react-native-web@0.21",
-        "npm:react-native-worklets@0.8.3",
-        "npm:react-native@0.85.3",
-        "npm:react@19.2.3",
-        "npm:typescript@~6.0.3",
-        "npm:zod@^4.4.3"
-      ]
-    }
   }
 }
