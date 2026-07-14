@@ -41,6 +41,16 @@ Deno.serve(async (req) => {
         tenantId: tenant.id,
         tenantSlug: tenant.slug,
       }).catch((error) => console.warn('payroll_notify_failed', error instanceof Error ? error.message : error));
+
+      // Ready.md §6: each rider/packer also gets their own total ("ยอดของฉันรอบนี้").
+      for (const payout of payouts) {
+        await notifyEvent({
+          eventType: 'payroll_self',
+          extra: { amount: payout.total, profileId: payout.profile_id },
+          tenantId: tenant.id,
+          tenantSlug: tenant.slug,
+        }).catch((error) => console.warn('payroll_self_notify_failed', error instanceof Error ? error.message : error));
+      }
     }
 
     return json({ closed, ok: true });

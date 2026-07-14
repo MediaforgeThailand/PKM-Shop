@@ -1,19 +1,20 @@
 import { HttpError } from './http.ts';
 
-// PKM-Shop AI sales caller. The shop uses GOOGLE GEMINI (owner directive 2026-07-14) — the
-// generateContent API with a system_instruction (fixed store rules) + user contents (untrusted
-// catalog/customer data), which keeps injection out of the trust channel. The exported name
-// callMiraPrompt is kept so pkmOrchestrate needs no change. Config: GEMINI_API_KEY (required),
-// GEMINI_MODEL (default gemini-2.0-flash), GEMINI_API_BASE_URL, AI_REQUEST_TIMEOUT_MS.
+// PKM-Shop AI sales caller — Anthropic Messages API (Ready.md §2: เริ่มที่ claude-sonnet-4-6,
+// model ตั้งผ่าน env/app_settings). Trust-channel isolation: only the fixed store rules +
+// brand name go in the `system` param; every customer-controlled value (catalog, customer
+// context, chat history, the message itself) rides in the user content, so embedded
+// instructions can't act as instructions.
+// Config: ANTHROPIC_API_KEY (required), AI_MODEL (default claude-sonnet-4-6),
+// ANTHROPIC_API_BASE_URL, AI_REQUEST_TIMEOUT_MS. app_settings.ai_model overrides per turn.
 
 type RuntimeDeno = { env: { get: (key: string) => string | undefined } };
 
-type GeminiPart = { text?: string };
-type GeminiResponse = {
-  error?: { message?: string };
-  responseId?: string;
-  candidates?: { content?: { parts?: GeminiPart[] }; finishReason?: string }[];
-  promptFeedback?: { blockReason?: string };
+type AnthropicResponse = {
+  id?: string;
+  content?: { type?: string; text?: string }[];
+  stop_reason?: string;
+  error?: { type?: string; message?: string };
 };
 
 function readEnv(key: string) {
@@ -25,17 +26,16 @@ function envOrDefault(key: string, fallback: string) {
   return readEnv(key)?.trim() || fallback;
 }
 
-function requireGeminiKey() {
-  const apiKey = readEnv('GEMINI_API_KEY')?.trim();
+function requireApiKey() {
+  const apiKey = readEnv('ANTHROPIC_API_KEY')?.trim();
   if (!apiKey) {
-    throw new HttpError('UPSTREAM', 'Missing GEMINI_API_KEY.', 500);
+    throw new HttpError('UPSTREAM', 'Missing ANTHROPIC_API_KEY.', 500);
   }
   return apiKey;
 }
 
-// Only fixed store rules + brand (tenant config) go in the system channel; all customer-
-// controlled data goes into the user content (buildPkmInput), so it can't act as instructions.
-function buildPkmInstructions(brandName: string): string {
+// Fixed store rules + brand only. Marker vocabulary must match _shared/marker.ts.
+function buildInstructions(brandName: string): string {
   return [
     `คุณคือแอดมินร้าน "${brandName}" ผู้ช่วยขายของทาง LINE พูดไทยสุภาพ กระชับ เป็นกันเอง`,
     `หน้าที่: แนะนำสินค้า ปิดการขาย และพาลูกค้าไปจนจ่ายเงิน ขั้นตอน: 1) เลือกสินค้า 2) แจ้งที่อยู่จัดส่ง 3) เลือกวิธีส่ง 4) โอนแล้วส่งสลิป`,
@@ -45,11 +45,12 @@ function buildPkmInstructions(brandName: string): string {
     `- โชว์หมวดสินค้า: ปิดท้ายด้วย [[categories]]`,
     `- โชว์สินค้าเจาะจง: ปิดท้ายด้วย [[products: catalog_key1, catalog_key2]] (ใช้ catalog_key จาก [รายการสินค้า] สูงสุด 4 อย่าง)`,
     `- ลูกค้าถามสถานะออเดอร์: ปิดท้ายด้วย [[order_status]]`,
+    `- ลูกค้าขอคุยกับพนักงาน/คนจริง ร้องเรียน หรือคุณช่วยไม่ได้ติดต่อกันเกิน 2 ครั้ง: บอกว่ากำลังส่งต่อให้เจ้าหน้าที่ แล้วปิดท้ายด้วย [[handoff]]`,
     `- ไม่ต้องโชว์การ์ด: ไม่ต้องใส่ marker`,
   ].join('\n');
 }
 
-function buildPkmInput(vars: { personal_context: string; product_catalog: string; recent_chat: string; user_nickname: string }, message: string): string {
+function buildInput(vars: { personal_context: string; product_catalog: string; recent_chat: string; user_nickname: string }, message: string): string {
   const nick = (vars.user_nickname || 'ลูกค้า').replace(/[\[\]]/g, '').slice(0, 40);
   return [
     `[รายการสินค้า (JSON)]`, vars.product_catalog || '[]',
@@ -59,27 +60,31 @@ function buildPkmInput(vars: { personal_context: string; product_catalog: string
   ].join('\n');
 }
 
-async function postGemini(systemText: string, userText: string, timeoutMs: number): Promise<GeminiResponse> {
-  const apiKey = requireGeminiKey();
-  const model = envOrDefault('GEMINI_MODEL', 'gemini-2.0-flash');
-  const base = envOrDefault('GEMINI_API_BASE_URL', 'https://generativelanguage.googleapis.com/v1beta').replace(/\/$/, '');
+async function postMessages(model: string, systemText: string, userText: string, timeoutMs: number): Promise<AnthropicResponse> {
+  const apiKey = requireApiKey();
+  const base = envOrDefault('ANTHROPIC_API_BASE_URL', 'https://api.anthropic.com').replace(/\/$/, '');
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const response = await fetch(`${base}/models/${encodeURIComponent(model)}:generateContent`, {
+    const response = await fetch(`${base}/v1/messages`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
       body: JSON.stringify({
-        systemInstruction: { parts: [{ text: systemText }] },
-        contents: [{ role: 'user', parts: [{ text: userText }] }],
-        generationConfig: { temperature: 0.4, maxOutputTokens: 600 },
+        model,
+        max_tokens: 1024,
+        system: systemText,
+        messages: [{ role: 'user', content: userText }],
       }),
       signal: controller.signal,
     });
-    const payload = (await response.json()) as GeminiResponse;
+    const payload = (await response.json()) as AnthropicResponse;
     if (!response.ok || payload.error) {
-      const status = response.ok || response.status >= 500 ? 502 : response.status;
-      throw new HttpError('UPSTREAM', payload.error?.message ?? `Gemini request failed with ${response.status}.`, status);
+      const status = response.status >= 500 || response.status === 429 ? response.status : 502;
+      throw new HttpError('UPSTREAM', payload.error?.message ?? `Anthropic request failed with ${response.status}.`, response.ok ? 502 : status);
     }
     return payload;
   } finally {
@@ -87,15 +92,15 @@ async function postGemini(systemText: string, userText: string, timeoutMs: numbe
   }
 }
 
-function extractText(data: GeminiResponse): string {
-  const parts = data.candidates?.[0]?.content?.parts;
-  if (Array.isArray(parts)) {
-    return parts.map((p) => p.text ?? '').join('').trim();
-  }
-  return '';
+function extractText(data: AnthropicResponse): string {
+  return (data.content ?? [])
+    .filter((b) => b.type === 'text' && typeof b.text === 'string')
+    .map((b) => b.text as string)
+    .join('')
+    .trim();
 }
 
-export async function callMiraPrompt(
+export async function callSalesModel(
   vars: {
     brand_name: string;
     personal_context: string;
@@ -104,23 +109,25 @@ export async function callMiraPrompt(
     user_nickname: string;
   },
   input: string,
+  opts: { model?: string | null } = {},
 ) {
-  const systemText = buildPkmInstructions(vars.brand_name);
-  const userText = buildPkmInput(vars, input);
+  const model = opts.model?.trim() || envOrDefault('AI_MODEL', 'claude-sonnet-4-6');
+  const systemText = buildInstructions(vars.brand_name);
+  const userText = buildInput(vars, input);
   const timeoutMs = Number(envOrDefault('AI_REQUEST_TIMEOUT_MS', '30000'));
   let lastError: unknown = null;
 
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
-      const payload = await postGemini(systemText, userText, timeoutMs);
+      const payload = await postMessages(model, systemText, userText, timeoutMs);
       const text = extractText(payload);
       if (!text) {
-        const reason = payload.promptFeedback?.blockReason ?? payload.candidates?.[0]?.finishReason;
-        throw new HttpError('UPSTREAM', `Gemini returned no text${reason ? ` (${reason})` : ''}.`, 502);
+        throw new HttpError('UPSTREAM', `Model returned no text${payload.stop_reason ? ` (${payload.stop_reason})` : ''}.`, 502);
       }
-      return { responseId: payload.responseId ?? null, text };
+      return { responseId: payload.id ?? null, text };
     } catch (error) {
       lastError = error;
+      // Retry once on 429/5xx/network; propagate everything else immediately.
       if (error instanceof HttpError && error.status < 500 && error.status !== 429) {
         throw error;
       }
@@ -130,5 +137,5 @@ export async function callMiraPrompt(
     }
   }
 
-  throw lastError instanceof Error ? lastError : new HttpError('UPSTREAM', 'Gemini request failed.', 502);
+  throw lastError instanceof Error ? lastError : new HttpError('UPSTREAM', 'Anthropic request failed.', 502);
 }

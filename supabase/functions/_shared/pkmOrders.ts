@@ -7,7 +7,7 @@ import { roundLabelBangkok } from './rounds.ts';
 import type { DeliveryType, PkmOrderPanel } from './pkmTypes.ts';
 
 const ORDER_SELECT =
-  'id,tenant_id,order_no,customer_id,session_id,status,payment_status,delivery_type,goods_total,delivery_fee,grand_total,address_text,lat,lng,recipient_name,recipient_phone,round_id';
+  'id,tenant_id,order_no,customer_id,session_id,status,payment_status,delivery_type,delivery_chosen,goods_total,delivery_fee,grand_total,address_text,lat,lng,recipient_name,recipient_phone,round_id';
 
 export type PendingOrderRow = {
   id: string;
@@ -18,6 +18,7 @@ export type PendingOrderRow = {
   status: string;
   payment_status: string;
   delivery_type: DeliveryType;
+  delivery_chosen: boolean;
   goods_total: number;
   delivery_fee: number;
   grand_total: number;
@@ -28,6 +29,36 @@ export type PendingOrderRow = {
   recipient_phone: string | null;
   round_id: string | null;
 };
+
+// The order a newly-sent slip should verify against: the active pending cart first,
+// otherwise a returned order still owing its redelivery fee (Ready.md §3.4).
+export type PaymentTarget = { order: PendingOrderRow; kind: 'goods' | 'redelivery'; expected_amount: number };
+
+export async function getOrderAwaitingPayment(tenantId: string, customerId: string): Promise<PaymentTarget | null> {
+  const pending = await getActivePendingOrder(tenantId, customerId);
+  if (pending) {
+    return { expected_amount: pending.grand_total, kind: 'goods', order: pending };
+  }
+  const returned = await selectOne<PendingOrderRow>('orders', {
+    customer_id: `eq.${customerId}`,
+    limit: '1',
+    order: 'created_at.desc',
+    select: ORDER_SELECT,
+    status: 'eq.awaiting_redelivery_fee',
+    tenant_id: `eq.${tenantId}`,
+  });
+  if (!returned) {
+    return null;
+  }
+  const ret = await selectOne<{ new_order_id: string | null }>('returns', {
+    order_id: `eq.${returned.id}`,
+    select: 'new_order_id',
+  });
+  if (ret?.new_order_id) {
+    return null; // redelivery already paid & rebooked
+  }
+  return { expected_amount: returned.delivery_fee, kind: 'redelivery', order: returned };
+}
 
 export async function getActivePendingOrder(tenantId: string, customerId: string): Promise<PendingOrderRow | null> {
   return selectOne<PendingOrderRow>('orders', {
@@ -100,6 +131,7 @@ export async function setOrderAddress(order: PendingOrderRow, patch: { lat?: num
 
 export async function setDeliveryType(order: PendingOrderRow, deliveryType: DeliveryType, fee: number): Promise<void> {
   await updateRows('orders', {
+    delivery_chosen: true,
     delivery_fee: fee,
     delivery_type: deliveryType,
     grand_total: order.goods_total + fee,
@@ -119,8 +151,10 @@ export async function loadOrderPanel(orderId: string, tenantId: string, promptpa
   const roundLabel = order.round_id
     ? await selectOne<{ round_at: string }>('delivery_rounds', { id: `eq.${order.round_id}`, select: 'round_at' }).then((r) => (r ? roundLabelBangkok(new Date(r.round_at)) : null))
     : null;
-  // The PromptPay QR is shown once the order is ready to pay (has items + address + a total).
-  const readyToPay = order.status === 'pending' && order.grand_total > 0 && Boolean(order.address_text);
+  // The PromptPay QR renders only once the order is complete: items + address + a CHOSEN
+  // delivery type. Before that the total is missing the fee and every slip would fail
+  // SlipOK's amount check (audit: premature wrong-amount QR).
+  const readyToPay = order.status === 'pending' && order.grand_total > 0 && Boolean(order.address_text) && order.delivery_chosen;
   const qrPayload = readyToPay && promptpayId ? buildPromptPayPayload(promptpayId, order.grand_total) : null;
 
   return {

@@ -9,7 +9,7 @@ declare const Deno: {
 
 export type SlipOkResult =
   | { status: 'not_configured' }
-  | { status: 'passed'; transRef: string; amount: number; receivingBank: string | null; raw: unknown }
+  | { status: 'passed'; transRef: string; amount: number | null; receivingBank: string | null; receiverAccount: string | null; raw: unknown }
   | { status: 'duplicate'; raw: unknown }
   | { status: 'amount_mismatch'; raw: unknown }
   | { status: 'wrong_account'; raw: unknown }
@@ -110,15 +110,36 @@ export async function verifySlip(params: {
   if (!data.transRef) {
     return { status: 'error', message: 'SlipOK success without transRef', raw };
   }
-  // SlipOK already compared `amount` (else 1013) and the linked receiver account (else 1014);
-  // slip-verify re-checks amount + duplicate transRef on our side before flipping the order.
+  // SlipOK already compared `amount` (else 1013) and the linked receiver account (else 1014).
+  // slip-verify still re-validates amount + receiver + duplicate transRef on our side before
+  // flipping the order (Ready.md §7.1 step 3) — `amount` stays null when SlipOK omitted it so
+  // the caller's re-check can't be vacuously true.
   return {
     status: 'passed',
     transRef: data.transRef,
-    amount: typeof data.amount === 'number' ? data.amount : params.expectedAmount,
+    amount: typeof data.amount === 'number' ? data.amount : null,
     receivingBank: data.receivingBank ?? null,
+    receiverAccount: data.receiver?.account?.value ?? null,
     raw,
   };
+}
+
+// Ready.md §7.1 note: SlipOK masks the receiver account (e.g. "xxx-x-x0209-x"), so we compare
+// partially — every digit run (len >= 3) visible in the masked value must appear in the store
+// account's digits. No configured store account -> defer to SlipOK's linked-account check (1014).
+export function receiverMatchesStore(receiverAccount: string | null, storeAccount: string | null | undefined): boolean {
+  if (!storeAccount || !storeAccount.trim()) {
+    return true;
+  }
+  if (!receiverAccount) {
+    return false;
+  }
+  const storeDigits = storeAccount.replace(/\D/g, '');
+  const runs = receiverAccount.match(/\d{3,}/g) ?? [];
+  if (storeDigits.length === 0 || runs.length === 0) {
+    return false;
+  }
+  return runs.every((run) => storeDigits.includes(run));
 }
 
 // Remaining-quota probe (Ready.md §7.1: small admin widget). Null when not configured.

@@ -13,7 +13,7 @@ import {
   verifyLineSignature,
   type LineMessage,
 } from '../_shared/line.ts';
-import { categoryFlex, deliveryOptionsFlex, paymentFlex, pkmPostbackToAction, productFlex } from '../_shared/pkmLine.ts';
+import { categoryFlex, deliveryOptionsFlex, orderStatusFlex, paymentFlex, pkmPostbackToAction, productFlex } from '../_shared/pkmLine.ts';
 import { bindStaffLinkCode, handleLineSlip, orchestrateLine } from '../_shared/pkmOrchestrate.ts';
 import { uploadStorageObject } from '../_shared/storage.ts';
 import type { PkmChatResponse } from '../_shared/pkmTypes.ts';
@@ -60,6 +60,9 @@ async function toLineMessages(response: PkmChatResponse): Promise<LineMessage[]>
       if (flex) messages.push(flex);
     } else if (card.type === 'delivery_options') {
       const flex = deliveryOptionsFlex(card.order_id, card.options);
+      if (flex) messages.push(flex);
+    } else if (card.type === 'order_status') {
+      const flex = orderStatusFlex(card.orders);
       if (flex) messages.push(flex);
     }
   }

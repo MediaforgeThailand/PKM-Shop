@@ -136,6 +136,44 @@ export function deliveryOptionsFlex(orderId: string, options: { delivery_type: D
   };
 }
 
+export const ORDER_STATUS_LABELS: Record<string, string> = {
+  pending: 'รอชำระเงิน',
+  paid: 'ชำระแล้ว',
+  confirmed: 'เข้ารอบจัดส่ง',
+  packing: 'กำลังแพ็ค',
+  packed: 'แพ็คเสร็จแล้ว',
+  out_for_delivery: 'รอไรเดอร์ออกส่ง',
+  delivering: 'ไรเดอร์กำลังไปส่ง',
+  delivered: 'ส่งสำเร็จ',
+  returned: 'ตีกลับ',
+  awaiting_redelivery_fee: 'รอชำระค่าส่งใหม่',
+  cancelled: 'ยกเลิก',
+};
+
+export function orderStatusFlex(orders: { order_no: string; status: string; grand_total: number }[]): LineFlexMessage | null {
+  if (orders.length === 0) {
+    return null;
+  }
+  return {
+    altText: 'สถานะออเดอร์',
+    contents: {
+      body: {
+        contents: [
+          { size: 'md', text: 'สถานะออเดอร์ล่าสุด', type: 'text', weight: 'bold' },
+          ...orders.slice(0, 5).flatMap((o) => [
+            { margin: 'md', size: 'sm', text: o.order_no, type: 'text' as const, weight: 'bold' as const },
+            { color: '#4E5F59', size: 'sm', text: `${ORDER_STATUS_LABELS[o.status] ?? o.status} · ${baht(o.grand_total)}`, type: 'text' as const },
+          ]),
+        ],
+        layout: 'vertical',
+        type: 'box',
+      },
+      type: 'bubble',
+    },
+    type: 'flex',
+  };
+}
+
 export function paymentFlex(order: NonNullable<PkmOrderPanel>): LineFlexMessage {
   const itemLines = order.items.map((i) => ({ color: '#4E5F59', size: 'sm', text: `${i.name} x${i.qty} — ${baht(i.unit_price * i.qty)}`, type: 'text' as const, wrap: true }));
   return {

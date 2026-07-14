@@ -22,6 +22,7 @@ Deno.serve(async (req) => {
     assertServiceRoleAuthorization(req.headers.get('authorization'));
     const tenants = await selectMany<TenantRow>('tenants', { select: 'id,slug' });
     let locked = 0;
+    let notified = 0;
 
     for (const tenant of tenants) {
       const rounds = await rpc<RoundRow[]>('pkm_lock_due_rounds', { p_tenant_id: tenant.id });
@@ -31,9 +32,23 @@ Deno.serve(async (req) => {
           console.warn('round_lock_notify_failed', error instanceof Error ? error.message : error);
         });
       }
+
+      // Catch-up: rounds locked by the SQL cron fallback (or by a tick whose notify failed)
+      // still need their packer/rider fan-out. notify dedup makes re-sends no-ops.
+      const recentlyLocked = await selectMany<RoundRow>('delivery_rounds', {
+        select: 'id',
+        status: 'eq.locked',
+        tenant_id: `eq.${tenant.id}`,
+        type: 'eq.rider',
+        updated_at: `gte.${new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString()}`,
+      });
+      for (const round of recentlyLocked) {
+        notified += 1;
+        await notifyEvent({ eventType: 'round_locked', roundId: round.id, tenantId: tenant.id, tenantSlug: tenant.slug }).catch(() => {});
+      }
     }
 
-    return json({ locked, ok: true });
+    return json({ locked, notified, ok: true });
   } catch (error) {
     return toErrorResponse(error);
   }

@@ -18,8 +18,13 @@ export type NotifyEvent =
   | 'returned'
   | 'express_paid'
   | 'payroll_cutoff'
+  | 'payroll_self'
   | 'payout_confirmed'
-  | 'kerry_handover';
+  | 'kerry_handover'
+  | 'handoff'
+  | 'slip_manual_queue'
+  | 'slipok_quota'
+  | 'payment_rejected';
 
 export type TemplateCtx = {
   order_no?: string;
@@ -49,6 +54,8 @@ export const customerText: Partial<Record<NotifyEvent, (c: TemplateCtx) => strin
   returned: (c) =>
     `ออเดอร์ ${c.order_no ?? ''} ตีกลับ เนื่องจาก: ${c.reason ?? '-'}\nกรุณาชำระค่าส่งใหม่ ${baht(c.fee ?? 0)} บาท เพื่อจัดส่งอีกครั้งค่ะ`,
   kerry_handover: (c) => `ส่งมอบพัสดุให้ Kerry แล้วค่ะ เลขพัสดุ ${c.tracking ?? '-'} (ออเดอร์ ${c.order_no ?? ''})`,
+  payment_rejected: (c) =>
+    `สลิปของออเดอร์ ${c.order_no ?? ''} ไม่ผ่านการตรวจสอบค่ะ${c.reason ? ` (${c.reason})` : ''}\nรบกวนตรวจสอบยอดโอนแล้วส่งสลิปใหม่ หรือพิมพ์คุยกับแอดมินได้เลยค่ะ`,
 };
 
 // Staff-facing copy (per role, keyed by a role tag the notifier passes in)
@@ -63,4 +70,7 @@ export const staffText: Partial<Record<string, (c: TemplateCtx) => string>> = {
   'payroll_self': (c) => `ยอดรอบนี้ของคุณ ${baht(c.amount ?? 0)} บาทค่ะ ดูรายละเอียดในแอป`,
   'payout_confirmed': (c) => `โอนเงินให้คุณแล้ว ${baht(c.amount ?? 0)} บาท (แนบสลิปในแอป)`,
   'returned_admin': (c) => `↩️ ออเดอร์ ${c.order_no ?? ''} ถูกตีกลับ: ${c.reason ?? '-'}`,
+  'slip_manual_queue': (c) => `🧾 มีสลิปรอตรวจมือ ออเดอร์ ${c.order_no ?? ''}${c.reason ? ` (${c.reason})` : ''} — เปิด "คิวตรวจสลิป" ในแอปเพื่อยืนยัน/ปฏิเสธ`,
+  'slipok_quota': () => `🚨 ด่วน: SlipOK ตรวจสลิปอัตโนมัติใช้งานไม่ได้ (แพ็กเกจหมด/เกินโควตา) ทุกสลิปจะเข้าคิวตรวจมือจนกว่าจะต่ออายุ`,
+  'handoff': (c) => `💬 ลูกค้าขอคุยกับแอดมิน${c.reason ? ` (${c.reason})` : ''} — เปิดหน้า "แชทลูกค้า" เพื่อรับเรื่อง AI หยุดตอบห้องนี้แล้ว`,
 };

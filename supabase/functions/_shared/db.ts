@@ -143,7 +143,7 @@ export async function rpc<T>(functionName: string, body: Record<string, unknown>
 
 export async function tenantBySlug(slug: string) {
   return selectOne<TenantRow>('tenants', {
-    select: 'id,slug,display_name,logo_url,promptpay_id,attribution_window_days,features',
+    select: 'id,slug,display_name,logo_url,promptpay_id,features',
     slug: `eq.${slug}`,
   });
 }
@@ -205,7 +205,7 @@ export async function resolveOrCreateCustomer(tenantId: string, authUserId: stri
     },
     'tenant_id,auth_user_id',
     {
-      select: 'id,tenant_id,auth_user_id,line_user_id,nickname,phone,referred_by,referred_at,created_at',
+      select: 'id,tenant_id,auth_user_id,line_user_id,nickname,phone,zone_override,created_at',
     },
   );
 }

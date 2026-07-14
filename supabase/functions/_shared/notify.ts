@@ -139,7 +139,7 @@ export type NotifyParams = {
   eventType: NotifyEvent;
   orderId?: string;
   roundId?: string;
-  extra?: TemplateCtx & { photoUrl?: string | null; profileId?: string };
+  extra?: TemplateCtx & { photoUrl?: string | null; profileId?: string; session_key?: string };
 };
 
 // Fan an event out to the right customer(s) and/or staff.
@@ -244,6 +244,41 @@ export async function notifyEvent(params: NotifyParams): Promise<void> {
         if (p) {
           await sendOne({ audience: 'staff', body: staffText['payout_confirmed']!(baseCtx), dedupKey: `payout:${extra.profileId}:${dayKey}:${extra.amount ?? 0}`, eventType, lineUserId: p.line_user_id, recipientProfileId: p.id, tenantId, tenantSlug });
         }
+      }
+      break;
+    }
+    case 'payroll_self': {
+      // Each rider/packer gets their own weekly total (Ready.md §6 ยอดของฉันรอบนี้).
+      if (extra.profileId) {
+        const p = await selectOne<StaffProfile>('profiles', { id: `eq.${extra.profileId}`, select: 'id,line_user_id,roles', tenant_id: `eq.${tenantId}` });
+        if (p) {
+          await sendOne({ audience: 'staff', body: staffText['payroll_self']!(baseCtx), dedupKey: `payroll_self:${dayKey}:${extra.profileId}`, eventType, lineUserId: p.line_user_id, recipientProfileId: p.id, tenantId, tenantSlug });
+        }
+      }
+      break;
+    }
+    case 'slip_manual_queue': {
+      // A new manual-queue entry should alert admins every time (no cross-slip dedup).
+      const admins = await staffByRoles(tenantId, ['admin']);
+      const unique = crypto.randomUUID();
+      for (const a of admins) {
+        await sendOne({ audience: 'staff', body: staffText['slip_manual_queue']!(baseCtx), dedupKey: `slipq:${orderId}:${unique}:${a.id}`, eventType, lineUserId: a.line_user_id, orderId, recipientProfileId: a.id, tenantId, tenantSlug });
+      }
+      break;
+    }
+    case 'slipok_quota': {
+      // Urgent, but rate-limited to once per hour so a burst of slips doesn't spam admins.
+      const hourKey = new Date().toISOString().slice(0, 13);
+      const admins = await staffByRoles(tenantId, ['admin']);
+      for (const a of admins) {
+        await sendOne({ audience: 'staff', body: staffText['slipok_quota']!(baseCtx), dedupKey: `slipok_quota:${hourKey}:${a.id}`, eventType, lineUserId: a.line_user_id, recipientProfileId: a.id, tenantId, tenantSlug });
+      }
+      break;
+    }
+    case 'handoff': {
+      const admins = await staffByRoles(tenantId, ['admin']);
+      for (const a of admins) {
+        await sendOne({ audience: 'staff', body: staffText['handoff']!(baseCtx), dedupKey: `handoff:${extra.session_key ?? orderId ?? 'x'}:${a.id}`, eventType, lineUserId: a.line_user_id, recipientProfileId: a.id, tenantId, tenantSlug });
       }
       break;
     }

@@ -7,7 +7,7 @@
 //  - NO weight, NO per-product commission (commission is the shop-wide setting).
 // All writes run with the service role (RLS bypassed) AFTER the staff role is verified, so
 // the fragile direct-from-browser insert that used to fail silently is gone.
-import { assertTenant, insertRow, selectOne, updateRows } from '../_shared/db.ts';
+import { assertTenant, insertRow, rpc, selectOne, updateRows } from '../_shared/db.ts';
 import { handleOptions, HttpError, json, toErrorResponse, validateJson, z } from '../_shared/http.ts';
 import { assertRole, resolveStaffProfile } from '../_shared/pkmAuth.ts';
 import { uploadStorageObject } from '../_shared/storage.ts';
@@ -30,6 +30,9 @@ const schema = z.discriminatedUnion('action', [
     category_id: z.string().uuid().nullable().optional(),
     description: z.string().max(500).optional(),
     image: IMAGE.optional(),
+    // Ready.md §3.5: a new product carries its opening stock, and inbound stock needs a photo.
+    initial_stock: z.number().int().min(0).max(1_000_000).optional(),
+    stock_photo: IMAGE.optional(),
   }),
   z.object({
     action: z.literal('update_product'), tenant_slug: z.string().min(1), product_id: z.string().uuid(),
@@ -97,8 +100,11 @@ Deno.serve(async (req) => {
         return json({ ok: true, category: rows[0] });
       }
       case 'create_product': {
+        if ((body.initial_stock ?? 0) > 0 && !body.stock_photo) {
+          throw new HttpError('VALIDATION', 'สต็อกตั้งต้นต้องแนบรูปของที่รับเข้า', 400);
+        }
         const image_url = body.image ? await storeImage(tenant.slug, body.image) : null;
-        const row = await insertRow('products', {
+        const row = await insertRow<{ id: string }>('products', {
           tenant_id: tenant.id,
           name: body.name,
           price_baht: body.price_baht,
@@ -108,7 +114,22 @@ Deno.serve(async (req) => {
           image_url,
           // catalog_key intentionally omitted -> trigger derives it from the name.
         }, { select: PRODUCT_SELECT });
-        return json({ ok: true, product: row });
+        if ((body.initial_stock ?? 0) > 0 && body.stock_photo) {
+          const bytes = decodeBase64(body.stock_photo.image_base64);
+          if (bytes.byteLength > 5_000_000) throw new HttpError('VALIDATION', 'รูปใหญ่เกินไป (เกิน 5MB)', 400);
+          const stockPath = `${tenant.id}/${crypto.randomUUID()}.${EXT[body.stock_photo.content_type] ?? 'jpg'}`;
+          await uploadStorageObject('stock-in', stockPath, bytes, body.stock_photo.content_type);
+          await rpc('pkm_apply_stock_movement', {
+            p_actor: profile.user_id,
+            p_photo_url: stockPath,
+            p_product_id: row.id,
+            p_qty: body.initial_stock,
+            p_reason: 'สต็อกตั้งต้น',
+            p_tenant_id: tenant.id,
+          });
+        }
+        const fresh = await selectOne('products', { id: `eq.${row.id}`, select: PRODUCT_SELECT, tenant_id: `eq.${tenant.id}` });
+        return json({ ok: true, product: fresh ?? row });
       }
       case 'update_product': {
         const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };

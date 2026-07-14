@@ -10,12 +10,14 @@ declare const Deno: {
   serve: (handler: (req: Request) => Response | Promise<Response>) => void;
 };
 
+// Ready.md §3.8: check-in = photo + GPS, always. The record never blocks work, but an
+// empty check-in is meaningless — both are required.
 const schema = z.object({
   tenant_slug: z.string().min(1),
   shift_id: z.string().uuid().optional(),
-  photo_path: z.string().optional(),
-  lat: z.number().optional(),
-  lng: z.number().optional(),
+  photo_path: z.string().min(1),
+  lat: z.number(),
+  lng: z.number(),
 });
 
 Deno.serve(async (req) => {
@@ -33,16 +35,16 @@ Deno.serve(async (req) => {
     const radiusM = settingNumber(settingsMap, 'checkin_radius_m', 150);
 
     let geofencePass: boolean | null = null;
-    if (store && typeof body.lat === 'number' && typeof body.lng === 'number') {
+    if (store) {
       const meters = haversineKm(store, { lat: body.lat, lng: body.lng }) * 1000;
       geofencePass = meters <= radiusM;
     }
 
     const row = await insertRow('attendance', {
       geofence_pass: geofencePass,
-      lat: body.lat ?? null,
-      lng: body.lng ?? null,
-      photo_url: body.photo_path ?? null,
+      lat: body.lat,
+      lng: body.lng,
+      photo_url: body.photo_path,
       profile_id: profile.id,
       shift_id: body.shift_id ?? null,
       tenant_id: tenant.id,
